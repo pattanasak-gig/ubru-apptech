@@ -64,7 +64,7 @@ const ERR_RULES = [   // [ตรวจจับ, หัวข้อ, ทำอ�
   [/already been registered|users?_email|username.*(exists|duplicate)|ชื่อล็อกอิน.*(ซ้ำ|มีอยู่)/i, 'ชื่อล็อกอินนี้มีผู้ใช้แล้ว', 'ตั้งชื่อล็อกอินอื่น เช่น เติมเลขต่อท้าย · ถ้าเป็นบัญชีเดิมที่ปิดไป ให้เปิดใช้งานบัญชีเดิมแทน'],
   [/duplicate key|\b23505\b|already exists|unique/i, 'ข้อมูลซ้ำ มีรายการนี้อยู่แล้ว', 'ค้นหารายการเดิมแล้วแก้ไขแทนการเพิ่มใหม่ · ถ้ารายการเดิมถูกปิดใช้งานอยู่ ให้กด "แก้" แล้วเปลี่ยนสถานะเป็นใช้งาน'],
   [/null value in column|\b23502\b|not-null|ต้องไม่ว่าง/i, 'กรอกข้อมูลไม่ครบ', 'ช่องที่มีเครื่องหมาย * ต้องกรอกทุกช่อง แล้วกดบันทึกอีกครั้ง'],
-  [/still referenced|violates foreign key.*(delete|update)|\b23503\b.*referenced/i, 'ลบไม่ได้ เพราะมีข้อมูลอื่นใช้รายการนี้อยู่', 'เช่น ฟาร์ม/แหล่งที่มีรอบเข้ารับแล้ว · ให้ "ปิดใช้งาน" รายการนั้นแทนการลบ ข้อมูลเดิมจะยังอยู่ครบ'],
+  [/still referenced|violates foreign key.*(delete|update)|\b23503\b.*referenced/i, 'ลบไม่ได้ เพราะมีข้อมูลอื่นใช้รายการนี้อยู่', 'เช่น ฟาร์ม/แหล่งกำเนิดเศษอาหารที่มีรอบเข้ารับแล้ว · ให้ "ปิดใช้งาน" รายการนั้นแทนการลบ ข้อมูลเดิมจะยังอยู่ครบ'],
   [/foreign key|\b23503\b|ไม่พบ(ฟาร์ม|แหล่ง|รอบ|โครงการ|องค์กร|รถ)ที่เลือก/i, 'รายการที่เลือกไม่มีอยู่แล้ว', 'ฟาร์ม/แหล่ง/โครงการที่เลือกอาจถูกปิดไปเมื่อสักครู่ · กดรีเฟรชหน้า (ลากหน้าจอลง หรือกด F5) แล้วเลือกใหม่'],
   [/check constraint|\b23514\b|quality|weight_kg|อนาคต/i, 'ค่าที่กรอกไม่อยู่ในเกณฑ์', 'น้ำหนักต้องไม่ติดลบ · คะแนนคัดแยกต้องเป็น 1–5 · วันที่เข้ารับต้องไม่เป็นวันในอนาคต · พิกัดต้องอยู่ในช่วง -90…90 และ -180…180'],
   [/value too long|\b22001\b|ยาวเกิน/i, 'ข้อความยาวเกินกำหนด', 'ย่อข้อความให้สั้นลง (ชื่อไม่เกิน 200 ตัวอักษร)'],
@@ -209,7 +209,7 @@ const DemoBackend = () => {
   const s3 = add('food.source', { org_id: o1.id, source_type_id: stOf('ร้านอาหาร'), name: 'ร้านอาหารตัวอย่าง ก', lat: 15.235, lng: 104.85 });
   const s4 = add('food.source', { org_id: o1.id, source_type_id: stOf('ร้านอาหาร'), name: 'ร้านอาหารตัวอย่าง ข', lat: 15.24, lng: 104.87 });
   add('food.source', { org_id: o1.id, source_type_id: stOf('หน่วยงาน/สถานศึกษา'), name: 'โรงเรียนตัวอย่าง (ยังไม่เคยรับ)' });
-  add('food.source', { org_id: o2.id, name: 'แหล่งของหน่วยงานสอง' });
+  add('food.source', { org_id: o2.id, name: 'แหล่งกำเนิดเศษอาหารของหน่วยงานสอง' });
   const v1 = add('food.vehicle', { org_id: o1.id, name: 'กระบะตัวอย่าง', plate_no: 'ตัวอย่าง-1', fuel_type: 'ดีเซล' });
   // รอบเข้ารับตัวอย่าง 12 สัปดาห์ย้อนหลัง (ตัวเลขสุ่มแบบคงที่ เพื่อให้แดชบอร์ดมีข้อมูล)
   const rnd = (seed => () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; })(7);
@@ -273,7 +273,7 @@ const DemoBackend = () => {
       if (['food.farm', 'food.source', 'food.vehicle', 'food.pickup', 'core.project'].includes(name) && !r.org_id) r.org_id = me.org_id;
       if (name === 'food.pickup_item' || name === 'food.pickup_photo') r.org_id = byId('food.pickup', r.pickup_id).org_id;
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
-      if (name === 'food.pickup_item' && D['food.pickup_item'].some(i => i.pickup_id === r.pickup_id && i.source_id === r.source_id)) throw new Error('duplicate key: แหล่งนี้มีในรอบแล้ว');
+      if (name === 'food.pickup_item' && D['food.pickup_item'].some(i => i.pickup_id === r.pickup_id && i.source_id === r.source_id)) throw new Error('duplicate key: แหล่งกำเนิดเศษอาหารนี้มีในรอบแล้ว');
       if (name === 'food.pickup_photo') { const mx = parseInt((D['core.app_setting'].find(s => s.key === 'max_photos_per_pickup') || {}).value || '3'); if (D['food.pickup_photo'].filter(x => x.pickup_id === r.pickup_id && x.status === 'active').length >= mx) throw new Error(`รอบนี้มีรูปครบ ${mx} รูปแล้ว ให้ admin ยกเลิกรูปเก่าก่อนจึงเพิ่มได้`); }
       r.created_by = me.id; r.updated_by = me.id;
       return { ...add(name, r) };
@@ -436,7 +436,7 @@ function pagedInner(id) {
   const pages = Math.max(1, Math.ceil(list.length / size)); st.page = Math.min(Math.max(0, st.page), pages - 1);
   const slice = list.slice(st.page * size, (st.page + 1) * size);
   const head = cols.map(c => c.key ? `<th class="sortable ${c.cls || ''}" role="button" tabindex="0" title="กดเพื่อเรียงตามคอลัมน์นี้" aria-sort="${st.sort && st.sort.key === c.key ? (st.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}" onclick="pageSort('${id}','${c.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pageSort('${id}','${c.key}')}">${c.label}</th>` : `<th class="${c.cls || ''}">${c.label}</th>`).join('');
-  const pager = pages > 1 ? `<div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="small secondary" ${st.page === 0 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page - 1})">‹ ก่อนหน้า</button><span class="muted">หน้า ${st.page + 1}/${pages} · ${fmtInt(list.length)} รายการ</span><button type="button" class="small secondary" ${st.page >= pages - 1 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page + 1})">ถัดไป ›</button></div>` : '';
+  const pager = list.length ? `<div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="small secondary" ${st.page === 0 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page - 1})">‹ ก่อนหน้า</button><span class="muted">หน้า ${st.page + 1}/${pages} · ${fmtInt(list.length)} รายการ</span><button type="button" class="small secondary" ${st.page >= pages - 1 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page + 1})">ถัดไป ›</button></div>` : '';
   return `<div style="overflow:auto"><table data-sort="data"><thead><tr>${head}</tr></thead><tbody>${slice.map(rowFn).join('') || `<tr><td colspan="${cols.length}" class="muted">${opts.empty || 'ยังไม่มีข้อมูล'}</td></tr>`}</tbody></table></div>${pager}`;
 }
 function pageTo(id, n) { Pager.st[id].page = n; const el = document.getElementById(id); if (el) { el.innerHTML = pagedInner(id); el.scrollIntoView({ block: 'nearest' }); } }
@@ -451,7 +451,7 @@ function exportCsv(rows, name) {
 }
 
 // =====================================================================
-// ตาราง + ฟอร์มจัดการข้อมูลทั่วไป (ฟาร์ม แหล่ง รถ โครงการ ...) — spec ใน SPECS ของโมดูล
+// ตาราง + ฟอร์มจัดการข้อมูลทั่วไป (ฟาร์ม แหล่งกำเนิดเศษอาหาร รถ โครงการ ...) — spec ใน SPECS ของโมดูล
 //   col: { key, label, type: text|number|select|status|textarea|latlng, required, nullable, options: () => [{value,label}], hide, readonly }
 // =====================================================================
 const SPECS = {};
@@ -551,7 +551,7 @@ function printCredentials() {
   const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบส่งมอบบัญชี</title><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;700&display=swap');body{font:15px/1.6 "Noto Sans Thai",system-ui,sans-serif;margin:24px;color:#000}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #999;padding:6px 8px;text-align:left}th{background:#eee}.mono{font-family:Consolas,monospace;font-size:16px}ol{padding-left:22px}@media print{button{display:none}}</style></head><body>
     <button onclick="window.print()">พิมพ์ / บันทึก PDF</button><h1>${esc(sys)} — ใบส่งมอบบัญชีผู้ใช้</h1><div>${ctx.org ? `${esc(ctx.org)} (${esc(ctx.code)}) · ` : ''}ออกเมื่อ ${thDate(new Date().toISOString())} · เว็บ: ${esc(CREDIT.url)}</div>
     <table><thead><tr><th>บทบาท</th><th>ชื่อล็อกอิน</th><th>รหัสผ่านตั้งต้น</th><th>มอบให้ (ชื่อ-สกุล)</th><th>ลงชื่อรับ</th></tr></thead><tbody>${accs.map(a => `<tr><td>${roleLabel(a.role || '')}</td><td class="mono">${esc(a.username)}</td><td class="mono">${esc(a.password)}</td><td></td><td></td></tr>`).join('')}</tbody></table>
-    <h3>วิธีเริ่มใช้งาน</h3><ol><li>เปิดเว็บด้านบนบนโทรศัพท์ → เลือก "บันทึกการเข้ารับเศษอาหาร" → เข้าสู่ระบบด้วยชื่อและรหัสผ่านในตาราง</li><li>เมนู "บัญชี" มุมขวาบน → เปลี่ยนรหัสผ่านเป็นของตนเอง</li><li>ผู้บันทึก: กดปุ่ม "＋ บันทึกรอบเข้ารับ" → เลือกฟาร์ม วันที่ → กรอกน้ำหนักและคะแนนคัดแยกต่อแหล่ง → ถ่ายรูป → บันทึก (ไม่มีสัญญาณก็บันทึกได้ ระบบส่งให้เองภายหลัง)</li><li>ลืมรหัสผ่าน: แจ้ง admin ให้กด "รีเซ็ตรหัส"</li></ol>
+    <h3>วิธีเริ่มใช้งาน</h3><ol><li>เปิดเว็บด้านบนบนโทรศัพท์ → เลือก "บันทึกการเข้ารับเศษอาหาร" → เข้าสู่ระบบด้วยชื่อและรหัสผ่านในตาราง</li><li>เมนู "บัญชี" มุมขวาบน → เปลี่ยนรหัสผ่านเป็นของตนเอง</li><li>ผู้บันทึก: กดปุ่ม "＋ บันทึกรอบเข้ารับ" → เลือกฟาร์ม วันที่ → กรอกน้ำหนักและคะแนนคัดแยกต่อแหล่งกำเนิดเศษอาหาร → ถ่ายรูป → บันทึก (ไม่มีสัญญาณก็บันทึกได้ ระบบส่งให้เองภายหลัง)</li><li>ลืมรหัสผ่าน: แจ้ง admin ให้กด "รีเซ็ตรหัส"</li></ol>
     <p><b>เอกสารนี้มีรหัสผ่าน</b> เก็บเป็นความลับ ห้ามถ่ายภาพส่งในแชต/ไลน์/อีเมล · ทำลายหลังผู้ใช้เปลี่ยนรหัสผ่านแล้ว</p></body></html>`;
   const w = window.open('', '_blank'); if (!w) return toast('เบราว์เซอร์กันหน้าต่างใหม่ กรุณาอนุญาตป๊อปอัป', true); w.document.write(withCredit(html)); w.document.close();
 }
@@ -590,7 +590,7 @@ function withCredit(doc) {
 function pageAbout(view) {
   view.innerHTML = `<div class="card" style="max-width:860px;margin:0 auto">
     <h2 style="margin-top:0">เกี่ยวกับระบบ</h2>
-    <p><b>UBRU AppTech System</b> คือระบบบริหารจัดการของศูนย์การเรียนรู้และถ่ายทอดเทคโนโลยี BSF มหาวิทยาลัยราชภัฏอุบลราชธานี โมดูลแรกคือ "บันทึกการเข้ารับเศษอาหาร" ใช้บันทึกปริมาณเศษอาหารที่ฟาร์มเข้ารับจากแหล่งต่าง ๆ พร้อมคุณภาพการคัดแยก และเผยแพร่ยอดรวมต่อสาธารณะ ใช้งานผ่านเว็บบนมือถือและคอมพิวเตอร์โดยไม่ต้องติดตั้งโปรแกรม</p>
+    <p><b>UBRU AppTech System</b> คือระบบบริหารจัดการของศูนย์การเรียนรู้และถ่ายทอดเทคโนโลยี BSF มหาวิทยาลัยราชภัฏอุบลราชธานี โมดูลแรกคือ "บันทึกการเข้ารับเศษอาหาร" ใช้บันทึกปริมาณเศษอาหารที่ฟาร์มเข้ารับจากแหล่งกำเนิดเศษอาหารต่าง ๆ พร้อมคุณภาพการคัดแยก และเผยแพร่ยอดรวมต่อสาธารณะ ใช้งานผ่านเว็บบนมือถือและคอมพิวเตอร์โดยไม่ต้องติดตั้งโปรแกรม</p>
     <h3>โครงการวิจัยที่เกี่ยวข้อง</h3>
     <p>ข้อมูลส่วนแรกมาจากโครงการ "การจัดการขยะอาหารอย่างครบวงจร" (บพท. ปี 2568) และต่อยอดสู่ศูนย์การเรียนรู้และถ่ายทอดเทคโนโลยี BSF ปี 2569</p>
     <h3>การพัฒนา</h3>

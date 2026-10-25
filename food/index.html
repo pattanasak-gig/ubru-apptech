@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261025d">
+<link rel="stylesheet" href="../common.css?v=20261025e">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261025d"></script>
+<script src="../common.js?v=20261025e"></script>
 </head>
 <body>
 <header>
@@ -28,8 +28,8 @@
 // =====================================================================
 // โมดูล: บันทึกการเข้ารับเศษอาหาร (food) — DEC-106
 //   ผู้บันทึก: หน้าแรก (รอบล่าสุด) · บันทึกรอบ · รายการรอบ · แผนที่
-//   admin: + แดชบอร์ด · จัดการ (ฟาร์ม แหล่ง รถ โครงการ บัญชี ตั้งค่า)
-//   super admin: + ส่วนกลาง (องค์กร ประเภทแหล่ง ตั้งค่าระบบ)
+//   admin: + แดชบอร์ด · จัดการ (ฟาร์ม แหล่งกำเนิดเศษอาหาร รถ โครงการ บัญชี ตั้งค่า)
+//   super admin: + ส่วนกลาง (องค์กร ประเภทแหล่งกำเนิดเศษอาหาร ตั้งค่าระบบ)
 // =====================================================================
 const TABS = () => [
   ['#home', 'หน้าแรก'], ['#pickups', 'รายการรอบ'], ...(isAdmin() ? [['#dashboard', 'แดชบอร์ด']] : []), ['#map', 'แผนที่'],
@@ -91,13 +91,13 @@ async function pageHome(view) {
   const month = todayISO().slice(0, 7);
   const mrows = rows.filter(r => r.pickup_date.startsWith(month));
   view.innerHTML = `${scopeSelector()}
-    <div class="kpis"><div class="kpi hero"><div class="l">เดือนนี้ (จาก 15 รอบล่าสุดที่แสดง)</div><div class="v">${fmt(sum(mrows, 'total_kg'))} กก.</div></div><div class="kpi"><div class="l">รอบเดือนนี้ในรายการ</div><div class="v">${fmtInt(mrows.length)}</div></div><div class="kpi"><div class="l">ฟาร์มที่ใช้งาน</div><div class="v">${fmtInt(S.farms.filter(f => f.status === 'active').length)}</div></div><div class="kpi"><div class="l">แหล่งที่ใช้งาน</div><div class="v">${fmtInt(S.sources.filter(s => s.status === 'active').length)}</div></div></div>
+    <div class="kpis"><div class="kpi hero"><div class="l">เดือนนี้ (จาก 15 รอบล่าสุดที่แสดง)</div><div class="v">${fmt(sum(mrows, 'total_kg'))} กก.</div></div><div class="kpi"><div class="l">รอบเดือนนี้ในรายการ</div><div class="v">${fmtInt(mrows.length)}</div></div><div class="kpi"><div class="l">ฟาร์มที่ใช้งาน</div><div class="v">${fmtInt(S.farms.filter(f => f.status === 'active').length)}</div></div><div class="kpi"><div class="l">แหล่งกำเนิดเศษอาหารที่ใช้งาน</div><div class="v">${fmtInt(S.sources.filter(s => s.status === 'active').length)}</div></div></div>
     <div class="card"><div class="cardhead"><h4>รอบเข้ารับล่าสุด ${helpBtn('home')}</h4><a href="#pickups">ดูทั้งหมด ›</a></div>
     ${pickupTable(rows, 'tblHome')}</div>
     ${canWrite() ? `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>` : ''}`;
 }
 function pickupTable(rows, id = 'tblPickups') {
-  const cols = [{ label: 'วันที่', key: 'pickup_date' }, { label: 'ฟาร์ม', key: 'farm_name' }, { label: 'แหล่ง', key: 'items', cls: 'num' }, { label: 'กก.', key: 'total_kg', cls: 'num' }, { label: 'คุณภาพ', key: 'avg_quality' }, { label: '' }];
+  const cols = [{ label: 'วันที่', key: 'pickup_date' }, { label: 'ฟาร์ม', key: 'farm_name' }, { label: 'แหล่งกำเนิด', key: 'items', cls: 'num' }, { label: 'กก.', key: 'total_kg', cls: 'num' }, { label: 'คุณภาพ', key: 'avg_quality' }, { label: '' }];
   const row = r => `<tr><td class="nowrap"><a href="#pickup/${r.id}">${thDay(r.pickup_date)}</a>${r.pickup_time ? ' ' + String(r.pickup_time).slice(0, 5) : ''}${r.entry_source === 'sheet' ? ' <span class="pill" title="ย้ายจากชีตเดิม">ชีต</span>' : ''}${r.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิก</span>' : ''}</td><td>${esc(r.farm_name)}<div class="muted">${esc(r.project_code)}</div></td><td class="num">${fmtInt(r.items)}</td><td class="num"><b>${fmt(r.total_kg)}</b></td><td>${r.avg_quality != null ? fmt(r.avg_quality) : '-'}</td><td>${r.photo_count ? '📷' + r.photo_count : ''}</td></tr>`;
   return pagedTable(id, rows, cols, row, { empty: 'ยังไม่มีรอบเข้ารับ', resetPage: true });
 }
@@ -124,7 +124,7 @@ async function exportPickups() {
   const ids = (S._pkRows || []).map(r => r.id); if (!ids.length) return toast('ไม่มีข้อมูล', true);
   const items = await api.list('food.v_pickup_item', { eq: { status: 'active', ...scopeEq() }, order: ['pickup_date'] });
   const set = new Set(ids);
-  exportCsv(items.filter(i => set.has(i.pickup_id)).map(i => ({ วันที่: i.pickup_date, เวลา: i.pickup_time || '', ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่ง: i.source_name, ประเภทแหล่ง: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนนคัดแยก: i.quality ?? '', หมายเหตุ: i.note || '', ผู้บันทึก: i.created_by_name || 'ย้ายจากชีตเดิม' })), 'pickup_items');
+  exportCsv(items.filter(i => set.has(i.pickup_id)).map(i => ({ วันที่: i.pickup_date, เวลา: i.pickup_time || '', ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่งกำเนิดเศษอาหาร: i.source_name, ประเภทแหล่งกำเนิดเศษอาหาร: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนนคัดแยก: i.quality ?? '', หมายเหตุ: i.note || '', ผู้บันทึก: i.created_by_name || 'ย้ายจากชีตเดิม' })), 'pickup_items');
 }
 
 // =====================================================================
@@ -140,8 +140,8 @@ async function pagePickup(view, id) {
     <div style="font-size:18px">${esc(p.farm_name)} <span class="muted">· ${esc(p.project_name)}</span></div>
     <div class="muted">${p.vehicle_name ? 'รถ ' + esc(p.vehicle_name) + ' · ' : ''}${p.distance_km != null ? 'ระยะทาง ' + fmt(p.distance_km) + ' กม. · ' : ''}บันทึกโดย ${esc(p.created_by_name || (p.entry_source === 'sheet' ? 'ย้ายจากชีตเดิม' : '-'))} · ${thDate(p.created_at)}</div>
     ${p.note ? `<div style="margin-top:6px">หมายเหตุ: ${esc(p.note)}</div>` : ''}
-    <div class="kpis" style="margin-top:10px"><div class="kpi hero"><div class="l">รวม</div><div class="v">${fmt(p.total_kg)} กก.</div></div><div class="kpi"><div class="l">แหล่ง</div><div class="v">${fmtInt(act.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย</div><div class="v">${p.avg_quality != null ? fmt(p.avg_quality) : '-'}</div></div></div>
-    <table style="margin-top:10px"><thead><tr><th>แหล่ง</th><th class="num">กก.</th><th>คะแนนคัดแยก</th><th>หมายเหตุ</th></tr></thead><tbody>${items.map(i => `<tr style="${i.status !== 'active' ? 'opacity:.5' : ''}"><td>${esc(i.source_name)}${i.status !== 'active' ? ' <span class="pill">ยกเลิก</span>' : ''}</td><td class="num">${fmt(i.weight_kg)}</td><td>${qLabel(i.quality)}</td><td class="muted">${esc(i.note || '')}</td></tr>`).join('')}</tbody></table>
+    <div class="kpis" style="margin-top:10px"><div class="kpi hero"><div class="l">รวม</div><div class="v">${fmt(p.total_kg)} กก.</div></div><div class="kpi"><div class="l">แหล่งกำเนิดเศษอาหาร</div><div class="v">${fmtInt(act.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย</div><div class="v">${p.avg_quality != null ? fmt(p.avg_quality) : '-'}</div></div></div>
+    <table style="margin-top:10px"><thead><tr><th>แหล่งกำเนิดเศษอาหาร</th><th class="num">กก.</th><th>คะแนนคัดแยก</th><th>หมายเหตุ</th></tr></thead><tbody>${items.map(i => `<tr style="${i.status !== 'active' ? 'opacity:.5' : ''}"><td>${esc(i.source_name)}${i.status !== 'active' ? ' <span class="pill">ยกเลิก</span>' : ''}</td><td class="num">${fmt(i.weight_kg)}</td><td>${qLabel(i.quality)}</td><td class="muted">${esc(i.note || '')}</td></tr>`).join('')}</tbody></table>
     <h4>รูป (${photos.length}/${maxPhotos()})</h4><div class="photos" id="photos">${photos.map(ph => `<div style="text-align:center"><a href="${esc(ph.url)}" target="_blank" rel="noopener"><img src="${esc(ph.url)}" alt="รูปรอบเข้ารับ" loading="lazy" onerror="photoMissing(this)"></a>${isAdmin() && p.status === 'active' ? `<button class="small danger" style="margin-top:4px" onclick="cancelRow('food.pickup_photo','${ph.id}','รูป')">เอาออก</button>` : ''}</div>`).join('') || '<span class="muted">ไม่มีรูป</span>'}</div>
     ${p.status === 'active' && canWrite() && photos.length < maxPhotos() ? `<div class="row" style="margin-top:8px"><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" onchange="addPhoto('${p.id}',this.files[0]);this.value=''"></label><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">🖼 เลือกจากคลัง<input type="file" accept="image/*" class="hidden" onchange="addPhoto('${p.id}',this.files[0]);this.value=''"></label></div>` : ''}
     <div class="row" style="margin-top:14px">${p.status === 'active' && canWrite() ? `<button onclick="go('#pickup-edit/${p.id}')">แก้ไข</button>` : ''}${isAdmin() && p.status === 'active' ? `<button class="danger" onclick="cancelRow('food.pickup','${p.id}','รอบเข้ารับนี้')">ยกเลิกรอบ</button>` : ''}<a class="btn secondary" style="text-decoration:none" href="#pickups">กลับ</a></div></div>`;
@@ -152,7 +152,7 @@ async function cancelRow(table, id, label) {
 }
 
 // =====================================================================
-// ฟอร์มบันทึก/แก้ไขรอบ — 1 รอบ = 1 ฟาร์ม หลายแหล่ง (DEC-106 ข้อ 6)
+// ฟอร์มบันทึก/แก้ไขรอบ — 1 รอบ = 1 ฟาร์ม หลายแหล่งกำเนิดเศษอาหาร (DEC-106 ข้อ 6)
 // =====================================================================
 async function pagePickupForm(view, id) {
   if (!canWrite()) return view.innerHTML = '<div class="card">เลือกองค์กรก่อน</div>';
@@ -171,9 +171,9 @@ async function pagePickupForm(view, id) {
       <div><label>รถที่ใช้ (ไม่บังคับ)</label><select id="f_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || (p && v.id === p.vehicle_id)).map(v => `<option value="${v.id}" ${p && p.vehicle_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.plate_no ? ' ' + esc(v.plate_no) : ''}</option>`).join('')}</select></div>
       <div><label>ระยะทางรอบนี้ (กม. ไม่บังคับ)</label><input id="f_km" type="number" step="0.1" min="0" inputmode="decimal" value="${p && p.distance_km != null ? p.distance_km : ''}"></div>
     </div>
-    <h4 style="margin:14px 0 4px">ปริมาณต่อแหล่ง <span class="muted">(กรอกเฉพาะแหล่งที่รับ · กก. ทศนิยมได้ · คะแนนคัดแยก 1 ต้องปรับปรุง … 5 ดีเยี่ยม)</span></h4>
-    <div class="itemrow" style="border-bottom:2px solid var(--line)"><div class="muted">แหล่ง</div><div class="muted">กก.</div><div class="muted">คะแนน</div></div>
-    ${srcs.map(s => { const it = itemOf(s.id); return `<div class="itemrow" data-sid="${s.id}"><div class="nm">${esc(s.name)}<div class="muted">${esc(typeOf(s.source_type_id).name || '')}</div></div><input class="kg" type="number" step="0.01" min="0" inputmode="decimal" placeholder="—" value="${it.weight_kg ?? ''}" aria-label="น้ำหนัก ${esc(s.name)}"><select class="q" aria-label="คะแนน ${esc(s.name)}"><option value="">—</option>${[1, 2, 3, 4, 5].map(q => `<option value="${q}" ${it.quality === q ? 'selected' : ''}>${q} ${QUALITY[q]}</option>`).join('')}</select></div>`; }).join('') || '<div class="muted">ยังไม่มีแหล่งเศษอาหาร ให้ admin เพิ่มที่เมนูจัดการ</div>'}
+    <h4 style="margin:14px 0 4px">ปริมาณต่อแหล่งกำเนิดเศษอาหาร <span class="muted">(กรอกเฉพาะแหล่งกำเนิดเศษอาหารที่รับ · กก. ทศนิยมได้ · คะแนนคัดแยก 1 ต้องปรับปรุง … 5 ดีเยี่ยม)</span></h4>
+    <div class="itemrow" style="border-bottom:2px solid var(--line)"><div class="muted">แหล่งกำเนิด</div><div class="muted">กก.</div><div class="muted">คะแนน</div></div>
+    ${srcs.map(s => { const it = itemOf(s.id); return `<div class="itemrow" data-sid="${s.id}"><div class="nm">${esc(s.name)}<div class="muted">${esc(typeOf(s.source_type_id).name || '')}</div></div><input class="kg" type="number" step="0.01" min="0" inputmode="decimal" placeholder="—" value="${it.weight_kg ?? ''}" aria-label="น้ำหนัก ${esc(s.name)}"><select class="q" aria-label="คะแนน ${esc(s.name)}"><option value="">—</option>${[1, 2, 3, 4, 5].map(q => `<option value="${q}" ${it.quality === q ? 'selected' : ''}>${q} ${QUALITY[q]}</option>`).join('')}</select></div>`; }).join('') || '<div class="muted">ยังไม่มีแหล่งกำเนิดเศษอาหาร ให้ admin เพิ่มที่เมนูจัดการ</div>'}
     <label>หมายเหตุ</label><textarea id="f_note" rows="2">${esc(p ? p.note || '' : '')}</textarea>
     ${id ? '' : `<h4 style="margin:14px 0 4px">รูป (สูงสุด ${maxPhotos()} ใบ · ย่อให้อัตโนมัติ)</h4><div class="row"><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" onchange="pickPhotos(this.files);this.value=''"></label><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">🖼 เลือกจากคลัง<input type="file" accept="image/*" multiple class="hidden" onchange="pickPhotos(this.files);this.value=''"></label></div><div class="photos" id="f_photoList" style="margin-top:8px"><span class="muted">ยังไม่ได้เลือกรูป</span></div>`}
     <div class="row" style="margin-top:14px"><button id="f_save" style="min-width:160px">${id ? 'บันทึกการแก้ไข' : 'บันทึก'}</button><a class="btn secondary" style="text-decoration:none" href="${id ? '#pickup/' + id : '#home'}">ยกเลิก</a></div>
@@ -196,7 +196,7 @@ async function savePickup(id, oldItems) {
   const rows = [...document.querySelectorAll('.itemrow[data-sid]')].map(r => ({ source_id: r.dataset.sid, kgEl: r.querySelector('.kg'), kg: r.querySelector('.kg').value, quality: r.querySelector('.q').value }));
   for (const r of rows) { if (r.kg !== '' && (isNaN(+r.kg) || +r.kg < 0)) { reset(); return needField(r.kgEl, 'น้ำหนักต้องเป็นตัวเลขไม่ติดลบ'); } if (r.kg === '' && r.quality !== '') { reset(); return needField(r.kgEl, 'ใส่คะแนนแล้วต้องกรอกน้ำหนักด้วย (ไม่ได้รับ = เว้นทั้งสองช่อง)'); } }
   const filled = rows.filter(r => r.kg !== '');
-  if (!filled.length) { reset(); return needField(rows[0] && rows[0].kgEl, 'กรอกน้ำหนักอย่างน้อย 1 แหล่ง'); }
+  if (!filled.length) { reset(); return needField(rows[0] && rows[0].kgEl, 'กรอกน้ำหนักอย่างน้อย 1 แหล่งกำเนิดเศษอาหาร'); }
   const pickup = { farm_id: farmId, pickup_date: date, pickup_time: $('#f_time').value || null, vehicle_id: $('#f_vehicle').value || null, distance_km: km === '' ? null : +km, note: $('#f_note').value.trim() || null };
   if (isSuper()) pickup.org_id = S.scopeOrg;
   const items = filled.map(r => ({ source_id: r.source_id, weight_kg: +(+r.kg).toFixed(2), quality: r.quality ? +r.quality : null }));
@@ -211,7 +211,7 @@ async function savePickup(id, oldItems) {
     const photos = []; for (const f of S._newPhotos) { toast('กำลังย่อรูป…'); photos.push(await compressImage(f)); }
     const payload = { pickup, items, photos, farm_name: farmOf(farmId).name, org_id: S.scopeOrg || S.me.org_id };
     try { const newId = await submitPickup(payload); toast('บันทึกรอบเข้ารับแล้ว'); go('#pickup/' + newId); }
-    catch (e) { if (!isNetworkError(e)) throw e; await Queue.push({ kind: 'pickup', payload, label: `รอบ ${thDay(date)} · ${farmOf(farmId).name} (${items.length} แหล่ง · ${photos.length} รูป)` }); toast('ไม่มีสัญญาณ เก็บไว้ส่งภายหลังแล้ว (ดูปุ่ม "รอส่ง")'); go('#home'); }
+    catch (e) { if (!isNetworkError(e)) throw e; await Queue.push({ kind: 'pickup', payload, label: `รอบ ${thDay(date)} · ${farmOf(farmId).name} (${items.length} แหล่งกำเนิดเศษอาหาร · ${photos.length} รูป)` }); toast('ไม่มีสัญญาณ เก็บไว้ส่งภายหลังแล้ว (ดูปุ่ม "รอส่ง")'); go('#home'); }
   } catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); reset(); }
 }
 // ส่งรอบ + รายการ + รูป (ใช้ทั้งตอนออนไลน์และตอนคิวส่งภายหลัง) · คืน id ของรอบ
@@ -258,25 +258,24 @@ async function pageDashboard(view) {
     <div class="row"><select style="width:auto" onchange="S._dash.project=this.value;render()"><option value="">ทุกโครงการ</option>${projects.map(p => `<option value="${p.id}" ${p.id === st.project ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
       <select style="width:auto" onchange="S._dash.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._dash.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._dash.to=this.value;render()" style="width:auto"></label></div></div>
-    <div class="kpis"><div class="kpi hero"><div class="l">เศษอาหารที่เข้ารับทั้งหมด</div><div class="v">${fmt(total)} กก.</div></div><div class="kpi"><div class="l">รอบเข้ารับ</div><div class="v">${fmtInt(pickups)}</div></div><div class="kpi"><div class="l">เฉลี่ยต่อรอบ</div><div class="v">${pickups ? fmt(total / pickups) : '-'} กก.</div></div><div class="kpi"><div class="l">ฟาร์ม / แหล่ง</div><div class="v">${fmtInt(byFarm.length)} / ${fmtInt(bySrc.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (${fmtInt(qs.length)} รายการ)</div><div class="v">${avgQ != null ? fmt(avgQ) : '-'}</div></div></div>
+    <div class="kpis"><div class="kpi hero"><div class="l">เศษอาหารที่เข้ารับทั้งหมด</div><div class="v">${fmt(total)} กก.</div></div><div class="kpi"><div class="l">รอบเข้ารับ</div><div class="v">${fmtInt(pickups)}</div></div><div class="kpi"><div class="l">เฉลี่ยต่อรอบ</div><div class="v">${pickups ? fmt(total / pickups) : '-'} กก.</div></div><div class="kpi"><div class="l">ฟาร์ม / แหล่งกำเนิด</div><div class="v">${fmtInt(byFarm.length)} / ${fmtInt(bySrc.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (${fmtInt(qs.length)} รายการ)</div><div class="v">${avgQ != null ? fmt(avgQ) : '-'}</div></div></div>
     <div class="grid-dash">
       <div class="card"><div class="cardhead"><h4>รายเดือน (กก.)</h4></div><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>สัดส่วนตามฟาร์ม</h4></div><div class="chartbox"><canvas id="cFarm"></canvas></div></div>
-      <div class="card"><div class="cardhead"><h4>ตามแหล่ง (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}</div>
-      <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่ง</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
-      <div class="card"><div class="cardhead"><h4>ตามประเภทแหล่ง</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
-      <div class="card"><div class="cardhead"><h4>ตารางรายเดือน</h4></div>${pagedTable('tblMonthly', mArr.slice().reverse().map(m => ({ m: m.m, n: m.n.size, kg: Math.round(m.kg * 100) / 100, avg: Math.round(m.kg / m.n.size * 100) / 100 })), [{ label: 'เดือน', key: 'm', cls: 'nowrap' }, { label: 'รอบ', key: 'n', cls: 'num' }, { label: 'กก.', key: 'kg', cls: 'num' }, { label: 'เฉลี่ย/รอบ', key: 'avg', cls: 'num' }], r => `<tr><td class="nowrap">${thMonth(r.m + '-01')}</td><td class="num">${fmtInt(r.n)}</td><td class="num">${fmt(r.kg)}</td><td class="num">${fmt(r.avg)}</td></tr>`, { resetPage: true })}</div>
+      <div class="card"><div class="cardhead"><h4>ตามแหล่งกำเนิดเศษอาหาร (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}<div class="cardhead" style="margin-top:14px"><h4>ตามประเภทแหล่งกำเนิดเศษอาหาร</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
+      <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
+      <div class="card" style="grid-column:1/-1"><div class="cardhead"><h4>ตารางรายเดือน</h4></div>${pagedTable('tblMonthly', mArr.slice().reverse().map(m => ({ m: m.m, n: m.n.size, kg: Math.round(m.kg * 100) / 100, avg: Math.round(m.kg / m.n.size * 100) / 100 })), [{ label: 'เดือน', key: 'm', cls: 'nowrap' }, { label: 'รอบ', key: 'n', cls: 'num' }, { label: 'กก.', key: 'kg', cls: 'num' }, { label: 'เฉลี่ย/รอบ', key: 'avg', cls: 'num' }], r => `<tr><td class="nowrap">${thMonth(r.m + '-01')}</td><td class="num">${fmtInt(r.n)}</td><td class="num">${fmt(r.kg)}</td><td class="num">${fmt(r.avg)}</td></tr>`, { resetPage: true })}</div>
     </div>`;
-  S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่ง: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
+  S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่งกำเนิดเศษอาหาร: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
   if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.m + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[0] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
   if (byFarm.length) mkChart($('#cFarm'), { type: 'doughnut', data: { labels: byFarm.map(f => f.label), datasets: [{ data: byFarm.map(f => Math.round(f.kg * 100) / 100), backgroundColor: byFarm.map((_, i) => PALETTE[i % PALETTE.length]) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
 }
 
 // =====================================================================
-// แผนที่: ฟาร์ม (เขียว) และแหล่ง (ส้ม)
+// แผนที่: ฟาร์ม (เขียว) และแหล่งกำเนิดเศษอาหาร (ส้ม)
 // =====================================================================
 async function pageMap(view) {
-  view.innerHTML = `${scopeSelector()}<div class="card legend" style="padding:8px 12px;justify-content:space-between"><span class="legend"><span><i class="dot" style="background:#2E7D32"></i>ฟาร์ม</span><span><i class="dot" style="background:#EF6C00"></i>แหล่งเศษอาหาร</span></span>${helpBtn('map')}</div><div id="map"></div>`;
+  view.innerHTML = `${scopeSelector()}<div class="card legend" style="padding:8px 12px;justify-content:space-between"><span class="legend"><span><i class="dot" style="background:#2E7D32"></i>ฟาร์ม</span><span><i class="dot" style="background:#EF6C00"></i>แหล่งกำเนิดเศษอาหาร</span></span>${helpBtn('map')}</div><div id="map"></div>`;
   const [farms, srcs] = await Promise.all([api.list('food.v_farm_summary', { eq: { status: 'active', ...scopeEq() } }), api.list('food.v_source_summary', { eq: { status: 'active', ...scopeEq() } })]);
   const map = L.map('map'); addBaseLayer(map); const g = L.featureGroup().addTo(map);
   let missing = 0;
@@ -287,20 +286,20 @@ async function pageMap(view) {
 }
 
 // =====================================================================
-// จัดการ (admin): ฟาร์ม · แหล่ง · รถ · โครงการ · บัญชี · ตั้งค่าองค์กร
+// จัดการ (admin): ฟาร์ม · แหล่งกำเนิดเศษอาหาร · รถ · โครงการ · บัญชี · ตั้งค่าองค์กร
 // =====================================================================
 const activeProjects = () => S.projects.filter(p => (!S.scopeOrg || p.org_id === S.scopeOrg)).map(p => ({ value: p.id, label: `${p.code} · ${p.name}${p.status !== 'active' ? ' (ปิด)' : ''}` }));
 SPECS['food.farm'] = { table: 'food.farm', title: 'ฟาร์มที่เข้ารับ', help: 'admin-farm', order: ['name'], intro: 'ฟาร์ม = ปลายทางที่นำเศษอาหารไปใช้ · ทุกฟาร์มต้องสังกัดโครงการเพื่อแยกวิเคราะห์ · ปิดใช้งานแทนการลบ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
   cols: [{ key: 'name', label: 'ชื่อฟาร์ม', required: true }, { key: 'project_id', label: 'โครงการ', type: 'select', required: true, options: activeProjects }, { key: 'lat', label: 'พิกัด', type: 'latlng' }, { key: 'address', label: 'ที่อยู่', nullable: true, hide: true }, { key: 'contact', label: 'ผู้ติดต่อ/โทร', nullable: true, hide: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
-SPECS['food.source'] = { table: 'food.source', title: 'แหล่งเศษอาหาร', help: 'admin-source', order: ['name'], intro: 'แหล่ง = ต้นทางที่ไปรับ (ตลาด ร้าน หน่วยงาน) · เพิ่มได้ไม่จำกัด ผู้บันทึกจะเห็นในฟอร์มทันที · ปิดใช้งานแทนการลบ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
-  cols: [{ key: 'name', label: 'ชื่อแหล่ง', required: true }, { key: 'source_type_id', label: 'ประเภท', type: 'select', nullable: true, options: () => S.types.map(t => ({ value: t.id, label: t.name })) }, { key: 'lat', label: 'พิกัด', type: 'latlng' }, { key: 'address', label: 'ที่อยู่', nullable: true, hide: true }, { key: 'contact', label: 'ผู้ติดต่อ/โทร', nullable: true, hide: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
+SPECS['food.source'] = { table: 'food.source', title: 'แหล่งกำเนิดเศษอาหาร', help: 'admin-source', order: ['name'], intro: 'แหล่งกำเนิดเศษอาหาร = ต้นทางที่ไปรับ (ตลาด ร้าน หน่วยงาน) · เพิ่มได้ไม่จำกัด ผู้บันทึกจะเห็นในฟอร์มทันที · ปิดใช้งานแทนการลบ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
+  cols: [{ key: 'name', label: 'ชื่อแหล่งกำเนิดเศษอาหาร', required: true }, { key: 'source_type_id', label: 'ประเภท', type: 'select', nullable: true, options: () => S.types.map(t => ({ value: t.id, label: t.name })) }, { key: 'lat', label: 'พิกัด', type: 'latlng' }, { key: 'address', label: 'ที่อยู่', nullable: true, hide: true }, { key: 'contact', label: 'ผู้ติดต่อ/โทร', nullable: true, hide: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 SPECS['food.vehicle'] = { table: 'food.vehicle', title: 'รถที่ใช้เข้ารับ', order: ['name'], intro: 'ไม่บังคับใช้ · เตรียมไว้สำหรับการวิเคราะห์ระยะทาง/คาร์บอนในรอบถัดไป', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
   cols: [{ key: 'name', label: 'ชื่อเรียกรถ', required: true }, { key: 'plate_no', label: 'ทะเบียน', nullable: true }, { key: 'fuel_type', label: 'เชื้อเพลิง', nullable: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 SPECS['core.project'] = { table: 'core.project', title: 'โครงการ', help: 'admin-project', order: ['code'], intro: 'ใช้จัดกลุ่มฟาร์ม (เช่น ปี 68 · ศูนย์ BSF) · "เผยแพร่" = ยอดของโครงการนี้แสดงบนหน้าสาธารณะ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
   cols: [{ key: 'code', label: 'รหัสสั้น (a-z 0-9)', required: true }, { key: 'name', label: 'ชื่อโครงการ', required: true }, { key: 'year_be', label: 'ปี พ.ศ.', type: 'number', nullable: true }, { key: 'is_public', label: 'เผยแพร่สาธารณะ', type: 'bool' }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 async function pageAdmin(view) {
   const tab = location.hash.split('/')[1] || 'farm';
-  const tabs = [['farm', 'ฟาร์ม'], ['source', 'แหล่ง'], ['vehicle', 'รถ'], ['project', 'โครงการ'], ['users', 'บัญชี'], ['settings', 'ตั้งค่า']];
+  const tabs = [['farm', 'ฟาร์ม'], ['source', 'แหล่งกำเนิดเศษอาหาร'], ['vehicle', 'รถ'], ['project', 'โครงการ'], ['users', 'บัญชี'], ['settings', 'ตั้งค่า']];
   let body = '';
   if (tab === 'farm') body = await crudSection({ ...SPECS['food.farm'], eq: scopeEq() });
   else if (tab === 'source') body = await crudSection({ ...SPECS['food.source'], eq: scopeEq() });
@@ -329,16 +328,16 @@ function orgSettings() {
 async function saveOrgSettings() { try { await api.update('core.org', S.scopeOrg, { photo_endpoint_url: $('#o_ep').value.trim() || null, photo_folder_id: $('#o_folder').value.trim() || null, note: $('#o_note').value.trim() || null }); toast('บันทึกแล้ว'); S.cache.coreLoaded = false; render(); } catch (e) { fail(e); } }
 
 // =====================================================================
-// ส่วนกลาง (super admin): องค์กร · ประเภทแหล่ง · ตั้งค่าระบบ
+// ส่วนกลาง (super admin): องค์กร · ประเภทแหล่งกำเนิดเศษอาหาร · ตั้งค่าระบบ
 // =====================================================================
 SPECS['core.org'] = { table: 'core.org', title: 'องค์กร', order: ['code'], intro: 'องค์กร = ผู้ใช้ระบบ 1 กลุ่ม (ศูนย์ เทศบาล หน่วยงาน) เห็นเฉพาะข้อมูลของตน · เพิ่มองค์กรแล้วไปที่ จัดการ → บัญชี เพื่อสร้าง admin',
   cols: [{ key: 'code', label: 'รหัส (A-Z 0-9 ใช้ประกอบชื่อล็อกอิน)', required: true, readonly: true }, { key: 'name', label: 'ชื่อ', required: true }, { key: 'max_recorders', label: 'เพดานผู้บันทึก', type: 'number', required: true }, { key: 'status', label: 'สถานะ', type: 'status' }],
   beforeSave: p => (p.code && !/^[A-Z0-9]{2,12}$/.test(p.code) ? 'รหัสองค์กรต้องเป็น A-Z/0-9 ยาว 2–12 ตัว' : null) };
-SPECS['food.source_type'] = { table: 'food.source_type', title: 'ประเภทแหล่งเศษอาหาร', order: ['sort_order'], cols: [{ key: 'name', label: 'ชื่อประเภท', required: true }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }] };
+SPECS['food.source_type'] = { table: 'food.source_type', title: 'ประเภทแหล่งกำเนิดเศษอาหารกำเนิดเศษอาหาร', order: ['sort_order'], cols: [{ key: 'name', label: 'ชื่อประเภท', required: true }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 const SETTINGS_META = { system_name: 'ชื่อระบบ', max_photos_per_pickup: 'รูปสูงสุดต่อรอบ', default_photo_endpoint_url: 'ลิงก์ตัวรับรูปค่ากลาง (URL ระบบหลังบ้าน)', default_photo_folder_id: 'โฟลเดอร์ Drive ค่ากลาง', quality_labels: 'ความหมายสเกลคุณภาพ' };
 async function pageSuper(view) {
   const tab = location.hash.split('/')[1] || 'org';
-  const tabs = [['org', 'องค์กร'], ['types', 'ประเภทแหล่ง'], ['settings', 'ตั้งค่าระบบ'], ['status', 'สถานะระบบ']];
+  const tabs = [['org', 'องค์กร'], ['types', 'ประเภทแหล่งกำเนิดเศษอาหาร'], ['settings', 'ตั้งค่าระบบ'], ['status', 'สถานะระบบ']];
   let body = '';
   if (tab === 'org') body = await crudSection(SPECS['core.org']);
   else if (tab === 'types') body = await crudSection(SPECS['food.source_type']);
@@ -365,12 +364,12 @@ async function superStatus() {
 // =====================================================================
 window.HELP = {
   home: { title: 'หน้าแรก', why: 'เห็นรอบเข้ารับล่าสุดและปุ่มบันทึกเร็ว', steps: ['กดปุ่มเขียว "＋ บันทึกรอบเข้ารับ" เมื่อกลับจากไปรับเศษอาหาร', 'กดวันที่ในตารางเพื่อดูรายละเอียดหรือแก้ไข', 'ถ้ามีปุ่ม "รอส่ง" มุมบน แปลว่ามีรายการที่ยังส่งไม่ได้ กดเพื่อส่งเมื่อมีสัญญาณ'] },
-  'pickup-new': { title: 'บันทึกรอบเข้ารับ', why: '1 รอบ = ไปรับ 1 ครั้งสำหรับ 1 ฟาร์ม อาจรับจากหลายแหล่ง', steps: ['เลือกฟาร์มที่นำเศษอาหารไป และวันที่ (ระบบจำฟาร์มล่าสุดให้)', 'กรอกน้ำหนัก (กก.) เฉพาะแหล่งที่ไปรับ แหล่งที่ไม่ได้รับเว้นว่าง', 'ให้คะแนนคัดแยก 1–5 ของแต่ละแหล่ง (ไม่บังคับ): 1 ปนขยะอื่นมาก … 5 สะอาดดีเยี่ยม', 'ถ่ายรูปใบชั่ง/ถัง (ไม่เกิน 3 รูป) แล้วกดบันทึก'], done: 'ขึ้นข้อความ "บันทึกรอบเข้ารับแล้ว" และเปิดหน้ารายละเอียดรอบ', note: 'ไม่มีสัญญาณ: กดบันทึกได้ตามปกติ ระบบเก็บไว้ในเครื่องและส่งเองเมื่อมีสัญญาณ (ดูปุ่ม "รอส่ง") · อย่าล้างข้อมูลเบราว์เซอร์ระหว่างมีรายการค้าง' },
-  pickups: { title: 'รายการรอบเข้ารับ', steps: ['กรองตามช่วงวันที่/ฟาร์ม หรือพิมพ์ค้นหา', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์รายการต่อแหล่ง เปิดใน Excel ได้'] },
-  dashboard: { title: 'แดชบอร์ด', why: 'ตัวเลขทั้งหมดคำนวณสดจากรายการที่ผ่านตัวกรอง (เฉพาะรอบและรายการสถานะใช้งาน)', steps: ['เลือกโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'กราฟรายเดือน สัดส่วนฟาร์ม ยอดตามแหล่ง และคะแนนคัดแยกเฉลี่ยตามแหล่ง (เขียว ≥4 · เหลือง ≥3 · แดง <3)', '"ส่งออก CSV" เพื่อวิเคราะห์ต่อ'] },
-  map: { title: 'แผนที่', steps: ['หมุดเขียว = ฟาร์ม · ส้ม = แหล่งเศษอาหาร กดหมุดดูยอด', 'รายการที่ไม่มีพิกัดจะไม่แสดง admin ใส่พิกัดได้ที่ จัดการ → แก้ → ใช้ GPS'] },
+  'pickup-new': { title: 'บันทึกรอบเข้ารับ', why: '1 รอบ = ไปรับ 1 ครั้งสำหรับ 1 ฟาร์ม อาจรับจากหลายแหล่งกำเนิดเศษอาหาร', steps: ['เลือกฟาร์มที่นำเศษอาหารไป และวันที่ (ระบบจำฟาร์มล่าสุดให้)', 'กรอกน้ำหนัก (กก.) เฉพาะแหล่งกำเนิดเศษอาหารที่ไปรับ แหล่งกำเนิดเศษอาหารที่ไม่ได้รับเว้นว่าง', 'ให้คะแนนคัดแยก 1–5 ของแต่ละแหล่งกำเนิดเศษอาหาร (ไม่บังคับ): 1 ปนขยะอื่นมาก … 5 สะอาดดีเยี่ยม', 'ถ่ายรูปใบชั่ง/ถัง (ไม่เกิน 3 รูป) แล้วกดบันทึก'], done: 'ขึ้นข้อความ "บันทึกรอบเข้ารับแล้ว" และเปิดหน้ารายละเอียดรอบ', note: 'ไม่มีสัญญาณ: กดบันทึกได้ตามปกติ ระบบเก็บไว้ในเครื่องและส่งเองเมื่อมีสัญญาณ (ดูปุ่ม "รอส่ง") · อย่าล้างข้อมูลเบราว์เซอร์ระหว่างมีรายการค้าง' },
+  pickups: { title: 'รายการรอบเข้ารับ', steps: ['กรองตามช่วงวันที่/ฟาร์ม หรือพิมพ์ค้นหา', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์รายการต่อแหล่งกำเนิดเศษอาหาร เปิดใน Excel ได้'] },
+  dashboard: { title: 'แดชบอร์ด', why: 'ตัวเลขทั้งหมดคำนวณสดจากรายการที่ผ่านตัวกรอง (เฉพาะรอบและรายการสถานะใช้งาน)', steps: ['เลือกโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'กราฟรายเดือน สัดส่วนฟาร์ม ยอดตามแหล่งกำเนิดเศษอาหาร และคะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร (เขียว ≥4 · เหลือง ≥3 · แดง <3)', '"ส่งออก CSV" เพื่อวิเคราะห์ต่อ'] },
+  map: { title: 'แผนที่', steps: ['หมุดเขียว = ฟาร์ม · ส้ม = แหล่งกำเนิดเศษอาหาร กดหมุดดูยอด', 'รายการที่ไม่มีพิกัดจะไม่แสดง admin ใส่พิกัดได้ที่ จัดการ → แก้ → ใช้ GPS'] },
   'admin-farm': { title: 'ฟาร์ม', steps: ['กด "＋ เพิ่ม" ใส่ชื่อ เลือกโครงการ ใส่พิกัด (ยืนที่ฟาร์มแล้วกด "ใช้ GPS")', 'เลิกใช้ → แก้ → สถานะ "ปิดใช้งาน" (ข้อมูลเก่ายังอยู่)'] },
-  'admin-source': { title: 'แหล่งเศษอาหาร', steps: ['เพิ่มแหล่งใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
+  'admin-source': { title: 'แหล่งกำเนิดเศษอาหาร', steps: ['เพิ่มแหล่งกำเนิดเศษอาหารใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
   'admin-project': { title: 'โครงการ', steps: ['ใช้จัดกลุ่มฟาร์มเพื่อแยกวิเคราะห์ (ปี 68 / ศูนย์ BSF)', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
   'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
