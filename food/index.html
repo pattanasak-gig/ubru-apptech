@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261025e">
+<link rel="stylesheet" href="../common.css?v=20261026a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261025e"></script>
+<script src="../common.js?v=20261026a"></script>
 </head>
 <body>
 <header>
@@ -82,6 +82,7 @@ const maxPhotos = () => parseInt(setting('max_photos_per_pickup') || '3') || 3;
 const QUALITY = { 1: 'ต้องปรับปรุง', 2: 'พอใช้', 3: 'ปานกลาง', 4: 'ดี', 5: 'ดีเยี่ยม' };
 const qLabel = q => q == null ? '-' : `${q} ${QUALITY[q] || ''}`;
 const canWrite = () => S.me.role !== 'super_admin' || !!S.scopeOrg;
+const projectsOfScope = () => S.projects.filter(x => (!S.scopeOrg || x.org_id === S.scopeOrg) && x.status === 'active');
 
 // =====================================================================
 // หน้าแรก: รอบล่าสุด + ปุ่มบันทึก
@@ -106,14 +107,14 @@ function pickupTable(rows, id = 'tblPickups') {
 // รายการรอบทั้งหมด + ตัวกรอง + CSV
 // =====================================================================
 async function pagePickups(view) {
-  const st = S._pk = S._pk || { from: '', to: '', farm: '', q: '' };
+  const st = S._pk = S._pk || { from: '', to: '', farm: '', q: '', project: '' };
   const o = { eq: scopeEq(), order: ['pickup_date', false], order2: ['created_at', false] };
-  if (st.from) o.gte = { pickup_date: st.from }; if (st.to) o.lte = { pickup_date: st.to }; if (st.farm) o.eq.farm_id = st.farm;
+  if (st.from) o.gte = { pickup_date: st.from }; if (st.to) o.lte = { pickup_date: st.to }; if (st.farm) o.eq.farm_id = st.farm; if (st.project) o.eq.project_id = st.project;
   const rows = await api.list('food.v_pickup', o);
   const f = rows.filter(r => !st.q || [r.farm_name, r.note, r.created_by_name].join(' ').toLowerCase().includes(st.q.toLowerCase()));
   S._pkRows = f;
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>รายการรอบเข้ารับ (${fmtInt(f.length)}) ${helpBtn('pickups')}</h4><button class="small secondary" onclick="exportPickups()">ส่งออก CSV</button></div>
-    <div class="row"><label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._pk.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._pk.to=this.value;render()" style="width:auto"></label>
+    <div class="row"><select style="width:auto;max-width:360px" onchange="S._pk.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projectsOfScope().map(x => `<option value="${x.id}" ${x.id === st.project ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select><label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._pk.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._pk.to=this.value;render()" style="width:auto"></label>
       <select style="width:auto" onchange="S._pk.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <input type="search" placeholder="ค้นหา…" value="${esc(st.q)}" onchange="S._pk.q=this.value;render()" style="flex:1;min-width:140px"></div>
     <div class="muted" style="margin:6px 0">รวม <b>${fmt(sum(f, 'total_kg'))}</b> กก. · ${fmtInt(f.length)} รอบ</div>
@@ -137,7 +138,7 @@ async function pagePickup(view, id) {
   const act = items.filter(i => i.status === 'active');
   view.innerHTML = `<div class="card">
     <div class="row" style="justify-content:space-between"><h3 style="margin:0">${thDay(p.pickup_date)}${p.pickup_time ? ' ' + String(p.pickup_time).slice(0, 5) + ' น.' : ''}</h3>${p.status !== 'active' ? '<span class="pill" style="background:#fee2e2">ยกเลิกแล้ว</span>' : ''}</div>
-    <div style="font-size:18px">${esc(p.farm_name)} <span class="muted">· ${esc(p.project_name)}</span></div>
+    <div style="font-size:18px">${esc(p.farm_name)}</div><div class="muted">โครงการวิจัย: <b>${esc(p.project_code)}</b> ${esc(p.project_name)} ${p.project_overridden ? '<span class="pill">เลือกเองในรอบนี้</span>' : '<span class="pill">ตามฟาร์ม</span>'}</div>
     <div class="muted">${p.vehicle_name ? 'รถ ' + esc(p.vehicle_name) + ' · ' : ''}${p.distance_km != null ? 'ระยะทาง ' + fmt(p.distance_km) + ' กม. · ' : ''}บันทึกโดย ${esc(p.created_by_name || (p.entry_source === 'sheet' ? 'ย้ายจากชีตเดิม' : '-'))} · ${thDate(p.created_at)}</div>
     ${p.note ? `<div style="margin-top:6px">หมายเหตุ: ${esc(p.note)}</div>` : ''}
     <div class="kpis" style="margin-top:10px"><div class="kpi hero"><div class="l">รวม</div><div class="v">${fmt(p.total_kg)} กก.</div></div><div class="kpi"><div class="l">แหล่งกำเนิดเศษอาหาร</div><div class="v">${fmtInt(act.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย</div><div class="v">${p.avg_quality != null ? fmt(p.avg_quality) : '-'}</div></div></div>
@@ -160,12 +161,14 @@ async function pagePickupForm(view, id) {
   if (id) { [p] = await api.list('food.pickup', { eq: { id } }); if (!p) return view.innerHTML = '<div class="card">ไม่พบรอบ</div>'; items = await api.list('food.pickup_item', { eq: { pickup_id: id, status: 'active' } }); }
   let lastFarm = ''; try { lastFarm = localStorage.getItem('food_last_farm') || ''; } catch {}
   const farms = S.farms.filter(f => f.status === 'active' || (p && f.id === p.farm_id));
+  if (!farms.some(f => f.id === lastFarm)) lastFarm = (farms[0] || {}).id || '';   // ฟาร์มที่จำไว้ไม่มีแล้ว → ใช้ตัวแรก
   const srcs = S.sources.filter(s => s.status === 'active' || items.some(i => i.source_id === s.id));
   const itemOf = sid => items.find(i => i.source_id === sid) || {};
   S._newPhotos = [];
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">${id ? 'แก้ไขรอบเข้ารับ' : 'บันทึกรอบเข้ารับ'} ${helpBtn('pickup-new')}</h3>
     <div class="grid2">
       <div><label>ฟาร์มที่เข้ารับ *</label><select id="f_farm">${farms.length ? '' : '<option value="">— ยังไม่มีฟาร์ม ให้ admin เพิ่มที่เมนูจัดการ —</option>'}${farms.map(f => `<option value="${f.id}" ${(p ? p.farm_id : lastFarm) === f.id ? 'selected' : ''}>${esc(f.name)}${f.status !== 'active' ? ' (ปิด)' : ''}</option>`).join('')}</select></div>
+      <div><label>โครงการวิจัยที่นับรอบนี้ <span class="muted">(ค่าเริ่มต้นตามฟาร์ม เปลี่ยนได้)</span></label><select id="f_project">${projectsOfScope().map(x => `<option value="${x.id}" ${(p ? (p.project_id || farmOf(p.farm_id).project_id) : farmOf(lastFarm || (farms[0] || {}).id).project_id) === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</select></div>
       <div><label>วันที่เข้ารับ *</label><input id="f_date" type="date" value="${p ? p.pickup_date : todayISO()}" max="${todayISO()}"></div>
       <div><label>เวลา (ไม่บังคับ)</label><input id="f_time" type="time" value="${p && p.pickup_time ? String(p.pickup_time).slice(0, 5) : ''}"></div>
       <div><label>รถที่ใช้ (ไม่บังคับ)</label><select id="f_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || (p && v.id === p.vehicle_id)).map(v => `<option value="${v.id}" ${p && p.vehicle_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.plate_no ? ' ' + esc(v.plate_no) : ''}</option>`).join('')}</select></div>
@@ -178,6 +181,7 @@ async function pagePickupForm(view, id) {
     ${id ? '' : `<h4 style="margin:14px 0 4px">รูป (สูงสุด ${maxPhotos()} ใบ · ย่อให้อัตโนมัติ)</h4><div class="row"><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" onchange="pickPhotos(this.files);this.value=''"></label><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">🖼 เลือกจากคลัง<input type="file" accept="image/*" multiple class="hidden" onchange="pickPhotos(this.files);this.value=''"></label></div><div class="photos" id="f_photoList" style="margin-top:8px"><span class="muted">ยังไม่ได้เลือกรูป</span></div>`}
     <div class="row" style="margin-top:14px"><button id="f_save" style="min-width:160px">${id ? 'บันทึกการแก้ไข' : 'บันทึก'}</button><a class="btn secondary" style="text-decoration:none" href="${id ? '#pickup/' + id : '#home'}">ยกเลิก</a></div>
     <div class="muted" style="margin-top:6px">ไม่มีสัญญาณก็กดบันทึกได้ ระบบเก็บไว้ในเครื่องแล้วส่งให้เองเมื่อมีสัญญาณ</div></div>`;
+  $('#f_farm').onchange = () => { const fp = farmOf($('#f_farm').value).project_id; if (fp) $('#f_project').value = fp; };
   $('#f_save').onclick = () => savePickup(id, items);
 }
 function pickPhotos(files) {
@@ -197,7 +201,7 @@ async function savePickup(id, oldItems) {
   for (const r of rows) { if (r.kg !== '' && (isNaN(+r.kg) || +r.kg < 0)) { reset(); return needField(r.kgEl, 'น้ำหนักต้องเป็นตัวเลขไม่ติดลบ'); } if (r.kg === '' && r.quality !== '') { reset(); return needField(r.kgEl, 'ใส่คะแนนแล้วต้องกรอกน้ำหนักด้วย (ไม่ได้รับ = เว้นทั้งสองช่อง)'); } }
   const filled = rows.filter(r => r.kg !== '');
   if (!filled.length) { reset(); return needField(rows[0] && rows[0].kgEl, 'กรอกน้ำหนักอย่างน้อย 1 แหล่งกำเนิดเศษอาหาร'); }
-  const pickup = { farm_id: farmId, pickup_date: date, pickup_time: $('#f_time').value || null, vehicle_id: $('#f_vehicle').value || null, distance_km: km === '' ? null : +km, note: $('#f_note').value.trim() || null };
+  const pickup = { farm_id: farmId, project_id: $('#f_project').value || null, pickup_date: date, pickup_time: $('#f_time').value || null, vehicle_id: $('#f_vehicle').value || null, distance_km: km === '' ? null : +km, note: $('#f_note').value.trim() || null };
   if (isSuper()) pickup.org_id = S.scopeOrg;
   const items = filled.map(r => ({ source_id: r.source_id, weight_kg: +(+r.kg).toFixed(2), quality: r.quality ? +r.quality : null }));
   try { localStorage.setItem('food_last_farm', farmId); } catch {}
@@ -255,7 +259,7 @@ async function pageDashboard(view) {
   const months = {}; for (const i of items) { const m = i.pickup_date.slice(0, 7); months[m] = months[m] || { m, kg: 0, n: new Set() }; months[m].kg += +i.weight_kg; months[m].n.add(i.pickup_id); }
   const mArr = Object.values(months).sort((a, b) => a.m.localeCompare(b.m));
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>แดชบอร์ด ${helpBtn('dashboard')}</h4><button class="small secondary" onclick="exportCsv(S._dashItems,'dashboard_items')">ส่งออก CSV</button></div>
-    <div class="row"><select style="width:auto" onchange="S._dash.project=this.value;render()"><option value="">ทุกโครงการ</option>${projects.map(p => `<option value="${p.id}" ${p.id === st.project ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
+    <div class="row"><select style="width:auto" onchange="S._dash.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projects.map(p => `<option value="${p.id}" ${p.id === st.project ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
       <select style="width:auto" onchange="S._dash.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._dash.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._dash.to=this.value;render()" style="width:auto"></label></div></div>
     <div class="kpis"><div class="kpi hero"><div class="l">เศษอาหารที่เข้ารับทั้งหมด</div><div class="v">${fmt(total)} กก.</div></div><div class="kpi"><div class="l">รอบเข้ารับ</div><div class="v">${fmtInt(pickups)}</div></div><div class="kpi"><div class="l">เฉลี่ยต่อรอบ</div><div class="v">${pickups ? fmt(total / pickups) : '-'} กก.</div></div><div class="kpi"><div class="l">ฟาร์ม / แหล่งกำเนิด</div><div class="v">${fmtInt(byFarm.length)} / ${fmtInt(bySrc.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (${fmtInt(qs.length)} รายการ)</div><div class="v">${avgQ != null ? fmt(avgQ) : '-'}</div></div></div>
@@ -295,11 +299,11 @@ SPECS['food.source'] = { table: 'food.source', title: 'แหล่งกำเ�
   cols: [{ key: 'name', label: 'ชื่อแหล่งกำเนิดเศษอาหาร', required: true }, { key: 'source_type_id', label: 'ประเภท', type: 'select', nullable: true, options: () => S.types.map(t => ({ value: t.id, label: t.name })) }, { key: 'lat', label: 'พิกัด', type: 'latlng' }, { key: 'address', label: 'ที่อยู่', nullable: true, hide: true }, { key: 'contact', label: 'ผู้ติดต่อ/โทร', nullable: true, hide: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 SPECS['food.vehicle'] = { table: 'food.vehicle', title: 'รถที่ใช้เข้ารับ', order: ['name'], intro: 'ไม่บังคับใช้ · เตรียมไว้สำหรับการวิเคราะห์ระยะทาง/คาร์บอนในรอบถัดไป', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
   cols: [{ key: 'name', label: 'ชื่อเรียกรถ', required: true }, { key: 'plate_no', label: 'ทะเบียน', nullable: true }, { key: 'fuel_type', label: 'เชื้อเพลิง', nullable: true }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
-SPECS['core.project'] = { table: 'core.project', title: 'โครงการ', help: 'admin-project', order: ['code'], intro: 'ใช้จัดกลุ่มฟาร์ม (เช่น ปี 68 · ศูนย์ BSF) · "เผยแพร่" = ยอดของโครงการนี้แสดงบนหน้าสาธารณะ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
-  cols: [{ key: 'code', label: 'รหัสสั้น (a-z 0-9)', required: true }, { key: 'name', label: 'ชื่อโครงการ', required: true }, { key: 'year_be', label: 'ปี พ.ศ.', type: 'number', nullable: true }, { key: 'is_public', label: 'เผยแพร่สาธารณะ', type: 'bool' }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
+SPECS['core.project'] = { table: 'core.project', title: 'โครงการวิจัย', help: 'admin-project', order: ['code'], intro: 'ทุกรอบเข้ารับนับเข้าโครงการวิจัย 1 โครงการ (ค่าเริ่มต้นตามฟาร์ม เลือกเองได้ในแต่ละรอบ) · "เผยแพร่" = ยอดของโครงการนี้แสดงบนหน้าสาธารณะ', defaults: () => (isSuper() ? { org_id: S.scopeOrg } : {}),
+  cols: [{ key: 'code', label: 'คำย่อ (แสดงในตาราง/ตัวกรอง/ลิงก์ เช่น บพท.68_GE)', required: true }, { key: 'name', label: 'ชื่อเต็มโครงการวิจัย', required: true }, { key: 'year_be', label: 'ปี พ.ศ.', type: 'number', nullable: true }, { key: 'is_public', label: 'เผยแพร่สาธารณะ', type: 'bool' }, { key: 'note', label: 'หมายเหตุ', type: 'textarea', nullable: true, hide: true }, { key: 'status', label: 'สถานะ', type: 'status' }] };
 async function pageAdmin(view) {
   const tab = location.hash.split('/')[1] || 'farm';
-  const tabs = [['farm', 'ฟาร์ม'], ['source', 'แหล่งกำเนิดเศษอาหาร'], ['vehicle', 'รถ'], ['project', 'โครงการ'], ['users', 'บัญชี'], ['settings', 'ตั้งค่า']];
+  const tabs = [['farm', 'ฟาร์ม'], ['source', 'แหล่งกำเนิดเศษอาหาร'], ['vehicle', 'รถ'], ['project', 'โครงการวิจัย'], ['users', 'บัญชี'], ['settings', 'ตั้งค่า']];
   let body = '';
   if (tab === 'farm') body = await crudSection({ ...SPECS['food.farm'], eq: scopeEq() });
   else if (tab === 'source') body = await crudSection({ ...SPECS['food.source'], eq: scopeEq() });
@@ -370,7 +374,7 @@ window.HELP = {
   map: { title: 'แผนที่', steps: ['หมุดเขียว = ฟาร์ม · ส้ม = แหล่งกำเนิดเศษอาหาร กดหมุดดูยอด', 'รายการที่ไม่มีพิกัดจะไม่แสดง admin ใส่พิกัดได้ที่ จัดการ → แก้ → ใช้ GPS'] },
   'admin-farm': { title: 'ฟาร์ม', steps: ['กด "＋ เพิ่ม" ใส่ชื่อ เลือกโครงการ ใส่พิกัด (ยืนที่ฟาร์มแล้วกด "ใช้ GPS")', 'เลิกใช้ → แก้ → สถานะ "ปิดใช้งาน" (ข้อมูลเก่ายังอยู่)'] },
   'admin-source': { title: 'แหล่งกำเนิดเศษอาหาร', steps: ['เพิ่มแหล่งกำเนิดเศษอาหารใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
-  'admin-project': { title: 'โครงการ', steps: ['ใช้จัดกลุ่มฟาร์มเพื่อแยกวิเคราะห์ (ปี 68 / ศูนย์ BSF)', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
+  'admin-project': { title: 'โครงการวิจัย', steps: ['คำย่อใช้แสดงในตาราง/ตัวกรอง/ลิงก์หน้าสาธารณะ · ชื่อเต็มแสดงในรายละเอียด', 'ฟาร์มแต่ละแห่งมีโครงการประจำ · แต่ละรอบเข้ารับเลือกโครงการเองได้ (เช่น รอบที่เก็บร่วมกับโครงการใหม่) และแก้ย้อนหลังได้ที่ปุ่ม "แก้ไข" ของรอบ', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
   'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
