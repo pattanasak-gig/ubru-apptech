@@ -20,7 +20,7 @@ const CONFIG = {
   SUPABASE_URL: 'https://leufewpqqvdixktnmusc.supabase.co',
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_FgATIHmG2SAgNqd17aMtCg_x3TXp9eV',   // กุญแจสาธารณะ (ตั้งใจฝังในหน้าเว็บ) สิทธิ์จริงบังคับที่ RLS
   LOGIN_EMAIL_DOMAIN: 'apptech.local',    // ต้องตรงกับ LOGIN_EMAIL_DOMAIN ในห้องเครื่อง Apps Script
-  ENGINE_URL: '',                         // Web app URL ของ apps-script/engine (ใส่หลัง deploy ขั้นที่ 4)
+  ENGINE_URL: 'https://script.google.com/macros/s/AKfycbxbEeBA1gb2nuB6ixMUVcqheoSLkzZrf8EI4uxan_DFVhJjWrlCYmgcMCSOtRpGwXEHlg/exec',   // Web app URL ของ apps-script/engine (deploy เวอร์ชัน 1 · 25 ต.ค. 2569 22:26)
   ESRI_KEY_EXPIRES: '2027-10-22',
   DEMO: false,                            // true = โหมดสาธิต ใช้ข้อมูลตัวอย่างในเครื่อง ไม่ต่อ Supabase (หรือเปิดด้วย ?demo=1)
   MAP_FALLBACK: { lat: 15.0, lng: 100.0, zoom: 6 },   // มุมมองเมื่อยังไม่มีพิกัดใด (ค่ากลางประเทศ ไม่ผูกเมือง)
