@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261026c">
+<link rel="stylesheet" href="../common.css?v=20261026d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261026c"></script>
+<script src="../common.js?v=20261026d"></script>
 </head>
 <body>
 <header>
@@ -369,12 +369,15 @@ async function routeForm(id) {
   const stops = id ? await api.list('food.v_route_stop', { eq: { route_id: id }, order: ['seq'] }) : [];
   S._rtEdit = { stops: stops.map(x => x.source_id) };
   const farms = S.farms.filter(f => f.status === 'active' || f.id === r.farm_id);
+  // จุดเริ่มต้นที่บันทึกไว้ตรงกับฟาร์มไหน (ชื่อ+พิกัดเดียวกัน) → เลือกฟาร์มนั้น
+  const startFarm = id ? S.farms.find(f => f.name === r.start_name && f.lat != null && Number(f.lat) === Number(r.start_lat) && Number(f.lng) === Number(r.start_lng)) : null;
   openModal(`<h3 style="margin-top:0">${id ? 'แก้ไข' : 'เพิ่ม'}เส้นทางเดินรถ</h3>
     <label>ชื่อเส้นทาง *</label><input id="r_name" value="${esc(r.name || '')}" maxlength="200" placeholder="เช่น สายตลาด–ฟาร์ม ก">
     <label>ฟาร์มปลายทาง *</label><select id="r_farm">${farms.map(f => `<option value="${f.id}" ${f.id === r.farm_id ? 'selected' : ''}>${esc(f.name)}${f.lat == null ? ' (ยังไม่มีพิกัด)' : ''}</option>`).join('')}</select>
     <label>รถ</label><select id="r_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || v.id === r.vehicle_id).map(v => `<option value="${v.id}" ${v.id === r.vehicle_id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>
-    <label>จุดเริ่มต้น (ชื่อ)</label><input id="r_start" value="${esc(r.start_name || '')}" placeholder="เช่น ศูนย์ BSF / จุดจอดรถ">
-    <label>พิกัดจุดเริ่มต้น</label>${latlngField(r.start_lat, r.start_lng, 'r_')}
+    <label>จุดเริ่มต้น *</label><select id="r_startkind" onchange="rtStartKind()">${farms.filter(f => f.lat != null).map(f => `<option value="${f.id}" ${startFarm && startFarm.id === f.id ? 'selected' : ''}>ฟาร์ม: ${esc(f.name)}</option>`).join('')}<option value="other" ${!startFarm ? 'selected' : ''}>อื่น ๆ (ระบุชื่อและพิกัดเอง)</option></select>
+    <div id="r_startOther" class="${startFarm ? 'hidden' : ''}"><label>ชื่อจุดเริ่มต้น</label><input id="r_start" value="${esc(startFarm ? '' : (r.start_name || ''))}" placeholder="เช่น ศูนย์ BSF / จุดจอดรถ">
+    <label>พิกัดจุดเริ่มต้น</label>${latlngField(startFarm ? '' : r.start_lat, startFarm ? '' : r.start_lng, 'r_')}</div>
     <label>ลำดับจุดรับ (กดเพิ่มตามลำดับที่รถวิ่ง · ▲▼ สลับ · × เอาออก)</label><div id="r_stops"></div>
     <div class="row" style="margin:6px 0"><select id="r_add" style="flex:1"><option value="">— เลือกแหล่งกำเนิดเศษอาหารเพื่อเพิ่ม —</option>${S.sources.filter(x => x.status === 'active').map(x => `<option value="${x.id}">${esc(x.name)}${x.lat == null ? ' (ยังไม่มีพิกัด)' : ''}</option>`).join('')}</select><button type="button" class="small secondary" onclick="rtAddStop()">เพิ่มจุด</button></div>
     <label>หมายเหตุ/ตารางวิ่ง</label><input id="r_sched" value="${esc(r.schedule_note || '')}" placeholder="เช่น ทุกอังคาร/ศุกร์ 15:00">
@@ -382,10 +385,12 @@ async function routeForm(id) {
   rtDrawStops();
   $('#r_save').onclick = async () => {
     const name = $('#r_name').value.trim(); if (!name) return needField('#r_name', 'กรอกชื่อเส้นทาง');
-    const la = $('#r_lat').value, ln = $('#r_lng').value; if ((la === '') !== (ln === '')) return needField('#r_lat', 'กรอกพิกัดจุดเริ่มต้นให้ครบ หรือเว้นว่างทั้งคู่');
+    const kind = $('#r_startkind').value; let startName, la, ln;
+    if (kind && kind !== 'other') { const f = farmOf(kind); startName = f.name; la = f.lat; ln = f.lng; }
+    else { startName = $('#r_start').value.trim(); la = $('#r_lat').value; ln = $('#r_lng').value; if (!startName) return needField('#r_start', 'กรอกชื่อจุดเริ่มต้น หรือเลือกฟาร์มจากรายการ'); if (la === '' || ln === '') return needField('#r_src', 'วางพิกัดจุดเริ่มต้น (หรือลิงก์ Google Maps) แล้วกด "ใช้ค่านี้"'); }
     if (!S._rtEdit.stops.length) return needField('#r_add', 'เพิ่มจุดรับอย่างน้อย 1 จุด');
     const b = $('#r_save'); b.disabled = true;
-    const patch = { name, farm_id: $('#r_farm').value, vehicle_id: $('#r_vehicle').value || null, start_name: $('#r_start').value.trim() || null, start_lat: la === '' ? null : +la, start_lng: ln === '' ? null : +ln, schedule_note: $('#r_sched').value.trim() || null };
+    const patch = { name, farm_id: $('#r_farm').value, vehicle_id: $('#r_vehicle').value || null, start_name: startName || null, start_lat: la === '' || la == null ? null : +la, start_lng: ln === '' || ln == null ? null : +ln, schedule_note: $('#r_sched').value.trim() || null };
     try {
       let rid = id;
       if (id) await api.update('food.route', id, patch); else { if (isSuper()) patch.org_id = S.scopeOrg; rid = (await api.insert('food.route', patch)).id; }
@@ -396,6 +401,7 @@ async function routeForm(id) {
     } catch (e) { fail(e, 'บันทึกเส้นทางไม่สำเร็จ'); b.disabled = false; }
   };
 }
+function rtStartKind() { const other = $('#r_startkind').value === 'other'; $('#r_startOther').classList.toggle('hidden', !other); }
 function rtDrawStops() { const box = $('#r_stops'); if (!box) return; box.innerHTML = S._rtEdit.stops.map((sid, i) => `<div class="stoprow"><b>${i + 1}.</b><span class="nm">${esc(sourceOf(sid).name || '?')}${sourceOf(sid).lat == null ? ' <span class="pill">ไม่มีพิกัด</span>' : ''}</span><button type="button" class="small secondary" onclick="rtMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button><button type="button" class="small secondary" onclick="rtMove(${i},1)" ${i === S._rtEdit.stops.length - 1 ? 'disabled' : ''}>▼</button><button type="button" class="small danger" onclick="S._rtEdit.stops.splice(${i},1);rtDrawStops()">×</button></div>`).join('') || '<div class="muted">ยังไม่มีจุดรับ</div>'; }
 function rtAddStop() { const v = $('#r_add').value; if (!v) return; if (S._rtEdit.stops.includes(v)) return toast('มีจุดนี้แล้ว', true); S._rtEdit.stops.push(v); $('#r_add').value = ''; rtDrawStops(); }
 function rtMove(i, d) { const a = S._rtEdit.stops; const j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; rtDrawStops(); }
@@ -487,7 +493,7 @@ window.HELP = {
   'admin-source': { title: 'แหล่งกำเนิดเศษอาหาร', steps: ['เพิ่มแหล่งกำเนิดเศษอาหารใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
   'admin-project': { title: 'โครงการวิจัย', steps: ['คำย่อใช้แสดงในตาราง/ตัวกรอง/ลิงก์หน้าสาธารณะ · ชื่อเต็มแสดงในรายละเอียด', 'ฟาร์มแต่ละแห่งมีโครงการประจำ · แต่ละรอบเข้ารับเลือกโครงการเองได้ (เช่น รอบที่เก็บร่วมกับโครงการใหม่) และแก้ย้อนหลังได้ที่ปุ่ม "แก้ไข" ของรอบ', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
   'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
-  routes: { title: 'เส้นทางเดินรถ', why: 'ดูว่ารถวิ่งจากจุดเริ่มต้น ไปรับที่แหล่งกำเนิดตามลำดับ แล้วส่งที่ฟาร์มไหน พร้อมระยะทางบนถนนจริง', steps: ['admin กด "＋ เพิ่มเส้นทาง": ตั้งชื่อ เลือกฟาร์มปลายทาง ใส่จุดเริ่มต้น (วางพิกัด/ลิงก์ Google Maps หรือ GPS) แล้วเพิ่มจุดรับตามลำดับ', 'กด "ลากเส้นตามถนน" ระบบคำนวณเส้นบนถนนและระยะทาง (ต้องมีพิกัดครบทุกจุด)', 'ถ้าเส้นไม่ตรงกับที่รถวิ่งจริง กด "ปรับเส้นทาง" แล้วคลิกบนแผนที่ตรงถนนที่ต้องการให้ผ่าน จากนั้นกด "คำนวณใหม่"', 'ติ๊ก/เอาติ๊กออกหน้าชื่อเส้นทางเพื่อเลือกแสดง · เลือกฟาร์มปลายทางด้านบนเพื่อกรอง'], note: 'เส้นทางคำนวณด้วยบริการฟรี OSRM เฉพาะตอนกดปุ่ม แล้วเก็บไว้ จึงเปิดดูได้แม้บริการล่ม' },
+  routes: { title: 'เส้นทางเดินรถ', why: 'ดูว่ารถวิ่งจากจุดเริ่มต้น ไปรับที่แหล่งกำเนิดตามลำดับ แล้วส่งที่ฟาร์มไหน พร้อมระยะทางบนถนนจริง', steps: ['admin กด "＋ เพิ่มเส้นทาง": ตั้งชื่อ เลือกฟาร์มปลายทาง เลือกจุดเริ่มต้นจากรายชื่อฟาร์ม (หรือ "อื่น ๆ" แล้วใส่ชื่อ+พิกัด/ลิงก์ Google Maps) แล้วเพิ่มจุดรับตามลำดับ', 'กด "ลากเส้นตามถนน" ระบบคำนวณเส้นบนถนนและระยะทาง (ต้องมีพิกัดครบทุกจุด)', 'ถ้าเส้นไม่ตรงกับที่รถวิ่งจริง กด "ปรับเส้นทาง" แล้วคลิกบนแผนที่ตรงถนนที่ต้องการให้ผ่าน จากนั้นกด "คำนวณใหม่"', 'ติ๊ก/เอาติ๊กออกหน้าชื่อเส้นทางเพื่อเลือกแสดง · เลือกฟาร์มปลายทางด้านบนเพื่อกรอง'], note: 'เส้นทางคำนวณด้วยบริการฟรี OSRM เฉพาะตอนกดปุ่ม แล้วเก็บไว้ จึงเปิดดูได้แม้บริการล่ม' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
 function pageHelp(view) {
