@@ -10,8 +10,8 @@ header button, header a.hbtn { background: rgba(255,255,255,.15); color:#fff; bo
 nav.tabs { display:flex; gap:4px; overflow-x:auto; background:#fff; border-bottom:1px solid var(--line); padding: 4px 8px; position: sticky; top:56px; z-index:40; }
 nav.tabs a { flex: 0 0 auto; text-decoration:none; color:var(--muted); padding: 0 14px; min-height:44px; min-width:44px; justify-content:center; display:inline-flex; align-items:center; border-radius:8px; white-space:nowrap; font-size:15px; }
 nav.tabs a.active { background: #e8eef6; color: var(--brand); font-weight:600; }
-main { padding: 12px 16px 8px; max-width: 1100px; margin: 0 auto; }
-footer.credit { max-width: 1100px; margin: 0 auto; padding: 10px 16px calc(90px + env(safe-area-inset-bottom)); font-size: 13px; line-height: 1.6; color: #4b5563; text-align: center; border-top: 1px solid var(--line); }
+main { padding: 12px 16px 8px; max-width: 1280px; margin: 0 auto; }
+footer.credit { max-width: 1280px; margin: 0 auto; padding: 10px 16px calc(90px + env(safe-area-inset-bottom)); font-size: 13px; line-height: 1.6; color: #4b5563; text-align: center; border-top: 1px solid var(--line); }
 footer.credit a { color: var(--brand); white-space: nowrap; display: inline-block; padding: 12px 6px; min-height: 44px; }
 @media print { footer.credit { padding-bottom: 0; } }
 .card { background: var(--card); border:1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
@@ -21,7 +21,7 @@ footer.credit a { color: var(--brand); white-space: nowrap; display: inline-bloc
 .kpi { background:#fff; border:1px solid var(--line); border-radius:12px; padding: 12px; }
 .kpi .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kpi .l { color: var(--muted); font-size: 14px; }
-.kpi.hero { background: var(--brand); color:#fff; border-color: var(--brand); } .kpi.hero .l { color:#dbeafe; } .kpi.hero .v { font-size:32px; color:#E9D5FF; }
+.kpi.hero { background: var(--brand); color:#fff; border-color: var(--brand); } .kpi.hero .l { color:#dbeafe; } .kpi.hero .v { font-size:28px; color:#E9D5FF; white-space:nowrap; }
 label { display:block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
 input, select, textarea { width:100%; font: inherit; padding: 10px; border:1px solid #cbd5e1; border-radius: 8px; background:#fff; min-height:44px; }
 input[type=checkbox], input[type=radio] { width:auto; min-height:auto; }
@@ -72,7 +72,11 @@ button, a, summary, input, select, textarea, label.pick-opt { touch-action: mani
 .subtabs { display:flex; gap:6px; margin: 0 0 12px; flex-wrap:wrap; }
 .subtabs a { text-decoration:none; padding: 0 16px; min-height:44px; display:inline-flex; align-items:center; border-radius: 999px; border:1px solid var(--line); background:#fff; color:#374151; font-size:14px; }
 .subtabs a.active { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
-.chartbox { position:relative; height:300px; }
+.chartbox { position:relative; height:320px; }
+.grid-dash { display:grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; }   /* แดชบอร์ด: 2 คอลัมน์บนจอกว้าง 1 คอลัมน์บนมือถือ */
+.grid-dash .card { margin-bottom:0; }
+td.nowrap, th.nowrap { white-space:nowrap; }
+.hbar-l { flex: 0 0 42%; }
 .cardhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
 .cardhead h4 { margin:0; }
 .infobtn { width:44px; height:44px; padding:0; border-radius:50%; background:#fff; color:var(--brand); border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; vertical-align:middle; margin-left:6px; }

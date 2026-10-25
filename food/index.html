@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css">
+<link rel="stylesheet" href="../common.css?v=20261025c">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js"></script>
+<script src="../common.js?v=20261025c"></script>
 </head>
 <body>
 <header>
@@ -257,13 +257,13 @@ async function pageDashboard(view) {
       <select style="width:auto" onchange="S._dash.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._dash.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._dash.to=this.value;render()" style="width:auto"></label></div></div>
     <div class="kpis"><div class="kpi hero"><div class="l">เศษอาหารที่เข้ารับทั้งหมด</div><div class="v">${fmt(total)} กก.</div></div><div class="kpi"><div class="l">รอบเข้ารับ</div><div class="v">${fmtInt(pickups)}</div></div><div class="kpi"><div class="l">เฉลี่ยต่อรอบ</div><div class="v">${pickups ? fmt(total / pickups) : '-'} กก.</div></div><div class="kpi"><div class="l">ฟาร์ม / แหล่ง</div><div class="v">${fmtInt(byFarm.length)} / ${fmtInt(bySrc.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (${fmtInt(qs.length)} รายการ)</div><div class="v">${avgQ != null ? fmt(avgQ) : '-'}</div></div></div>
-    <div class="grid2">
+    <div class="grid-dash">
       <div class="card"><div class="cardhead"><h4>รายเดือน (กก.)</h4></div><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>สัดส่วนตามฟาร์ม</h4></div><div class="chartbox"><canvas id="cFarm"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>ตามแหล่ง (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}</div>
       <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่ง</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
       <div class="card"><div class="cardhead"><h4>ตามประเภทแหล่ง</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
-      <div class="card"><div class="cardhead"><h4>ตารางรายเดือน</h4></div><table><thead><tr><th>เดือน</th><th class="num">รอบ</th><th class="num">กก.</th><th class="num">เฉลี่ย/รอบ</th></tr></thead><tbody>${mArr.slice().reverse().map(m => `<tr><td data-sort-value="${m.m}">${thMonth(m.m + '-01')}</td><td class="num">${fmtInt(m.n.size)}</td><td class="num">${fmt(m.kg)}</td><td class="num">${fmt(m.kg / m.n.size)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="card"><div class="cardhead"><h4>ตารางรายเดือน</h4></div><table><thead><tr><th class="nowrap">เดือน</th><th class="num">รอบ</th><th class="num">กก.</th><th class="num">เฉลี่ย/รอบ</th></tr></thead><tbody>${mArr.slice().reverse().map(m => `<tr><td class="nowrap" data-sort-value="${m.m}">${thMonth(m.m + '-01')}</td><td class="num">${fmtInt(m.n.size)}</td><td class="num">${fmt(m.kg)}</td><td class="num">${fmt(m.kg / m.n.size)}</td></tr>`).join('')}</tbody></table></div>
     </div>`;
   S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่ง: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
   if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.m + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[0] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
