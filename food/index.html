@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261026a">
+<link rel="stylesheet" href="../common.css?v=20261026b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261026a"></script>
+<script src="../common.js?v=20261026b"></script>
 </head>
 <body>
 <header>
@@ -32,7 +32,7 @@
 //   super admin: + ส่วนกลาง (องค์กร ประเภทแหล่งกำเนิดเศษอาหาร ตั้งค่าระบบ)
 // =====================================================================
 const TABS = () => [
-  ['#home', 'หน้าแรก'], ['#pickups', 'รายการรอบ'], ...(isAdmin() ? [['#dashboard', 'แดชบอร์ด']] : []), ['#map', 'แผนที่'],
+  ['#home', 'แดชบอร์ด'], ['#pickups', 'รายการรอบ'], ['#map', 'แผนที่'], ['#routes', 'เส้นทางรถ'],
   ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ...(isSuper() ? [['#super', 'ส่วนกลาง']] : []), ['#help', 'ช่วยเหลือ']
 ];
 function renderTabs() { $('#tabs').innerHTML = S.me ? TABS().map(([h, l]) => `<a href="${h}" class="${location.hash.startsWith(h) ? 'active' : ''}">${l}</a>`).join('') : ''; }
@@ -48,19 +48,20 @@ async function render() {
     $('#who').textContent = `${S.me.display_name} · ${roleLabel(S.me.role)}${S.me.org_id ? ' · ' + (orgOf(S.me.org_id).code || '') : ''}`;
     Queue.refreshBadge();
     const h = location.hash || '#home'; renderTabs();
-    if (h.startsWith('#home')) return pageHome(view);
+    if (h.startsWith('#home')) return pageDashboard(view);   // DEC-111 หน้าแรก = แดชบอร์ด (ทุกบทบาท เห็นเฉพาะองค์กรตน)
     if (h.startsWith('#pickups')) return pagePickups(view);
     if (h.startsWith('#pickup/new')) return pagePickupForm(view, null);
     if (h.startsWith('#pickup-edit/')) return pagePickupForm(view, h.split('/')[1]);
     if (h.startsWith('#pickup/')) return pagePickup(view, h.split('/')[1]);
-    if (h.startsWith('#dashboard')) return isAdmin() ? pageDashboard(view) : pageHome(view);
+    if (h.startsWith('#dashboard')) return pageDashboard(view);
+    if (h.startsWith('#routes')) return pageRoutes(view);
     if (h.startsWith('#map')) return pageMap(view);
-    if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageHome(view);
-    if (h.startsWith('#super')) return isSuper() ? pageSuper(view) : pageHome(view);
+    if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageDashboard(view);
+    if (h.startsWith('#super')) return isSuper() ? pageSuper(view) : pageDashboard(view);
     if (h.startsWith('#queue')) return pageQueue(view);
     if (h.startsWith('#me')) return pageMe(view);
     if (h.startsWith('#help')) return pageHelp(view);
-    return pageHome(view);
+    return pageDashboard(view);
   } catch (e) { const f = friendlyError(e, 'เปิดหน้านี้ไม่สำเร็จ'); console.error(e); if (f.kind === 'session' && S.me && api.name === 'supabase') return sessionLost();
     view.innerHTML = `<div class="card"><b style="color:var(--danger)">${esc(f.title)}</b>${f.hint ? `<div style="margin-top:6px">${esc(f.hint)}</div>` : ''}${f.raw && f.raw !== f.title ? `<div class="muted" style="margin-top:6px;word-break:break-all">${esc(f.raw)}</div>` : ''}<div class="row" style="margin-top:10px"><button class="secondary" onclick="render()">ลองใหม่</button><button class="secondary" onclick="S.cache={};location.reload()">รีเฟรชทั้งหน้า</button></div></div>`; }
   finally { setTimeout(() => { bindLabels(view); makeSortable(view); }, 0); }
@@ -165,18 +166,18 @@ async function pagePickupForm(view, id) {
   const srcs = S.sources.filter(s => s.status === 'active' || items.some(i => i.source_id === s.id));
   const itemOf = sid => items.find(i => i.source_id === sid) || {};
   S._newPhotos = [];
-  view.innerHTML = `<div class="card"><h3 style="margin-top:0">${id ? 'แก้ไขรอบเข้ารับ' : 'บันทึกรอบเข้ารับ'} ${helpBtn('pickup-new')}</h3>
-    <div class="grid2">
+  view.innerHTML = `<div class="card formbox"><h3 style="margin-top:0">${id ? 'แก้ไขรอบเข้ารับ' : 'บันทึกรอบเข้ารับ'} ${helpBtn('pickup-new')}</h3>
+    <div class="fgrid">
       <div><label>ฟาร์มที่เข้ารับ *</label><select id="f_farm">${farms.length ? '' : '<option value="">— ยังไม่มีฟาร์ม ให้ admin เพิ่มที่เมนูจัดการ —</option>'}${farms.map(f => `<option value="${f.id}" ${(p ? p.farm_id : lastFarm) === f.id ? 'selected' : ''}>${esc(f.name)}${f.status !== 'active' ? ' (ปิด)' : ''}</option>`).join('')}</select></div>
-      <div><label>โครงการวิจัยที่นับรอบนี้ <span class="muted">(ค่าเริ่มต้นตามฟาร์ม เปลี่ยนได้)</span></label><select id="f_project">${projectsOfScope().map(x => `<option value="${x.id}" ${(p ? (p.project_id || farmOf(p.farm_id).project_id) : farmOf(lastFarm || (farms[0] || {}).id).project_id) === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</select></div>
+      <div><label>โครงการวิจัยที่นับรอบนี้</label><select id="f_project">${projectsOfScope().map(x => `<option value="${x.id}" ${(p ? (p.project_id || farmOf(p.farm_id).project_id) : farmOf(lastFarm || (farms[0] || {}).id).project_id) === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.name)}</option>`).join('')}</select><div class="hint">ค่าเริ่มต้นตามฟาร์ม เปลี่ยนได้</div></div>
       <div><label>วันที่เข้ารับ *</label><input id="f_date" type="date" value="${p ? p.pickup_date : todayISO()}" max="${todayISO()}"></div>
-      <div><label>เวลา (ไม่บังคับ)</label><input id="f_time" type="time" value="${p && p.pickup_time ? String(p.pickup_time).slice(0, 5) : ''}"></div>
-      <div><label>รถที่ใช้ (ไม่บังคับ)</label><select id="f_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || (p && v.id === p.vehicle_id)).map(v => `<option value="${v.id}" ${p && p.vehicle_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.plate_no ? ' ' + esc(v.plate_no) : ''}</option>`).join('')}</select></div>
-      <div><label>ระยะทางรอบนี้ (กม. ไม่บังคับ)</label><input id="f_km" type="number" step="0.1" min="0" inputmode="decimal" value="${p && p.distance_km != null ? p.distance_km : ''}"></div>
+      <div><label>เวลา</label><input id="f_time" type="time" value="${p && p.pickup_time ? String(p.pickup_time).slice(0, 5) : ''}"><div class="hint">ไม่บังคับ</div></div>
+      <div><label>รถที่ใช้</label><select id="f_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || (p && v.id === p.vehicle_id)).map(v => `<option value="${v.id}" ${p && p.vehicle_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.plate_no ? ' ' + esc(v.plate_no) : ''}</option>`).join('')}</select><div class="hint">ไม่บังคับ</div></div>
+      <div><label>ระยะทางรอบนี้ (กม.)</label><input id="f_km" type="number" step="0.1" min="0" inputmode="decimal" value="${p && p.distance_km != null ? p.distance_km : ''}"><div class="hint">ไม่บังคับ · ดูจากหน้าเส้นทางรถได้</div></div>
     </div>
-    <h4 style="margin:14px 0 4px">ปริมาณต่อแหล่งกำเนิดเศษอาหาร <span class="muted">(กรอกเฉพาะแหล่งกำเนิดเศษอาหารที่รับ · กก. ทศนิยมได้ · คะแนนคัดแยก 1 ต้องปรับปรุง … 5 ดีเยี่ยม)</span></h4>
-    <div class="itemrow" style="border-bottom:2px solid var(--line)"><div class="muted">แหล่งกำเนิด</div><div class="muted">กก.</div><div class="muted">คะแนน</div></div>
-    ${srcs.map(s => { const it = itemOf(s.id); return `<div class="itemrow" data-sid="${s.id}"><div class="nm">${esc(s.name)}<div class="muted">${esc(typeOf(s.source_type_id).name || '')}</div></div><input class="kg" type="number" step="0.01" min="0" inputmode="decimal" placeholder="—" value="${it.weight_kg ?? ''}" aria-label="น้ำหนัก ${esc(s.name)}"><select class="q" aria-label="คะแนน ${esc(s.name)}"><option value="">—</option>${[1, 2, 3, 4, 5].map(q => `<option value="${q}" ${it.quality === q ? 'selected' : ''}>${q} ${QUALITY[q]}</option>`).join('')}</select></div>`; }).join('') || '<div class="muted">ยังไม่มีแหล่งกำเนิดเศษอาหาร ให้ admin เพิ่มที่เมนูจัดการ</div>'}
+    <h4 style="margin:14px 0 2px">ปริมาณต่อแหล่งกำเนิดเศษอาหาร</h4><div class="muted" style="margin-bottom:4px">กรอกเฉพาะแหล่งที่ไปรับ (กก. ทศนิยมได้) · คะแนนคัดแยก 1 ต้องปรับปรุง … 5 ดีเยี่ยม</div>
+    <div class="items"><div class="itemrow" style="border-bottom:2px solid var(--line)"><div class="muted">แหล่งกำเนิด</div><div class="muted">กก.</div><div class="muted">คะแนน</div></div>
+    ${srcs.map(s => { const it = itemOf(s.id); return `<div class="itemrow" data-sid="${s.id}"><div class="nm">${esc(s.name)}<div class="muted">${esc(typeOf(s.source_type_id).name || '')}</div></div><input class="kg" type="number" step="0.01" min="0" inputmode="decimal" placeholder="—" value="${it.weight_kg ?? ''}" aria-label="น้ำหนัก ${esc(s.name)}"><select class="q" aria-label="คะแนน ${esc(s.name)}"><option value="">—</option>${[1, 2, 3, 4, 5].map(q => `<option value="${q}" ${it.quality === q ? 'selected' : ''}>${q} ${QUALITY[q]}</option>`).join('')}</select></div>`; }).join('') || '<div class="muted">ยังไม่มีแหล่งกำเนิดเศษอาหาร ให้ admin เพิ่มที่เมนูจัดการ</div>'}</div>
     <label>หมายเหตุ</label><textarea id="f_note" rows="2">${esc(p ? p.note || '' : '')}</textarea>
     ${id ? '' : `<h4 style="margin:14px 0 4px">รูป (สูงสุด ${maxPhotos()} ใบ · ย่อให้อัตโนมัติ)</h4><div class="row"><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" class="hidden" onchange="pickPhotos(this.files);this.value=''"></label><label class="btn secondary" style="margin:0;display:inline-flex;align-items:center">🖼 เลือกจากคลัง<input type="file" accept="image/*" multiple class="hidden" onchange="pickPhotos(this.files);this.value=''"></label></div><div class="photos" id="f_photoList" style="margin-top:8px"><span class="muted">ยังไม่ได้เลือกรูป</span></div>`}
     <div class="row" style="margin-top:14px"><button id="f_save" style="min-width:160px">${id ? 'บันทึกการแก้ไข' : 'บันทึก'}</button><a class="btn secondary" style="text-decoration:none" href="${id ? '#pickup/' + id : '#home'}">ยกเลิก</a></div>
@@ -270,6 +271,7 @@ async function pageDashboard(view) {
       <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
       <div class="card" style="grid-column:1/-1"><div class="cardhead"><h4>ตารางรายเดือน</h4></div>${pagedTable('tblMonthly', mArr.slice().reverse().map(m => ({ m: m.m, n: m.n.size, kg: Math.round(m.kg * 100) / 100, avg: Math.round(m.kg / m.n.size * 100) / 100 })), [{ label: 'เดือน', key: 'm', cls: 'nowrap' }, { label: 'รอบ', key: 'n', cls: 'num' }, { label: 'กก.', key: 'kg', cls: 'num' }, { label: 'เฉลี่ย/รอบ', key: 'avg', cls: 'num' }], r => `<tr><td class="nowrap">${thMonth(r.m + '-01')}</td><td class="num">${fmtInt(r.n)}</td><td class="num">${fmt(r.kg)}</td><td class="num">${fmt(r.avg)}</td></tr>`, { resetPage: true })}</div>
     </div>`;
+  if (canWrite()) view.insertAdjacentHTML('beforeend', `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>`);
   S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่งกำเนิดเศษอาหาร: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
   if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.m + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[0] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
   if (byFarm.length) mkChart($('#cFarm'), { type: 'doughnut', data: { labels: byFarm.map(f => f.label), datasets: [{ data: byFarm.map(f => Math.round(f.kg * 100) / 100), backgroundColor: byFarm.map((_, i) => PALETTE[i % PALETTE.length]) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
@@ -288,6 +290,115 @@ async function pageMap(view) {
   fitAll(map, g);
   if (missing) toast(`${missing} รายการยังไม่มีพิกัด${isAdmin() ? ' (ใส่ได้ที่เมนู จัดการ → แก้ → ใช้ GPS)' : ''}`);
 }
+
+
+// =====================================================================
+// เส้นทางเดินรถ (DEC-111): จุดเริ่มต้น → แหล่งกำเนิดตามลำดับ → ฟาร์มปลายทาง · เส้นบนถนนจาก OSRM เก็บในฐานข้อมูล
+//   ปรับเส้นให้ตรงถนนจริง: โหมด "ปรับเส้นทาง" คลิกบนแผนที่เพิ่มจุดบังคับผ่าน แล้วคำนวณใหม่
+// =====================================================================
+const RCOL = ['#1F3A5F', '#C62828', '#2E7D32', '#6A1B9A', '#EF6C00', '#0097A7', '#5D4037', '#AD1457'];
+async function pageRoutes(view) {
+  const st = S._rt = S._rt || { farm: '', hidden: {}, editing: null, via: [] };
+  const routes = await api.list('food.v_route', { eq: scopeEq(), order: ['name'] });
+  const shown = routes.filter(r => r.status === 'active' && (!st.farm || r.farm_id === st.farm));
+  const vis = shown.filter(r => !st.hidden[r.id]);
+  const stopsAll = vis.length ? await api.list('food.v_route_stop', { in: { route_id: vis.map(r => r.id) }, order: ['seq'] }) : [];
+  const editing = st.editing ? routes.find(r => r.id === st.editing) : null;
+  view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>เส้นทางเดินรถ (${fmtInt(shown.length)}) ${helpBtn('routes')}</h4><div class="row">${isAdmin() && canWrite() ? `<button class="small" onclick="routeForm()">＋ เพิ่มเส้นทาง</button>` : ''}</div></div>
+    <div class="row" style="margin-bottom:6px"><select style="width:auto" onchange="S._rt.farm=this.value;render()"><option value="">ทุกฟาร์มปลายทาง</option>${S.farms.map(f => `<option value="${f.id}" ${f.id === st.farm ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><span class="muted">ติ๊กเพื่อเลือกแสดงบนแผนที่ · ระยะทางคำนวณจากถนนจริง (OSRM) เมื่อ admin กด "ลากเส้นตามถนน"</span></div>
+    <div style="overflow:auto"><table><thead><tr><th></th><th>เส้นทาง</th><th>ปลายทาง (ฟาร์ม)</th><th class="num">จุดรับ</th><th class="num">กม.</th><th class="num">นาที</th><th>คำนวณเมื่อ</th><th></th></tr></thead><tbody>
+    ${shown.map((r, i) => `<tr><td><label class="pick-opt" style="padding:0"><input type="checkbox" ${st.hidden[r.id] ? '' : 'checked'} onchange="S._rt.hidden['${r.id}']=!this.checked;render()" aria-label="แสดง ${esc(r.name)}"><span class="legend-sw" style="background:${RCOL[i % RCOL.length]}"></span></label></td><td><b>${esc(r.name)}</b>${r.start_name ? `<div class="muted">เริ่ม: ${esc(r.start_name)}</div>` : ''}${r.vehicle_name ? `<div class="muted">รถ ${esc(r.vehicle_name)}</div>` : ''}</td><td>${esc(r.farm_name)}</td><td class="num">${fmtInt(r.stops)}</td><td class="num">${r.path_km != null ? fmt(r.path_km, 1) : '<span class="muted">ยังไม่คำนวณ</span>'}</td><td class="num">${r.path_duration_s != null ? fmtInt(r.path_duration_s / 60) : '-'}</td><td class="muted">${r.path_at ? thDate(r.path_at) : '-'}</td>
+      <td style="white-space:nowrap">${isAdmin() && canWrite() ? `<button class="small secondary" onclick="routeForm('${r.id}')">แก้</button> <button class="small" onclick="computeRoute('${r.id}')">ลากเส้นตามถนน</button> <button class="small secondary" onclick="S._rt.editing=${st.editing === r.id ? 'null' : `'${r.id}'`};S._rt.via=${st.editing === r.id ? '[]' : JSON.stringify(r.via || [])};render()">${st.editing === r.id ? 'เลิกปรับ' : 'ปรับเส้นทาง'}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">ยังไม่มีเส้นทาง' + (isAdmin() ? ' กด "＋ เพิ่มเส้นทาง"' : '') + '</td></tr>'}</tbody></table></div>
+    ${editing ? `<div class="banner info" style="margin-top:8px"><b>โหมดปรับเส้นทาง: ${esc(editing.name)}</b> — คลิกบนแผนที่ตรงถนนที่รถวิ่งจริง เพื่อเพิ่ม "จุดบังคับผ่าน" (ลากหมุดย้ายได้ · คลิกหมุดเพื่อลบ) แล้วกด "คำนวณใหม่" · จุดบังคับ ${st.via.length} จุด
+      <div class="row" style="margin-top:6px"><button class="small" onclick="computeRoute('${editing.id}', S._rt.via)">คำนวณใหม่ตามจุดบังคับ</button><button class="small secondary" onclick="S._rt.via=[];computeRoute('${editing.id}', [])">ล้างจุดบังคับแล้วคำนวณใหม่</button></div></div>` : ''}
+    </div><div id="map"></div>`;
+  const map = L.map('map'); addBaseLayer(map); const g = L.featureGroup().addTo(map); S.map = map;
+  vis.forEach((r, idx) => {
+    const col = RCOL[shown.indexOf(r) % RCOL.length];
+    const stops = stopsAll.filter(x => x.route_id === r.id);
+    const pts = routePoints(r, stops);
+    if (r.path && r.path.coordinates) L.polyline(r.path.coordinates.map(c => [c[1], c[0]]), { color: col, weight: 5, opacity: .85 }).bindPopup(`<b>${esc(r.name)}</b><br>${fmt(r.path_km, 1)} กม. · ${fmtInt(r.path_duration_s / 60)} นาที`).addTo(g);
+    else if (pts.length > 1) L.polyline(pts.map(p => [p.lat, p.lng]), { color: col, weight: 3, dashArray: '6 8', opacity: .7 }).bindPopup(`<b>${esc(r.name)}</b><br>ยังไม่ได้ลากเส้นตามถนน (เส้นประ = เส้นตรง)`).addTo(g);
+    if (r.start_lat != null) L.circleMarker([r.start_lat, r.start_lng], { radius: 9, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindPopup(`<b>จุดเริ่มต้น</b> ${esc(r.start_name || '')}<br>${esc(r.name)}`).addTo(g);
+    stops.forEach(sp => { if (sp.lat == null) return; L.marker([sp.lat, sp.lng], { icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:${col};border-radius:50%;width:22px;height:22px;border:2px solid #fff">${sp.seq}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }) }).bindPopup(`<b>${sp.seq}. ${esc(sp.source_name)}</b><br>${esc(r.name)}`).addTo(g); });
+    if (r.farm_lat != null) L.marker([r.farm_lat, r.farm_lng], { icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:${col};border-radius:4px;width:26px;height:22px;border:2px solid #fff;line-height:18px">🏁</div>`, iconSize: [26, 22], iconAnchor: [13, 11] }) }).bindPopup(`<b>ปลายทาง</b> ${esc(r.farm_name)}`).addTo(g);
+    if (editing && editing.id === r.id) {
+      st.via.forEach((v, i) => { const m = L.marker([v[0], v[1]], { draggable: true, icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:#F9A825;color:#000;border-radius:50%;width:20px;height:20px;border:2px solid #fff;line-height:16px">v</div>`, iconSize: [20, 20], iconAnchor: [10, 10] }) }).addTo(g); m.on('dragend', e => { const ll = e.target.getLatLng(); st.via[i] = [+ll.lat.toFixed(6), +ll.lng.toFixed(6)]; }); m.on('click', () => { st.via.splice(i, 1); render(); }); });
+    }
+  });
+  if (editing) map.on('click', e => { st.via.push([+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6)]); render(); });
+  fitAll(map, g);
+  const missing = stopsAll.filter(x => x.lat == null).length; if (missing) toast(`${missing} จุดรับยังไม่มีพิกัด จึงไม่อยู่บนเส้นทาง (ใส่ได้ที่ จัดการ → แหล่งกำเนิดเศษอาหาร)`);
+}
+// ลำดับจุด: เริ่ม → จุดรับที่มีพิกัด → ฟาร์ม
+function routePoints(r, stops) {
+  const pts = [];
+  if (r.start_lat != null) pts.push({ lat: +r.start_lat, lng: +r.start_lng, k: 'start' });
+  stops.filter(x => x.lat != null).forEach(x => pts.push({ lat: +x.lat, lng: +x.lng, k: 'stop' }));
+  if (r.farm_lat != null) pts.push({ lat: +r.farm_lat, lng: +r.farm_lng, k: 'farm' });
+  return pts;
+}
+// แทรกจุดบังคับผ่านเข้าไปในลำดับ ตรงช่วงที่ทำให้ระยะเพิ่มน้อยที่สุด
+function insertVia(pts, via) {
+  const d = (a, b) => Math.hypot(a.lat - b.lat, (a.lng - b.lng) * Math.cos(a.lat * Math.PI / 180));
+  const out = pts.slice();
+  for (const v of via || []) { const p = { lat: v[0], lng: v[1], k: 'via' }; let best = 1, bestCost = Infinity; for (let i = 1; i < out.length; i++) { const c = d(out[i - 1], p) + d(p, out[i]) - d(out[i - 1], out[i]); if (c < bestCost) { bestCost = c; best = i; } } out.splice(best, 0, p); }
+  return out;
+}
+async function computeRoute(routeId, via) {
+  try {
+    const [r] = await api.list('food.v_route', { eq: { id: routeId } }); const stops = await api.list('food.v_route_stop', { eq: { route_id: routeId }, order: ['seq'] });
+    const base = routePoints(r, stops);
+    if (!r.start_lat && r.start_lat !== 0) return toastErr('ยังไม่มีจุดเริ่มต้น', 'กด "แก้" แล้วใส่พิกัดจุดเริ่มต้นก่อน');
+    if (r.farm_lat == null) return toastErr('ฟาร์มปลายทางยังไม่มีพิกัด', 'ใส่ได้ที่ จัดการ → ฟาร์ม → แก้ → ใช้ค่านี้/ใช้ GPS');
+    if (base.length < 2) return toastErr('จุดไม่พอ', 'ต้องมีจุดเริ่มต้นและปลายทางอย่างน้อย');
+    const useVia = via !== undefined ? via : (r.via || []);
+    const pts = insertVia(base, useVia);
+    toast('กำลังคำนวณเส้นทางบนถนน…');
+    const coords = pts.map(p => `${p.lng},${p.lat}`).join(';');
+    const res = await fetch(`${CONFIG.ROUTING_URL}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=false`);
+    if (!res.ok) throw new Error('บริการเส้นทาง OSRM ตอบ ' + res.status);
+    const j = await res.json(); if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new Error('บริการเส้นทาง OSRM หาเส้นทางไม่ได้: ' + (j.message || j.code));
+    const rt = j.routes[0];
+    await api.update('food.route', routeId, { path: rt.geometry, path_distance_m: Math.round(rt.distance * 10) / 10, path_duration_s: Math.round(rt.duration), path_source: 'osrm', path_at: new Date().toISOString(), via: useVia });
+    toast(`ได้เส้นทาง ${fmt(rt.distance / 1000, 1)} กม. · ${fmtInt(rt.duration / 60)} นาที`); render();
+  } catch (e) { fail(e, 'คำนวณเส้นทางไม่สำเร็จ'); }
+}
+async function routeForm(id) {
+  const r = id ? (await api.list('food.route', { eq: { id } }))[0] : {};
+  const stops = id ? await api.list('food.v_route_stop', { eq: { route_id: id }, order: ['seq'] }) : [];
+  S._rtEdit = { stops: stops.map(x => x.source_id) };
+  const farms = S.farms.filter(f => f.status === 'active' || f.id === r.farm_id);
+  openModal(`<h3 style="margin-top:0">${id ? 'แก้ไข' : 'เพิ่ม'}เส้นทางเดินรถ</h3>
+    <label>ชื่อเส้นทาง *</label><input id="r_name" value="${esc(r.name || '')}" maxlength="200" placeholder="เช่น สายตลาด–ฟาร์ม ก">
+    <label>ฟาร์มปลายทาง *</label><select id="r_farm">${farms.map(f => `<option value="${f.id}" ${f.id === r.farm_id ? 'selected' : ''}>${esc(f.name)}${f.lat == null ? ' (ยังไม่มีพิกัด)' : ''}</option>`).join('')}</select>
+    <label>รถ</label><select id="r_vehicle"><option value="">—</option>${S.vehicles.filter(v => v.status === 'active' || v.id === r.vehicle_id).map(v => `<option value="${v.id}" ${v.id === r.vehicle_id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>
+    <label>จุดเริ่มต้น (ชื่อ)</label><input id="r_start" value="${esc(r.start_name || '')}" placeholder="เช่น ศูนย์ BSF / จุดจอดรถ">
+    <label>พิกัดจุดเริ่มต้น</label>${latlngField(r.start_lat, r.start_lng, 'r_')}
+    <label>ลำดับจุดรับ (กดเพิ่มตามลำดับที่รถวิ่ง · ▲▼ สลับ · × เอาออก)</label><div id="r_stops"></div>
+    <div class="row" style="margin:6px 0"><select id="r_add" style="flex:1"><option value="">— เลือกแหล่งกำเนิดเศษอาหารเพื่อเพิ่ม —</option>${S.sources.filter(x => x.status === 'active').map(x => `<option value="${x.id}">${esc(x.name)}${x.lat == null ? ' (ยังไม่มีพิกัด)' : ''}</option>`).join('')}</select><button type="button" class="small secondary" onclick="rtAddStop()">เพิ่มจุด</button></div>
+    <label>หมายเหตุ/ตารางวิ่ง</label><input id="r_sched" value="${esc(r.schedule_note || '')}" placeholder="เช่น ทุกอังคาร/ศุกร์ 15:00">
+    <div class="row" style="margin-top:12px"><button id="r_save">บันทึก</button><button class="secondary" onclick="closeModal()">ยกเลิก</button></div><div class="muted">บันทึกแล้วกด "ลากเส้นตามถนน" ในตารางเพื่อคำนวณระยะทาง</div>`);
+  rtDrawStops();
+  $('#r_save').onclick = async () => {
+    const name = $('#r_name').value.trim(); if (!name) return needField('#r_name', 'กรอกชื่อเส้นทาง');
+    const la = $('#r_lat').value, ln = $('#r_lng').value; if ((la === '') !== (ln === '')) return needField('#r_lat', 'กรอกพิกัดจุดเริ่มต้นให้ครบ หรือเว้นว่างทั้งคู่');
+    if (!S._rtEdit.stops.length) return needField('#r_add', 'เพิ่มจุดรับอย่างน้อย 1 จุด');
+    const b = $('#r_save'); b.disabled = true;
+    const patch = { name, farm_id: $('#r_farm').value, vehicle_id: $('#r_vehicle').value || null, start_name: $('#r_start').value.trim() || null, start_lat: la === '' ? null : +la, start_lng: ln === '' ? null : +ln, schedule_note: $('#r_sched').value.trim() || null };
+    try {
+      let rid = id;
+      if (id) await api.update('food.route', id, patch); else { if (isSuper()) patch.org_id = S.scopeOrg; rid = (await api.insert('food.route', patch)).id; }
+      const old = id ? await api.list('food.route_stop', { eq: { route_id: rid } }) : [];
+      for (const o of old) if (!S._rtEdit.stops.includes(o.source_id)) await api.remove('food.route_stop', o.id);
+      for (let i = 0; i < S._rtEdit.stops.length; i++) { const sid = S._rtEdit.stops[i]; const ex = old.find(o => o.source_id === sid); if (ex) { if (ex.seq !== i + 1) await api.update('food.route_stop', ex.id, { seq: i + 1 }); } else await api.insert('food.route_stop', { route_id: rid, seq: i + 1, source_id: sid }); }
+      closeModal(); toast('บันทึกเส้นทางแล้ว · กด "ลากเส้นตามถนน" เพื่อคำนวณระยะทาง'); render();
+    } catch (e) { fail(e, 'บันทึกเส้นทางไม่สำเร็จ'); b.disabled = false; }
+  };
+}
+function rtDrawStops() { const box = $('#r_stops'); if (!box) return; box.innerHTML = S._rtEdit.stops.map((sid, i) => `<div class="stoprow"><b>${i + 1}.</b><span class="nm">${esc(sourceOf(sid).name || '?')}${sourceOf(sid).lat == null ? ' <span class="pill">ไม่มีพิกัด</span>' : ''}</span><button type="button" class="small secondary" onclick="rtMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button><button type="button" class="small secondary" onclick="rtMove(${i},1)" ${i === S._rtEdit.stops.length - 1 ? 'disabled' : ''}>▼</button><button type="button" class="small danger" onclick="S._rtEdit.stops.splice(${i},1);rtDrawStops()">×</button></div>`).join('') || '<div class="muted">ยังไม่มีจุดรับ</div>'; }
+function rtAddStop() { const v = $('#r_add').value; if (!v) return; if (S._rtEdit.stops.includes(v)) return toast('มีจุดนี้แล้ว', true); S._rtEdit.stops.push(v); $('#r_add').value = ''; rtDrawStops(); }
+function rtMove(i, d) { const a = S._rtEdit.stops; const j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; rtDrawStops(); }
 
 // =====================================================================
 // จัดการ (admin): ฟาร์ม · แหล่งกำเนิดเศษอาหาร · รถ · โครงการ · บัญชี · ตั้งค่าองค์กร
@@ -367,7 +478,7 @@ async function superStatus() {
 // ช่วยเหลือ
 // =====================================================================
 window.HELP = {
-  home: { title: 'หน้าแรก', why: 'เห็นรอบเข้ารับล่าสุดและปุ่มบันทึกเร็ว', steps: ['กดปุ่มเขียว "＋ บันทึกรอบเข้ารับ" เมื่อกลับจากไปรับเศษอาหาร', 'กดวันที่ในตารางเพื่อดูรายละเอียดหรือแก้ไข', 'ถ้ามีปุ่ม "รอส่ง" มุมบน แปลว่ามีรายการที่ยังส่งไม่ได้ กดเพื่อส่งเมื่อมีสัญญาณ'] },
+  home: { title: 'หน้าแรก (แดชบอร์ด)', why: 'เห็นภาพรวมทันทีที่เปิด และมีปุ่มบันทึกเร็ว', steps: ['กดปุ่มเขียว "＋ บันทึกรอบเข้ารับ" เมื่อกลับจากไปรับเศษอาหาร', 'ใช้ตัวกรองโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'ถ้ามีปุ่ม "รอส่ง" มุมบน แปลว่ามีรายการที่ยังส่งไม่ได้ กดเพื่อส่งเมื่อมีสัญญาณ'] },
   'pickup-new': { title: 'บันทึกรอบเข้ารับ', why: '1 รอบ = ไปรับ 1 ครั้งสำหรับ 1 ฟาร์ม อาจรับจากหลายแหล่งกำเนิดเศษอาหาร', steps: ['เลือกฟาร์มที่นำเศษอาหารไป และวันที่ (ระบบจำฟาร์มล่าสุดให้)', 'กรอกน้ำหนัก (กก.) เฉพาะแหล่งกำเนิดเศษอาหารที่ไปรับ แหล่งกำเนิดเศษอาหารที่ไม่ได้รับเว้นว่าง', 'ให้คะแนนคัดแยก 1–5 ของแต่ละแหล่งกำเนิดเศษอาหาร (ไม่บังคับ): 1 ปนขยะอื่นมาก … 5 สะอาดดีเยี่ยม', 'ถ่ายรูปใบชั่ง/ถัง (ไม่เกิน 3 รูป) แล้วกดบันทึก'], done: 'ขึ้นข้อความ "บันทึกรอบเข้ารับแล้ว" และเปิดหน้ารายละเอียดรอบ', note: 'ไม่มีสัญญาณ: กดบันทึกได้ตามปกติ ระบบเก็บไว้ในเครื่องและส่งเองเมื่อมีสัญญาณ (ดูปุ่ม "รอส่ง") · อย่าล้างข้อมูลเบราว์เซอร์ระหว่างมีรายการค้าง' },
   pickups: { title: 'รายการรอบเข้ารับ', steps: ['กรองตามช่วงวันที่/ฟาร์ม หรือพิมพ์ค้นหา', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์รายการต่อแหล่งกำเนิดเศษอาหาร เปิดใน Excel ได้'] },
   dashboard: { title: 'แดชบอร์ด', why: 'ตัวเลขทั้งหมดคำนวณสดจากรายการที่ผ่านตัวกรอง (เฉพาะรอบและรายการสถานะใช้งาน)', steps: ['เลือกโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'กราฟรายเดือน สัดส่วนฟาร์ม ยอดตามแหล่งกำเนิดเศษอาหาร และคะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร (เขียว ≥4 · เหลือง ≥3 · แดง <3)', '"ส่งออก CSV" เพื่อวิเคราะห์ต่อ'] },
@@ -376,10 +487,11 @@ window.HELP = {
   'admin-source': { title: 'แหล่งกำเนิดเศษอาหาร', steps: ['เพิ่มแหล่งกำเนิดเศษอาหารใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
   'admin-project': { title: 'โครงการวิจัย', steps: ['คำย่อใช้แสดงในตาราง/ตัวกรอง/ลิงก์หน้าสาธารณะ · ชื่อเต็มแสดงในรายละเอียด', 'ฟาร์มแต่ละแห่งมีโครงการประจำ · แต่ละรอบเข้ารับเลือกโครงการเองได้ (เช่น รอบที่เก็บร่วมกับโครงการใหม่) และแก้ย้อนหลังได้ที่ปุ่ม "แก้ไข" ของรอบ', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
   'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
+  routes: { title: 'เส้นทางเดินรถ', why: 'ดูว่ารถวิ่งจากจุดเริ่มต้น ไปรับที่แหล่งกำเนิดตามลำดับ แล้วส่งที่ฟาร์มไหน พร้อมระยะทางบนถนนจริง', steps: ['admin กด "＋ เพิ่มเส้นทาง": ตั้งชื่อ เลือกฟาร์มปลายทาง ใส่จุดเริ่มต้น (วางพิกัด/ลิงก์ Google Maps หรือ GPS) แล้วเพิ่มจุดรับตามลำดับ', 'กด "ลากเส้นตามถนน" ระบบคำนวณเส้นบนถนนและระยะทาง (ต้องมีพิกัดครบทุกจุด)', 'ถ้าเส้นไม่ตรงกับที่รถวิ่งจริง กด "ปรับเส้นทาง" แล้วคลิกบนแผนที่ตรงถนนที่ต้องการให้ผ่าน จากนั้นกด "คำนวณใหม่"', 'ติ๊ก/เอาติ๊กออกหน้าชื่อเส้นทางเพื่อเลือกแสดง · เลือกฟาร์มปลายทางด้านบนเพื่อกรอง'], note: 'เส้นทางคำนวณด้วยบริการฟรี OSRM เฉพาะตอนกดปุ่ม แล้วเก็บไว้ จึงเปิดดูได้แม้บริการล่ม' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
 function pageHelp(view) {
-  const rec = ['home', 'pickup-new', 'pickups', 'map', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-users'];
+  const rec = ['home', 'pickup-new', 'pickups', 'map', 'routes', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-users'];
   const sec = (title, keys) => `<div class="card"><h3 style="margin-top:0">${title}</h3>${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>`;
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ</h3><div class="muted">ทุกหน้ามีไอคอน (?) · บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ติดปัญหา: ผู้บันทึกติดต่อ admin · admin ติดต่อเจ้าของโครงการ</div></div>
     ${sec('สำหรับผู้บันทึก', rec)}${isAdmin() ? sec('สำหรับ admin', adm) : ''}

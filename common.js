@@ -185,7 +185,7 @@ const SupaBackend = () => {
 const DemoBackend = () => {
   const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
   const now = () => new Date().toISOString();
-  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [] };
+  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [] };
   const add = (t, row) => { const r = { id: uid(), status: 'active', created_at: now(), updated_at: now(), ...row }; D[t].push(r); return r; };
   const o1 = add('core.org', { code: 'DEMO', name: 'ศูนย์สาธิต (ตัวอย่าง)', max_recorders: 10 });
   const o2 = add('core.org', { code: 'DEMO2', name: 'หน่วยงานสาธิต สอง', max_recorders: 10 });
@@ -225,6 +225,9 @@ const DemoBackend = () => {
   const pkOv = add('food.pickup', { org_id: o1.id, farm_id: f1.id, project_id: pBsf.id, pickup_date: todayISO(), pickup_time: '11:00', entry_source: 'app', created_by: users[2].id });   // รอบที่เลือกโครงการเอง (ฟาร์ม ก แต่นับเข้า BSF)
   add('food.pickup_item', { org_id: o1.id, pickup_id: pkOv.id, source_id: s1.id, weight_kg: 8, quality: 4 });
 
+  const rt1 = add('food.route', { org_id: o1.id, name: 'สายตัวอย่าง ตลาด–ฟาร์ม ก', farm_id: f1.id, vehicle_id: v1.id, start_name: 'ศูนย์สาธิต', start_lat: 15.235, lng: null, start_lng: 104.84, via: [], schedule_note: 'ทุกอังคาร' });
+  add('food.route_stop', { org_id: o1.id, route_id: rt1.id, seq: 1, source_id: s1.id }); add('food.route_stop', { org_id: o1.id, route_id: rt1.id, seq: 2, source_id: s3.id });
+  add('food.route', { org_id: o1.id, name: 'สายตัวอย่าง ร้าน ข–ฟาร์ม ข', farm_id: f2.id, start_name: 'ศูนย์สาธิต', start_lat: 15.235, start_lng: 104.84, via: [] });
   let me = null;
   const byId = (t, id) => D[t].find(r => r.id === id) || {};
   const userName = id => (D['core.app_user'].find(u => u.id === id) || {}).display_name || null;
@@ -239,6 +242,8 @@ const DemoBackend = () => {
     'food.v_farm_summary': () => D['food.farm'].map(f => { const pj = byId('core.project', f.project_id); const ps = D['food.pickup'].filter(p => p.farm_id === f.id && p.status === 'active'); const its = ps.flatMap(p => itemsOf(p.id)); const ds = ps.map(p => p.pickup_date).sort(); return { farm_id: f.id, org_id: f.org_id, farm_name: f.name, project_id: f.project_id, project_code: pj.code, project_name: pj.name, lat: f.lat, lng: f.lng, status: f.status, pickups: ps.length, total_kg: r2(sum(its, 'weight_kg')), first_date: ds[0] || null, last_date: ds[ds.length - 1] || null }; }),
     'food.v_source_summary': () => D['food.source'].map(s => { const its = D['food.pickup_item'].filter(i => i.source_id === s.id && i.status === 'active' && byId('food.pickup', i.pickup_id).status === 'active'); const ds = its.map(i => byId('food.pickup', i.pickup_id).pickup_date).sort(); return { source_id: s.id, org_id: s.org_id, source_name: s.name, source_type_id: s.source_type_id, source_type_name: s.source_type_id ? byId('food.source_type', s.source_type_id).name : null, lat: s.lat, lng: s.lng, status: s.status, pickups: new Set(its.map(i => i.pickup_id)).size, total_kg: r2(sum(its, 'weight_kg')), avg_quality: avg(its.map(i => i.quality)), first_date: ds[0] || null, last_date: ds[ds.length - 1] || null }; }),
     'food.v_monthly': () => { const out = {}; for (const p of D['food.pickup']) { if (p.status !== 'active') continue; const pj = projOf(p); const k = p.org_id + pj.id + p.pickup_date.slice(0, 7); out[k] = out[k] || { org_id: p.org_id, project_id: pj.id, project_code: pj.code, month_start: p.pickup_date.slice(0, 7) + '-01', pickups: 0, total_kg: 0 }; out[k].pickups++; out[k].total_kg = r2(out[k].total_kg + sum(itemsOf(p.id), 'weight_kg')); } return Object.values(out); },
+    'food.v_route': () => D['food.route'].map(r => { const f = byId('food.farm', r.farm_id); return { ...r, farm_name: f.name, farm_lat: f.lat, farm_lng: f.lng, vehicle_name: r.vehicle_id ? byId('food.vehicle', r.vehicle_id).name : null, path_km: r.path_distance_m != null ? Math.round(r.path_distance_m / 100) / 10 : null, stops: D['food.route_stop'].filter(x => x.route_id === r.id).length }; }),
+    'food.v_route_stop': () => D['food.route_stop'].map(x => { const src = byId('food.source', x.source_id); return { ...x, source_name: src.name, lat: src.lat, lng: src.lng, source_type_name: src.source_type_id ? byId('food.source_type', src.source_type_id).name : null }; }),
     'food.v_public_total': () => D['core.project'].filter(pubProj).map(pj => { const o = byId('core.org', pj.org_id); const ps = D['food.pickup'].filter(p => p.status === 'active' && byId('food.farm', p.farm_id).status === 'active' && projOf(p).id === pj.id); const its = ps.flatMap(p => itemsOf(p.id)); const ds = ps.map(p => p.pickup_date).sort(); return { org_code: o.code, org_name: o.name, project_code: pj.code, project_name: pj.name, year_be: pj.year_be, pickups: ps.length, farms: new Set(ps.map(p => p.farm_id)).size, sources: new Set(its.map(i => i.source_id)).size, total_kg: r2(sum(its, 'weight_kg')), first_date: ds[0] || null, last_date: ds[ds.length - 1] || null }; }),
     'food.v_public_monthly': () => views['food.v_monthly']().filter(m => pubProj(byId('core.project', m.project_id))).map(m => ({ org_code: byId('core.org', m.org_id).code, project_code: m.project_code, month_start: m.month_start, pickups: m.pickups, total_kg: m.total_kg })),
     'food.v_public_source': () => { const out = {}; for (const i of views['food.v_pickup_item']()) { const p = byId('food.pickup', i.pickup_id); if (i.status !== 'active' || p.status !== 'active') continue; const pj = projOf(p); if (!pubProj(pj)) continue; const k = pj.id + i.source_id; out[k] = out[k] || { org_code: byId('core.org', p.org_id).code, project_code: pj.code, source_name: i.source_name, source_type_name: i.source_type_name, _p: new Set(), _q: [], total_kg: 0, first_date: null, last_date: null }; const x = out[k]; x._p.add(p.id); x._q.push(i.quality); x.total_kg = r2(x.total_kg + i.weight_kg); x.first_date = !x.first_date || p.pickup_date < x.first_date ? p.pickup_date : x.first_date; x.last_date = !x.last_date || p.pickup_date > x.last_date ? p.pickup_date : x.last_date; } return Object.values(out).map(x => ({ ...x, pickups: x._p.size, avg_quality: avg(x._q), _p: undefined, _q: undefined })); },
@@ -272,8 +277,10 @@ const DemoBackend = () => {
     async insert(name, row) {
       if (!me) throw new Error('ไม่ได้ล็อกอิน');
       const r = { ...row };
-      if (['food.farm', 'food.source', 'food.vehicle', 'food.pickup', 'core.project'].includes(name) && !r.org_id) r.org_id = me.org_id;
+      if (['food.farm', 'food.source', 'food.vehicle', 'food.pickup', 'food.route', 'core.project'].includes(name) && !r.org_id) r.org_id = me.org_id;
       if (name === 'food.pickup_item' || name === 'food.pickup_photo') r.org_id = byId('food.pickup', r.pickup_id).org_id;
+      if (name === 'food.route_stop') r.org_id = byId('food.route', r.route_id).org_id;
+      if (['food.farm', 'food.source', 'food.vehicle', 'food.route'].includes(name) && me.role === 'recorder') throw new Error('permission denied: row-level security');
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
       if (name === 'food.pickup_item' && D['food.pickup_item'].some(i => i.pickup_id === r.pickup_id && i.source_id === r.source_id)) throw new Error('duplicate key: แหล่งกำเนิดเศษอาหารนี้มีในรอบแล้ว');
       if (name === 'food.pickup_photo') { const mx = parseInt((D['core.app_setting'].find(s => s.key === 'max_photos_per_pickup') || {}).value || '3'); if (D['food.pickup_photo'].filter(x => x.pickup_id === r.pickup_id && x.status === 'active').length >= mx) throw new Error(`รอบนี้มีรูปครบ ${mx} รูปแล้ว ให้ admin ยกเลิกรูปเก่าก่อนจึงเพิ่มได้`); }
@@ -292,6 +299,7 @@ const DemoBackend = () => {
       if (action === 'create_user') { const oid = me.role === 'super_admin' ? payload.org_id : me.org_id; const org = byId('core.org', oid); const cnt = D['core.app_user'].filter(u => u.org_id === oid && u.role === 'recorder' && u.status === 'active').length; if (payload.role === 'recorder' && cnt >= org.max_recorders) throw new Error(`บัญชีผู้บันทึกขององค์กรนี้ครบเพดาน ${org.max_recorders} บัญชีแล้ว`); const u = add('core.app_user', { username: payload.username, display_name: payload.display_name, role: payload.role, org_id: oid }); return { ok: true, account: { ...u, password: pw(org.code, payload.password) } }; }
       if (action === 'reset_password') { const t = byId('core.app_user', payload.user_id); return { ok: true, username: t.username, role: t.role, password: pw(t.org_id ? byId('core.org', t.org_id).code : 'app', payload.password) }; }
       if (action === 'whoami') return { ok: true, me };
+      if (action === 'resolve_link') { await new Promise(r => setTimeout(r, 300)); return { ok: true, url: 'https://www.google.com/maps/place/demo/@15.240311,104.823275,17z' }; }   // สาธิต: คืนพิกัดตัวอย่าง
       throw new Error('สาธิต: ไม่รองรับ ' + action);
     },
     async uploadPhoto(endpointUrl, payload) { return { ok: true, file_id: 'demo-' + Date.now(), url: 'data:' + (payload.mime || 'image/jpeg') + ';base64,' + payload.data, size: payload.data.length * 3 / 4 }; }
@@ -484,7 +492,7 @@ function crudForm(table, id) {
     if (c.type === 'status') return `<select id="c_${c.key}"><option value="active" ${r[c.key] !== 'inactive' ? 'selected' : ''}>ใช้งาน</option><option value="inactive" ${r[c.key] === 'inactive' ? 'selected' : ''}>ปิดใช้งาน</option></select>`;
     if (c.type === 'bool') return `<select id="c_${c.key}"><option value="true" ${r[c.key] !== false ? 'selected' : ''}>ใช่</option><option value="false" ${r[c.key] === false ? 'selected' : ''}>ไม่</option></select>`;
     if (c.type === 'textarea') return `<textarea id="c_${c.key}" rows="2">${esc(r[c.key] ?? '')}</textarea>`;
-    if (c.type === 'latlng') return `<div class="row"><input id="c_lat" type="number" step="any" placeholder="ละติจูด" value="${esc(r.lat ?? '')}" style="flex:1"><input id="c_lng" type="number" step="any" placeholder="ลองจิจูด" value="${esc(r.lng ?? '')}" style="flex:1"><button type="button" class="small secondary" onclick="fillGps()">ใช้ GPS</button></div><div class="muted">ยืนอยู่ที่จุดนั้นแล้วกด "ใช้ GPS" หรือพิมพ์พิกัดจากแอปแผนที่</div>`;
+    if (c.type === 'latlng') return latlngField(r.lat, r.lng, 'c_');
     return `<input id="c_${c.key}" type="${c.type === 'number' ? 'number' : 'text'}" ${c.type === 'number' ? 'step="any"' : 'maxlength="200"'} value="${esc(r[c.key] ?? '')}" ${c.readonly && id ? 'readonly' : ''}>`;
   };
   openModal(`<h3 style="margin-top:0">${id ? 'แก้ไข' : 'เพิ่ม'} ${spec.title}</h3>${spec.cols.filter(c => !(c.readonly && id) && !(c.onlyEdit && !id) && !c.noForm).map(c => `<label>${c.label}${c.required ? ' *' : ''}</label>` + field(c)).join('')}
@@ -506,10 +514,35 @@ function crudForm(table, id) {
     try { if (id) await api.update(spec.table, r[spec.pk || 'id'], patch, spec.pk || 'id'); else await api.insert(spec.table, { ...(spec.defaults ? spec.defaults() : {}), ...patch }); closeModal(); toast('บันทึกแล้ว'); S.cache = {}; render(); } catch (e) { fail(e, (id ? 'แก้ไข' : 'เพิ่ม') + spec.title + 'ไม่สำเร็จ'); b.disabled = false; }
   };
 }
-function fillGps() {
+// ---- พิกัด: รับ "15.240311, 104.823275" · ลิงก์ Google Maps เต็ม · ลิงก์ย่อ maps.app.goo.gl (แกะผ่านระบบหลังบ้าน) ----
+function parseLatLng(text) {
+  const t = String(text || '').trim(); if (!t) return null;
+  const ok = (a, b) => (isFinite(a) && isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180) ? { lat: +(+a).toFixed(6), lng: +(+b).toFixed(6) } : null;
+  let m;
+  if ((m = t.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/))) return ok(m[1], m[2]);          // ลิงก์เต็มแบบ /place/...!3dLAT!4dLNG
+  if ((m = t.match(/[@/](-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);                // .../@LAT,LNG,17z
+  if ((m = t.match(/[?&](?:q|ll|query|destination|center)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/i))) return ok(m[1], m[2]);   // ?q=LAT,LNG
+  if ((m = t.match(/^\s*(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)\s*$/))) return ok(m[1], m[2]);         // "LAT, LNG"
+  return null;
+}
+async function applyLatLng(srcSel, latSel, lngSel) {
+  const raw = $(srcSel).value.trim(); if (!raw) return toastErr('ยังไม่ได้วาง', 'วางตัวเลขพิกัด เช่น 15.240311, 104.823275 หรือวางลิงก์จาก Google Maps');
+  let p = parseLatLng(raw);
+  if (!p && /^https?:\/\//i.test(raw)) {
+    toast('กำลังแกะลิงก์…');
+    try { const r = await api.engine('resolve_link', { url: raw }); p = parseLatLng(r.url); if (!p) throw new Error('ลิงก์นี้ไม่มีพิกัด (ลองเปิดลิงก์ในเบราว์เซอร์ แล้วคัดลอกตัวเลขพิกัดจากช่องค้นหาแทน)'); }
+    catch (e) { return fail(e, 'แกะลิงก์ไม่สำเร็จ'); }
+  }
+  if (!p) return toastErr('อ่านพิกัดไม่ได้', 'รูปแบบที่รับได้: "15.240311, 104.823275" · ลิงก์ Google Maps (เต็มหรือย่อ) · ใน Google Maps: กดค้างที่จุด → ตัวเลขพิกัดจะขึ้นด้านบน → แตะเพื่อคัดลอก');
+  $(latSel).value = p.lat; $(lngSel).value = p.lng; toast(`ได้พิกัด ${p.lat}, ${p.lng}`);
+}
+const latlngField = (lat, lng, pre = 'c_') => `<div class="row"><input id="${pre}src" placeholder="วางพิกัด 15.240311, 104.823275 หรือลิงก์ Google Maps" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter'){event.preventDefault();applyLatLng('#${pre}src','#${pre}lat','#${pre}lng')}"><button type="button" class="small secondary" onclick="applyLatLng('#${pre}src','#${pre}lat','#${pre}lng')">ใช้ค่านี้</button><button type="button" class="small secondary" onclick="fillGps('#${pre}lat','#${pre}lng')">ใช้ GPS</button></div>
+  <div class="row" style="margin-top:6px"><input id="${pre}lat" type="number" step="any" placeholder="ละติจูด" value="${esc(lat ?? '')}" style="flex:1"><input id="${pre}lng" type="number" step="any" placeholder="ลองจิจูด" value="${esc(lng ?? '')}" style="flex:1"></div>
+  <div class="muted">ใน Google Maps: กดค้างที่จุด → ตัวเลขพิกัดขึ้นด้านบน → คัดลอกมาวางทั้งก้อน หรือกด "แชร์" แล้ววางลิงก์ · หรือยืนที่จุดนั้นแล้วกด "ใช้ GPS"</div>`;
+function fillGps(latSel = '#c_lat', lngSel = '#c_lng') {
   if (!navigator.geolocation) return toastErr('เครื่องนี้ไม่รองรับ GPS', 'พิมพ์พิกัดเองจากแอปแผนที่');
   toast('กำลังอ่านตำแหน่ง…');
-  navigator.geolocation.getCurrentPosition(p => { $('#c_lat').value = p.coords.latitude.toFixed(6); $('#c_lng').value = p.coords.longitude.toFixed(6); toast(`ได้พิกัดแล้ว (±${Math.round(p.coords.accuracy)} ม.)`); }, err => toastErr('อ่านตำแหน่ง GPS ไม่ได้', gpsErrorText(err)), { enableHighAccuracy: true, timeout: 15000 });
+  navigator.geolocation.getCurrentPosition(p => { $(latSel).value = p.coords.latitude.toFixed(6); $(lngSel).value = p.coords.longitude.toFixed(6); toast(`ได้พิกัดแล้ว (±${Math.round(p.coords.accuracy)} ม.)`); }, err => toastErr('อ่านตำแหน่ง GPS ไม่ได้', gpsErrorText(err)), { enableHighAccuracy: true, timeout: 15000 });
 }
 
 // =====================================================================
