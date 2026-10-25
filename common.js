@@ -437,7 +437,8 @@ function crudState(table, patch) { Object.assign(S._crud[table], patch); render(
 function crudSort(table, key) { const st = S._crud[table]; const dir = st.sort && st.sort.key === key && st.sort.dir === 'asc' ? 'desc' : 'asc'; crudState(table, { sort: { key, dir }, page: 0 }); }
 async function crudSection(spec) {
   const rows = await api.list(spec.table, { eq: spec.eq || {}, order: spec.order || [spec.cols[0].key] });
-  spec._rows = rows; const id = 'sec_' + spec.table.replace('.', '_');
+  spec._rows = rows; if (SPECS[spec.table]) SPECS[spec.table]._rows = rows;   // crudForm อ่านจาก SPECS[table] แม้หน้าจะส่ง spec สำเนาเข้ามา (MIS-018)
+  const id = 'sec_' + spec.table.replace('.', '_');
   const st = S._crud[spec.table] = S._crud[spec.table] || { page: 0, size: 20, q: '' };
   const keys = spec.searchKeys || spec.cols.filter(c => !c.type || c.type === 'textarea').map(c => c.key);
   const q = (st.q || '').trim().toLowerCase();

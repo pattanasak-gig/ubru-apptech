@@ -307,7 +307,6 @@ async function pageAdmin(view) {
   else if (tab === 'users') body = await usersSection();
   else body = orgSettings();
   view.innerHTML = `${scopeSelector()}<div class="subtabs">${tabs.map(([k, l]) => `<a href="#admin/${k}" class="${tab === k ? 'active' : ''}">${l}</a>`).join('')}</div>${body}`;
-  Object.assign(SPECS['food.farm'], { _rows: SPECS['food.farm']._rows });
 }
 async function usersSection() {
   const users = await api.list('core.app_user', { eq: scopeEq(), order: ['username'] });
