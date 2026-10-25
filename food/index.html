@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261025c">
+<link rel="stylesheet" href="../common.css?v=20261025d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261025c"></script>
+<script src="../common.js?v=20261025d"></script>
 </head>
 <body>
 <header>
@@ -93,11 +93,13 @@ async function pageHome(view) {
   view.innerHTML = `${scopeSelector()}
     <div class="kpis"><div class="kpi hero"><div class="l">เดือนนี้ (จาก 15 รอบล่าสุดที่แสดง)</div><div class="v">${fmt(sum(mrows, 'total_kg'))} กก.</div></div><div class="kpi"><div class="l">รอบเดือนนี้ในรายการ</div><div class="v">${fmtInt(mrows.length)}</div></div><div class="kpi"><div class="l">ฟาร์มที่ใช้งาน</div><div class="v">${fmtInt(S.farms.filter(f => f.status === 'active').length)}</div></div><div class="kpi"><div class="l">แหล่งที่ใช้งาน</div><div class="v">${fmtInt(S.sources.filter(s => s.status === 'active').length)}</div></div></div>
     <div class="card"><div class="cardhead"><h4>รอบเข้ารับล่าสุด ${helpBtn('home')}</h4><a href="#pickups">ดูทั้งหมด ›</a></div>
-    ${pickupTable(rows)}</div>
+    ${pickupTable(rows, 'tblHome')}</div>
     ${canWrite() ? `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>` : ''}`;
 }
-function pickupTable(rows) {
-  return `<div style="overflow:auto"><table><thead><tr><th>วันที่</th><th>ฟาร์ม</th><th class="num">แหล่ง</th><th class="num">กก.</th><th>คุณภาพ</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td data-sort-value="${r.pickup_date}"><a href="#pickup/${r.id}">${thDay(r.pickup_date)}</a>${r.pickup_time ? ' ' + String(r.pickup_time).slice(0, 5) : ''}${r.entry_source === 'sheet' ? ' <span class="pill" title="ย้ายจากชีตเดิม">ชีต</span>' : ''}${r.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิก</span>' : ''}</td><td>${esc(r.farm_name)}<div class="muted">${esc(r.project_code)}</div></td><td class="num">${fmtInt(r.items)}</td><td class="num"><b>${fmt(r.total_kg)}</b></td><td>${r.avg_quality != null ? fmt(r.avg_quality) : '-'}</td><td>${r.photo_count ? '📷' + r.photo_count : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">ยังไม่มีรอบเข้ารับ</td></tr>'}</tbody></table></div>`;
+function pickupTable(rows, id = 'tblPickups') {
+  const cols = [{ label: 'วันที่', key: 'pickup_date' }, { label: 'ฟาร์ม', key: 'farm_name' }, { label: 'แหล่ง', key: 'items', cls: 'num' }, { label: 'กก.', key: 'total_kg', cls: 'num' }, { label: 'คุณภาพ', key: 'avg_quality' }, { label: '' }];
+  const row = r => `<tr><td class="nowrap"><a href="#pickup/${r.id}">${thDay(r.pickup_date)}</a>${r.pickup_time ? ' ' + String(r.pickup_time).slice(0, 5) : ''}${r.entry_source === 'sheet' ? ' <span class="pill" title="ย้ายจากชีตเดิม">ชีต</span>' : ''}${r.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิก</span>' : ''}</td><td>${esc(r.farm_name)}<div class="muted">${esc(r.project_code)}</div></td><td class="num">${fmtInt(r.items)}</td><td class="num"><b>${fmt(r.total_kg)}</b></td><td>${r.avg_quality != null ? fmt(r.avg_quality) : '-'}</td><td>${r.photo_count ? '📷' + r.photo_count : ''}</td></tr>`;
+  return pagedTable(id, rows, cols, row, { empty: 'ยังไม่มีรอบเข้ารับ', resetPage: true });
 }
 
 // =====================================================================
@@ -115,7 +117,7 @@ async function pagePickups(view) {
       <select style="width:auto" onchange="S._pk.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <input type="search" placeholder="ค้นหา…" value="${esc(st.q)}" onchange="S._pk.q=this.value;render()" style="flex:1;min-width:140px"></div>
     <div class="muted" style="margin:6px 0">รวม <b>${fmt(sum(f, 'total_kg'))}</b> กก. · ${fmtInt(f.length)} รอบ</div>
-    ${pickupTable(f)}</div>
+    ${pickupTable(f, 'tblPickupsAll')}</div>
     ${canWrite() ? `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>` : ''}`;
 }
 async function exportPickups() {
@@ -263,7 +265,7 @@ async function pageDashboard(view) {
       <div class="card"><div class="cardhead"><h4>ตามแหล่ง (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}</div>
       <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่ง</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
       <div class="card"><div class="cardhead"><h4>ตามประเภทแหล่ง</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
-      <div class="card"><div class="cardhead"><h4>ตารางรายเดือน</h4></div><table><thead><tr><th class="nowrap">เดือน</th><th class="num">รอบ</th><th class="num">กก.</th><th class="num">เฉลี่ย/รอบ</th></tr></thead><tbody>${mArr.slice().reverse().map(m => `<tr><td class="nowrap" data-sort-value="${m.m}">${thMonth(m.m + '-01')}</td><td class="num">${fmtInt(m.n.size)}</td><td class="num">${fmt(m.kg)}</td><td class="num">${fmt(m.kg / m.n.size)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="card"><div class="cardhead"><h4>ตารางรายเดือน</h4></div>${pagedTable('tblMonthly', mArr.slice().reverse().map(m => ({ m: m.m, n: m.n.size, kg: Math.round(m.kg * 100) / 100, avg: Math.round(m.kg / m.n.size * 100) / 100 })), [{ label: 'เดือน', key: 'm', cls: 'nowrap' }, { label: 'รอบ', key: 'n', cls: 'num' }, { label: 'กก.', key: 'kg', cls: 'num' }, { label: 'เฉลี่ย/รอบ', key: 'avg', cls: 'num' }], r => `<tr><td class="nowrap">${thMonth(r.m + '-01')}</td><td class="num">${fmtInt(r.n)}</td><td class="num">${fmt(r.kg)}</td><td class="num">${fmt(r.avg)}</td></tr>`, { resetPage: true })}</div>
     </div>`;
   S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่ง: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
   if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.m + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[0] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
@@ -312,7 +314,7 @@ async function usersSection() {
   const users = await api.list('core.app_user', { eq: scopeEq(), order: ['username'] });
   const org = orgOf(S.scopeOrg); const recs = users.filter(u => u.role === 'recorder' && u.status === 'active').length;
   return `<div class="card"><div class="cardhead"><h4>บัญชีผู้ใช้ (${fmtInt(users.length)}) ${helpBtn('admin-users')}</h4><button class="small" onclick="userForm('${S.scopeOrg}')">＋ เพิ่มบัญชี</button></div>
-    <div class="muted">ผู้บันทึกใช้งาน ${recs}/${org.max_recorders ?? '-'} บัญชี · เพิ่ม/รีเซ็ตรหัสผ่านทำผ่านห้องเครื่อง${CONFIG.ENGINE_URL ? '' : ' <b>(ยังไม่ได้เชื่อมห้องเครื่อง ใช้ไม่ได้จนกว่าเจ้าของโครงการจะติดตั้ง)</b>'}</div>
+    <div class="muted">ผู้บันทึกใช้งาน ${recs}/${org.max_recorders ?? '-'} บัญชี · เพิ่ม/รีเซ็ตรหัสผ่านทำผ่านระบบหลังบ้าน${CONFIG.ENGINE_URL ? '' : ' <b>(ยังไม่ได้เชื่อมระบบหลังบ้าน ใช้ไม่ได้จนกว่าเจ้าของโครงการจะติดตั้ง)</b>'}</div>
     <table><thead><tr><th>ชื่อล็อกอิน</th><th>ชื่อแสดง</th><th>บทบาท</th><th>สถานะ</th><th></th></tr></thead><tbody>${users.map(u => `<tr><td class="mono">${esc(u.username)}</td><td>${esc(u.display_name)}</td><td>${roleLabel(u.role)}</td><td>${u.status === 'active' ? '<span class="pill">ใช้งาน</span>' : '<span class="pill" style="background:#fee2e2">ปิด</span>'}</td><td style="white-space:nowrap">${(u.role === 'recorder' || isSuper()) && u.id !== S.me.id ? `<button class="small secondary" onclick="resetPw('${u.id}','${esc(u.username)}','${u.role}')">รีเซ็ตรหัส</button> <button class="small ${u.status === 'active' ? 'danger' : 'secondary'}" onclick="toggleUser('${u.id}','${u.status === 'active' ? 'inactive' : 'active'}')">${u.status === 'active' ? 'ปิด' : 'เปิด'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 async function toggleUser(id, status) { try { await api.update('core.app_user', id, { status }); toast(status === 'active' ? 'เปิดใช้งานแล้ว' : 'ปิดใช้งานแล้ว'); render(); } catch (e) { fail(e); } }
@@ -333,7 +335,7 @@ SPECS['core.org'] = { table: 'core.org', title: 'องค์กร', order: ['c
   cols: [{ key: 'code', label: 'รหัส (A-Z 0-9 ใช้ประกอบชื่อล็อกอิน)', required: true, readonly: true }, { key: 'name', label: 'ชื่อ', required: true }, { key: 'max_recorders', label: 'เพดานผู้บันทึก', type: 'number', required: true }, { key: 'status', label: 'สถานะ', type: 'status' }],
   beforeSave: p => (p.code && !/^[A-Z0-9]{2,12}$/.test(p.code) ? 'รหัสองค์กรต้องเป็น A-Z/0-9 ยาว 2–12 ตัว' : null) };
 SPECS['food.source_type'] = { table: 'food.source_type', title: 'ประเภทแหล่งเศษอาหาร', order: ['sort_order'], cols: [{ key: 'name', label: 'ชื่อประเภท', required: true }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }] };
-const SETTINGS_META = { system_name: 'ชื่อระบบ', max_photos_per_pickup: 'รูปสูงสุดต่อรอบ', default_photo_endpoint_url: 'ลิงก์ตัวรับรูปค่ากลาง (URL ห้องเครื่อง)', default_photo_folder_id: 'โฟลเดอร์ Drive ค่ากลาง', quality_labels: 'ความหมายสเกลคุณภาพ' };
+const SETTINGS_META = { system_name: 'ชื่อระบบ', max_photos_per_pickup: 'รูปสูงสุดต่อรอบ', default_photo_endpoint_url: 'ลิงก์ตัวรับรูปค่ากลาง (URL ระบบหลังบ้าน)', default_photo_folder_id: 'โฟลเดอร์ Drive ค่ากลาง', quality_labels: 'ความหมายสเกลคุณภาพ' };
 async function pageSuper(view) {
   const tab = location.hash.split('/')[1] || 'org';
   const tabs = [['org', 'องค์กร'], ['types', 'ประเภทแหล่ง'], ['settings', 'ตั้งค่าระบบ'], ['status', 'สถานะระบบ']];
@@ -352,7 +354,7 @@ async function superStatus() {
   const totals = await api.list('food.v_public_total');
   return `<div class="card"><h4 style="margin-top:0">สถานะระบบ</h4><table>
     <tr><th>ฐานข้อมูล</th><td>${IS_DEMO ? 'โหมดสาธิต' : esc(CONFIG.SUPABASE_URL)}</td></tr>
-    <tr><th>ห้องเครื่อง</th><td>${esc(eng)}</td></tr>
+    <tr><th>ระบบหลังบ้าน</th><td>${esc(eng)}</td></tr>
     <tr><th>คีย์ Esri</th><td>หมดอายุ ${esc(CONFIG.ESRI_KEY_EXPIRES)} (${esriDays >= 0 ? 'เหลือ ' + esriDays + ' วัน' : 'หมดอายุแล้ว'})${esriDays < 30 ? ' <b style="color:var(--danger)">ต่ออายุที่ location.arcgis.com</b>' : ''}</td></tr>
     <tr><th>ยอดสาธารณะ</th><td>${totals.map(t => `${esc(t.org_code)}/${esc(t.project_code)}: ${fmt(t.total_kg)} กก. (${fmtInt(t.pickups)} รอบ)`).join('<br>') || '-'}</td></tr>
     <tr><th>ฉบับเว็บ</th><td>${esc(CREDIT.updated)}</td></tr></table></div>`;
@@ -370,7 +372,7 @@ window.HELP = {
   'admin-farm': { title: 'ฟาร์ม', steps: ['กด "＋ เพิ่ม" ใส่ชื่อ เลือกโครงการ ใส่พิกัด (ยืนที่ฟาร์มแล้วกด "ใช้ GPS")', 'เลิกใช้ → แก้ → สถานะ "ปิดใช้งาน" (ข้อมูลเก่ายังอยู่)'] },
   'admin-source': { title: 'แหล่งเศษอาหาร', steps: ['เพิ่มแหล่งใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', 'ปิดใช้งานแทนการลบ'] },
   'admin-project': { title: 'โครงการ', steps: ['ใช้จัดกลุ่มฟาร์มเพื่อแยกวิเคราะห์ (ปี 68 / ศูนย์ BSF)', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
-  'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมห้องเครื่อง (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
+  'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
 function pageHelp(view) {

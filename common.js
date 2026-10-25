@@ -19,7 +19,7 @@ const CONFIG = {
   SYSTEM_NAME: 'UBRU AppTech System',
   SUPABASE_URL: 'https://leufewpqqvdixktnmusc.supabase.co',
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_FgATIHmG2SAgNqd17aMtCg_x3TXp9eV',   // กุญแจสาธารณะ (ตั้งใจฝังในหน้าเว็บ) สิทธิ์จริงบังคับที่ RLS
-  LOGIN_EMAIL_DOMAIN: 'apptech.local',    // ต้องตรงกับ LOGIN_EMAIL_DOMAIN ในห้องเครื่อง Apps Script
+  LOGIN_EMAIL_DOMAIN: 'apptech.local',    // ต้องตรงกับ LOGIN_EMAIL_DOMAIN ในระบบหลังบ้าน Apps Script
   ENGINE_URL: 'https://script.google.com/macros/s/AKfycbxbEeBA1gb2nuB6ixMUVcqheoSLkzZrf8EI4uxan_DFVhJjWrlCYmgcMCSOtRpGwXEHlg/exec',   // Web app URL ของ apps-script/engine (deploy เวอร์ชัน 1 · 25 ต.ค. 2569 22:26)
   ESRI_KEY_EXPIRES: '2027-10-22',
   DEMO: false,                            // true = โหมดสาธิต ใช้ข้อมูลตัวอย่างในเครื่อง ไม่ต่อ Supabase (หรือเปิดด้วย ?demo=1)
@@ -71,8 +71,8 @@ const ERR_RULES = [   // [ตรวจจับ, หัวข้อ, ทำอ�
   [/invalid input syntax|\b22P02\b|numeric field overflow|\b22003\b|out of range/i, 'รูปแบบข้อมูลไม่ถูกต้อง', 'ช่องตัวเลขต้องเป็นตัวเลขล้วน (ไม่มีตัวอักษร เครื่องหมาย , หรือหน่วย)'],
   [/PGRST116|multiple \(or no\) rows|Cannot coerce|0 rows/i, 'ไม่พบรายการที่จะบันทึก', 'รายการนี้อาจถูกลบไปแล้ว หรือบัญชีของท่านไม่มีสิทธิ์แก้ไข · รีเฟรชหน้าแล้วลองใหม่'],
   [/PGRST106|Invalid schema/i, 'ฐานข้อมูลยังไม่เปิดสคีมาให้หน้าเว็บ', 'เจ้าของโครงการต้องเพิ่ม core และ food ใน Supabase → Integrations → Data API → Settings → Exposed schemas'],
-  [/Unexpected token|not valid JSON|<!DOCTYPE|JSON\.parse|BAD_JSON|ห้องเครื่องตอบผิดพลาด/i, 'ห้องเครื่อง/ตัวรับรูปตอบกลับไม่ถูกต้อง', 'ลิงก์ห้องเครื่องอาจผิด หมดอายุ หรือ deploy โดยไม่ได้เลือก "ทุกคน (Anyone)" · แจ้งเจ้าของโครงการ'],
-  [/ENGINE_URL|ยังไม่ได้ตั้งค่าห้องเครื่อง/i, 'ยังไม่ได้เชื่อมห้องเครื่อง', 'การเพิ่มบัญชี รีเซ็ตรหัส และส่งรูป ต้องรอเจ้าของโครงการติดตั้งห้องเครื่อง (ขั้นที่ 4) · ข้อมูลอื่นบันทึกได้ตามปกติ'],
+  [/Unexpected token|not valid JSON|<!DOCTYPE|JSON\.parse|BAD_JSON|ระบบหลังบ้านตอบผิดพลาด/i, 'ระบบหลังบ้าน/ตัวรับรูปตอบกลับไม่ถูกต้อง', 'ลิงก์ระบบหลังบ้านอาจผิด หมดอายุ หรือ deploy โดยไม่ได้เลือก "ทุกคน (Anyone)" · แจ้งเจ้าของโครงการ'],
+  [/ENGINE_URL|ยังไม่ได้ตั้งค่าระบบหลังบ้าน/i, 'ยังไม่ได้เชื่อมระบบหลังบ้าน', 'การเพิ่มบัญชี รีเซ็ตรหัส และส่งรูป ต้องรอเจ้าของโครงการติดตั้งระบบหลังบ้าน (ขั้นที่ 4) · ข้อมูลอื่นบันทึกได้ตามปกติ'],
   [/quota|storage.*(full|exceeded)|exceeded|insufficient.*space|Drive/i, 'ที่เก็บรูป (Google Drive) รับไฟล์ไม่ได้', 'พื้นที่ Drive อาจเต็ม หรือสิทธิ์ของสคริปต์หมดอายุ · แจ้งเจ้าของโครงการ'],
   [/Password should|weak_password|password.*(short|length)|รหัสผ่านต้อง/i, 'รหัสผ่านไม่ผ่านเกณฑ์', 'ใช้ 6–30 ตัว เฉพาะตัวอักษรอังกฤษและตัวเลข ไม่มีช่องว่าง'],
   [/Email not confirmed|not confirmed/i, 'บัญชียังไม่ได้เปิดใช้', 'แจ้งเจ้าของโครงการให้เปิดบัญชีนี้'],
@@ -164,10 +164,10 @@ const SupaBackend = () => {
     async update(name, id, patch, pk = 'id') { return unwrap(await from(name).update(patch).eq(pk, id).select().single()); },
     async remove(name, id) { unwrap(await from(name).delete().eq('id', id)); },
     async engine(action, payload) {
-      if (!CONFIG.ENGINE_URL) throw new Error('ยังไม่ได้ตั้งค่า ENGINE_URL (ห้องเครื่อง Apps Script ขั้นที่ 4)');
+      if (!CONFIG.ENGINE_URL) throw new Error('ยังไม่ได้ตั้งค่า ENGINE_URL (ระบบหลังบ้าน Apps Script ขั้นที่ 4)');
       const sess = await this.session(); if (!sess) throw new Error('ไม่ได้ล็อกอิน');
       const r = await fetch(CONFIG.ENGINE_URL, { method: 'POST', body: JSON.stringify({ action, token: sess.access_token, ...payload }) });
-      const j = await readJson(r, 'ห้องเครื่อง'); if (!j.ok) throw new Error(j.error || 'ห้องเครื่องตอบผิดพลาด'); return j;
+      const j = await readJson(r, 'ระบบหลังบ้าน'); if (!j.ok) throw new Error(j.error || 'ระบบหลังบ้านตอบผิดพลาด'); return j;
     },
     async uploadPhoto(endpointUrl, payload) {
       const url = endpointUrl || CONFIG.ENGINE_URL;
@@ -382,7 +382,7 @@ function pageMe(view) {
     <h4>เปลี่ยนรหัสผ่าน</h4>
     <label>รหัสผ่านใหม่ (6–30 ตัว อังกฤษ/ตัวเลข)</label><input id="pw1" type="password"><label>พิมพ์ซ้ำ</label><input id="pw2" type="password">
     <div class="row" style="margin-top:12px"><button onclick="changePw()">บันทึกรหัสผ่าน</button><button class="danger" onclick="logout()">ออกจากระบบ</button></div>
-    <p class="muted">${IS_DEMO ? 'โหมดสาธิต' : 'เชื่อมต่อ ' + esc(CONFIG.SUPABASE_URL)} · ห้องเครื่อง: ${CONFIG.ENGINE_URL ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า'} · ฉบับ ${esc(CREDIT.updated)}</p></div>`;
+    <p class="muted">${IS_DEMO ? 'โหมดสาธิต' : 'เชื่อมต่อ ' + esc(CONFIG.SUPABASE_URL)} · ระบบหลังบ้าน: ${CONFIG.ENGINE_URL ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า'} · ฉบับ ${esc(CREDIT.updated)}</p></div>`;
 }
 async function changePw() { const a = $('#pw1').value, b = $('#pw2').value; if (!/^[A-Za-z0-9]{6,30}$/.test(a)) return needField('#pw1', 'รหัสผ่านใหม่ต้องยาว 6–30 ตัว เฉพาะตัวอักษรอังกฤษและตัวเลข'); if (a !== b) return needField('#pw2', 'ช่อง "พิมพ์ซ้ำ" ไม่ตรงกับรหัสผ่านใหม่'); try { await api.changePassword(a); toast('เปลี่ยนรหัสผ่านแล้ว'); } catch (e) { fail(e); } }
 async function logout() { await api.logout(); S.me = null; S.cache = {}; S.scopeOrg = null; go('#'); render(); }
@@ -420,6 +420,28 @@ function sortTableDom(table, th) {
   const key = r => { const c = r.cells[idx]; return c ? (c.dataset.sortValue ?? c.textContent) : ''; };
   rows.sort((a, b) => sortCmp(key(a), key(b), dir)).forEach(r => body.appendChild(r));
 }
+// ---- ตารางแบ่งหน้า 20 รายการ (เปลี่ยนหน้า/เรียง เฉพาะตาราง ไม่โหลดทั้งหน้า) ----
+//   pagedTable(id, rows, cols, rowFn)  cols: [{ label, key, cls }]  rowFn(r) → '<tr>…</tr>'
+const Pager = { st: {}, data: {}, SIZE: 20 };
+function pagedTable(id, rows, cols, rowFn, opts = {}) {
+  Pager.data[id] = { rows, cols, rowFn, opts };
+  const st = Pager.st[id] = Pager.st[id] || { page: 0, sort: null };
+  if (opts.resetPage) st.page = 0;
+  return `<div id="${id}" class="pgtbl">${pagedInner(id)}</div>`;
+}
+function pagedInner(id) {
+  const { rows, cols, rowFn, opts } = Pager.data[id]; const st = Pager.st[id]; const size = opts.size || Pager.SIZE;
+  let list = rows;
+  if (st.sort) list = [...rows].sort((a, b) => sortCmp(a[st.sort.key], b[st.sort.key], st.sort.dir));
+  const pages = Math.max(1, Math.ceil(list.length / size)); st.page = Math.min(Math.max(0, st.page), pages - 1);
+  const slice = list.slice(st.page * size, (st.page + 1) * size);
+  const head = cols.map(c => c.key ? `<th class="sortable ${c.cls || ''}" role="button" tabindex="0" title="กดเพื่อเรียงตามคอลัมน์นี้" aria-sort="${st.sort && st.sort.key === c.key ? (st.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}" onclick="pageSort('${id}','${c.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pageSort('${id}','${c.key}')}">${c.label}</th>` : `<th class="${c.cls || ''}">${c.label}</th>`).join('');
+  const pager = pages > 1 ? `<div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="small secondary" ${st.page === 0 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page - 1})">‹ ก่อนหน้า</button><span class="muted">หน้า ${st.page + 1}/${pages} · ${fmtInt(list.length)} รายการ</span><button type="button" class="small secondary" ${st.page >= pages - 1 ? 'disabled' : ''} onclick="pageTo('${id}',${st.page + 1})">ถัดไป ›</button></div>` : '';
+  return `<div style="overflow:auto"><table data-sort="data"><thead><tr>${head}</tr></thead><tbody>${slice.map(rowFn).join('') || `<tr><td colspan="${cols.length}" class="muted">${opts.empty || 'ยังไม่มีข้อมูล'}</td></tr>`}</tbody></table></div>${pager}`;
+}
+function pageTo(id, n) { Pager.st[id].page = n; const el = document.getElementById(id); if (el) { el.innerHTML = pagedInner(id); el.scrollIntoView({ block: 'nearest' }); } }
+function pageSort(id, key) { const st = Pager.st[id]; st.sort = { key, dir: st.sort && st.sort.key === key && st.sort.dir === 'asc' ? 'desc' : 'asc' }; st.page = 0; const el = document.getElementById(id); if (el) el.innerHTML = pagedInner(id); }
+
 function exportCsv(rows, name) {
   if (!rows || !rows.length) return toast('ไม่มีข้อมูลให้ส่งออก', true);
   const cols = Object.keys(rows[0]).filter(k => !k.startsWith('_'));
@@ -489,7 +511,7 @@ function fillGps() {
 }
 
 // =====================================================================
-// บัญชีผู้ใช้ (ผ่านห้องเครื่อง) · ใบส่งมอบ
+// บัญชีผู้ใช้ (ผ่านระบบหลังบ้าน) · ใบส่งมอบ
 // =====================================================================
 function userForm(orgId) {
   const superRole = isSuper() ? `<label>บทบาท</label><select id="u_role"><option value="recorder">ผู้บันทึก</option><option value="admin">admin</option></select>` : '';
@@ -574,7 +596,7 @@ function pageAbout(view) {
     <h3>การพัฒนา</h3>
     <p>ออกแบบและเขียนโค้ดร่วมกับ Claude (Anthropic) ผ่าน Claude Code โดยเจ้าของโครงการเป็นผู้กำหนดความต้องการ ตัดสินใจ ตรวจสอบตัวเลขกับข้อมูลจริง และตรวจรับทุกขั้นตอน</p>
     <h3>ข้อมูลและบริการที่ใช้</h3>
-    <p>แผนที่ © OpenStreetMap contributors (ODbL) · ภาพดาวเทียม Esri · ฐานข้อมูล Supabase · ห้องเครื่อง Google Apps Script · ที่เก็บรูป Google Drive · โฮสติ้ง GitHub Pages · ฟอนต์ Noto Sans Thai (Google Fonts) · ไลบรารี Leaflet และ Chart.js</p>
+    <p>แผนที่ © OpenStreetMap contributors (ODbL) · ภาพดาวเทียม Esri · ฐานข้อมูล Supabase · ระบบหลังบ้าน Google Apps Script · ที่เก็บรูป Google Drive · โฮสติ้ง GitHub Pages · ฟอนต์ Noto Sans Thai (Google Fonts) · ไลบรารี Leaflet และ Chart.js</p>
     <h3>ติดต่อ</h3>
     <p>ผศ.พัฒนศักดิ์ ปทุมวัน · <a href="mailto:pattanasak.p@ubru.ac.th">pattanasak.p@ubru.ac.th</a></p>
     <p class="muted">ฉบับระบบ: ${esc(CREDIT.updated)}</p>
