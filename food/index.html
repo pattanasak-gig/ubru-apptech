@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261026h">
+<link rel="stylesheet" href="../common.css?v=20261026i">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261026h"></script>
+<script src="../common.js?v=20261026i"></script>
 </head>
 <body>
 <header>
@@ -308,27 +308,34 @@ async function pageRoutes(view) {
     <div class="row" style="margin-bottom:6px"><select style="width:auto" onchange="S._rt.farm=this.value;render()"><option value="">ทุกฟาร์มปลายทาง</option>${S.farms.map(f => `<option value="${f.id}" ${f.id === st.farm ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><span class="muted">ติ๊กเพื่อเลือกแสดงบนแผนที่ · ระยะทางคำนวณจากถนนจริง (OSRM) เมื่อ admin กด "ลากเส้นตามถนน"</span></div>
     <div style="overflow:auto"><table><thead><tr><th></th><th>เส้นทาง</th><th>ปลายทาง (ฟาร์ม)</th><th class="num">จุดรับ</th><th class="num">กม.</th><th class="num">นาที</th><th>คำนวณเมื่อ</th><th></th></tr></thead><tbody>
     ${shown.map((r, i) => `<tr><td><label class="pick-opt" style="padding:0"><input type="checkbox" ${st.hidden[r.id] ? '' : 'checked'} onchange="S._rt.hidden['${r.id}']=!this.checked;render()" aria-label="แสดง ${esc(r.name)}"><span class="legend-sw" style="background:${RCOL[i % RCOL.length]}"></span></label></td><td><b>${esc(r.name)}</b>${r.round_trip ? ' <span class="pill">ไป–กลับ</span>' : ''}${r.start_name ? `<div class="muted">เริ่ม: ${esc(r.start_name)}</div>` : ''}${r.vehicle_name ? `<div class="muted">รถ ${esc(r.vehicle_name)}</div>` : ''}</td><td>${esc(r.farm_name)}</td><td class="num">${fmtInt(r.stops)}</td><td class="num">${r.path_km != null ? fmt(r.path_km, 1) : '<span class="muted">ยังไม่คำนวณ</span>'}</td><td class="num">${r.path_duration_s != null ? fmtInt(r.path_duration_s / 60) : '-'}</td><td class="muted">${r.path_at ? thDate(r.path_at) : '-'}</td>
-      <td style="white-space:nowrap">${isAdmin() && canWrite() ? `<button class="small secondary" onclick="routeForm('${r.id}')">แก้</button> <button class="small" onclick="computeRoute('${r.id}')">ลากเส้นตามถนน</button> <button class="small secondary" onclick="S._rt.editing=${st.editing === r.id ? 'null' : `'${r.id}'`};S._rt.via=${st.editing === r.id ? '[]' : JSON.stringify(r.via || [])};render()">${st.editing === r.id ? 'เลิกปรับ' : 'ปรับเส้นทาง'}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">ยังไม่มีเส้นทาง' + (isAdmin() ? ' กด "＋ เพิ่มเส้นทาง"' : '') + '</td></tr>'}</tbody></table></div>
-    ${editing ? `<div class="banner info" style="margin-top:8px"><b>โหมดปรับเส้นทาง: ${esc(editing.name)}</b> — คลิกบนแผนที่ตรงถนนที่รถวิ่งจริง เพื่อเพิ่ม "จุดแวะ" (ลากหมุดย้ายได้ · คลิกหมุดเพื่อลบ) แล้วกด "คำนวณใหม่" · จุดบังคับ ${st.via.length} จุด
-      <div class="row" style="margin-top:6px"><button class="small" onclick="computeRoute('${editing.id}', S._rt.via)">คำนวณใหม่ตามจุดบังคับ</button><button class="small secondary" onclick="S._rt.via=[];computeRoute('${editing.id}', [])">ล้างจุดบังคับแล้วคำนวณใหม่</button></div></div>` : ''}
+      <td style="white-space:nowrap">${isAdmin() && canWrite() ? `<button class="small secondary" onclick="routeForm('${r.id}')">แก้</button> <button class="small" onclick="computeRoute('${r.id}')">ลากเส้นตามถนน</button> <button class="small secondary" onclick="S._rt.editing=${st.editing === r.id ? 'null' : `'${r.id}'`};S._rt.via=${st.editing === r.id ? '[]' : JSON.stringify(r.via || [])};S._rt.view=null;render()">${st.editing === r.id ? 'เลิกปรับ' : 'ปรับเส้นทาง'}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">ยังไม่มีเส้นทาง' + (isAdmin() ? ' กด "＋ เพิ่มเส้นทาง"' : '') + '</td></tr>'}</tbody></table></div>
+    ${editing ? `<div class="banner info" style="margin-top:8px"><b>โหมดปรับเส้นทาง: ${esc(editing.name)}</b> — คลิกบนแผนที่ (คลิกบนเส้นก็ได้) ตรงถนนที่รถวิ่งจริง เพื่อเพิ่ม "จุดแวะ" ทีละจุด กี่จุดก็ได้ (ลากหมุดย้ายได้ · คลิกหมุดเพื่อลบ) แล้วกด "คำนวณใหม่" · จุดแวะ <b id="viaCount">${st.via.length}</b> จุด (วางได้หลายจุด ตามลำดับที่รถวิ่ง)
+      <div class="row" style="margin-top:6px"><button class="small" onclick="computeRoute('${editing.id}', S._rt.via)">คำนวณใหม่ตามจุดแวะ</button><button class="small secondary" onclick="S._rt.via=[];computeRoute('${editing.id}', [])">ล้างจุดแวะแล้วคำนวณใหม่</button></div></div>` : ''}
     </div><div id="map"></div>`;
   const map = L.map('map'); addBaseLayer(map); const g = L.featureGroup().addTo(map); S.map = map;
   vis.forEach((r, idx) => {
     const col = RCOL[shown.indexOf(r) % RCOL.length];
     const stops = stopsAll.filter(x => x.route_id === r.id);
     const pts = routePoints(r, stops);
-    if (r.path && r.path.coordinates) L.polyline(r.path.coordinates.map(c => [c[1], c[0]]), { color: col, weight: 5, opacity: .85 }).bindPopup(`<b>${esc(r.name)}</b><br>${fmt(r.path_km, 1)} กม. · ${fmtInt(r.path_duration_s / 60)} นาที`).addTo(g);
-    else if (pts.length > 1) L.polyline(pts.map(p => [p.lat, p.lng]), { color: col, weight: 3, dashArray: '6 8', opacity: .7 }).bindPopup(`<b>${esc(r.name)}</b><br>ยังไม่ได้ลากเส้นตามถนน (เส้นประ = เส้นตรง)`).addTo(g);
+    const isEd = editing && editing.id === r.id;
+    const line = (r.path && r.path.coordinates) ? L.polyline(r.path.coordinates.map(c => [c[1], c[0]]), { color: col, weight: isEd ? 7 : 5, opacity: .85 }) : (pts.length > 1 ? L.polyline(pts.map(p => [p.lat, p.lng]), { color: col, weight: 3, dashArray: '6 8', opacity: .7 }) : null);
+    if (line) { if (isEd) line.on('click', e => { L.DomEvent.stop(e); addVia(e.latlng); }); else line.bindPopup(`<b>${esc(r.name)}</b><br>${r.path ? `${fmt(r.path_km, 1)} กม. · ${fmtInt(r.path_duration_s / 60)} นาที` : 'ยังไม่ได้ลากเส้นตามถนน (เส้นประ = เส้นตรง)'}`); line.addTo(g); }
     if (r.start_lat != null) L.circleMarker([r.start_lat, r.start_lng], { radius: 9, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindPopup(`<b>จุดเริ่มต้น</b> ${esc(r.start_name || '')}<br>${esc(r.name)}`).addTo(g);
     stops.forEach(sp => { if (sp.lat == null) return; L.marker([sp.lat, sp.lng], { icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:${col};border-radius:50%;width:22px;height:22px;border:2px solid #fff">${sp.seq}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }) }).bindPopup(`<b>${sp.seq}. ${esc(sp.source_name)}</b><br>${esc(r.name)}`).addTo(g); });
     if (r.farm_lat != null) L.marker([r.farm_lat, r.farm_lng], { icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:${col};border-radius:4px;width:26px;height:22px;border:2px solid #fff;line-height:18px">🏁</div>`, iconSize: [26, 22], iconAnchor: [13, 11] }) }).bindPopup(`<b>ปลายทาง</b> ${esc(r.farm_name)}`).addTo(g);
-    if (editing && editing.id === r.id) {
-      st.via.forEach((v, i) => { const m = L.marker([v[0], v[1]], { draggable: true, icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:#F9A825;color:#000;border-radius:50%;width:20px;height:20px;border:2px solid #fff;line-height:16px">v</div>`, iconSize: [20, 20], iconAnchor: [10, 10] }) }).addTo(g); m.on('dragend', e => { const ll = e.target.getLatLng(); st.via[i] = [+ll.lat.toFixed(6), +ll.lng.toFixed(6)]; }); m.on('click', () => { st.via.splice(i, 1); render(); }); });
-    }
+    if (isEd) { S._viaLayer = L.featureGroup().addTo(map); drawVia(); }
   });
-  if (editing) map.on('click', e => { st.via.push([+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6)]); render(); });
-  fitAll(map, g);
+  if (editing) map.on('click', e => addVia(e.latlng));
+  map.on('moveend', () => { st.view = { c: map.getCenter(), z: map.getZoom() }; });   // จำมุมมอง ไม่ให้กระโดดเมื่อวาดหน้าใหม่
+  if (st.view && editing) map.setView(st.view.c, st.view.z); else fitAll(map, g);
   const missing = stopsAll.filter(x => x.lat == null).length; if (missing) toast(`${missing} จุดรับยังไม่มีพิกัด จึงไม่อยู่บนเส้นทาง (ใส่ได้ที่ จัดการ → แหล่งกำเนิดเศษอาหาร)`);
+}
+// จุดแวะ: เพิ่มได้หลายจุดต่อเนื่องโดยไม่วาดหน้าใหม่ · ลากย้าย/คลิกลบ · ตัวนับในแถบฟ้าอัปเดตทันที
+function addVia(latlng) { const st = S._rt; st.via.push([+latlng.lat.toFixed(6), +latlng.lng.toFixed(6)]); drawVia(); toast(`เพิ่มจุดแวะที่ ${st.via.length} แล้ว · กด "คำนวณใหม่ตามจุดแวะ" เมื่อวางครบ`); }
+function drawVia() {
+  const st = S._rt; const g = S._viaLayer; if (!g) return; g.clearLayers();
+  st.via.forEach((v, i) => { const m = L.marker([v[0], v[1]], { draggable: true, icon: L.divIcon({ className: 'seqlbl', html: `<div style="background:#F9A825;color:#000;border-radius:50%;width:22px;height:22px;border:2px solid #fff;line-height:18px">${i + 1}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(g); m.on('dragend', e => { const ll = e.target.getLatLng(); st.via[i] = [+ll.lat.toFixed(6), +ll.lng.toFixed(6)]; }); m.on('click', e => { L.DomEvent.stop(e); if (confirm(`ลบจุดแวะที่ ${i + 1}?`)) { st.via.splice(i, 1); drawVia(); } }); });
+  const c = $('#viaCount'); if (c) c.textContent = st.via.length;
 }
 // ลำดับจุด: เริ่ม → จุดรับที่มีพิกัด → ฟาร์ม
 function routePoints(r, stops) {
