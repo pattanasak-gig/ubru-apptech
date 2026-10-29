@@ -526,7 +526,35 @@ function carbonGroup(rows, keyFn, labelFn) {
   return Object.values(m).sort((a, b) => b.kg - a.kg);
 }
 // groups: กลุ่มฟาร์ม/เส้นทาง · factors: ค่าสัมประสิทธิ์ที่ใช้งาน · sources: [{name, kg}] · monthly: กลุ่มรายเดือน (ไม่บังคับ)
-function carbonReport({ groups, factors, sources = [], monthly = null, groupTitle = 'รายฟาร์มและเส้นทาง', firstCol = 'ฟาร์ม · เส้นทาง' }) {
+// กราฟคาร์บอน 4 กราฟ (DEC-116) — ใช้ทั้งหน้าคาร์บอนและแดชบอร์ด · rows = v_pickup_carbon · items = v_pickup_item · factors = ค่าสัมประสิทธิ์
+const carbonChartCards = p => `<div class="grid-dash">
+  <div class="card"><div class="cardhead"><h4>การปล่อยก๊าซเรือนกระจกจากการขนส่งรายเดือน (kgCO2e)</h4></div><div class="chartbox"><canvas id="${p}Trans"></canvas></div></div>
+  <div class="card"><div class="cardhead"><h4>ก๊าซที่หลีกเลี่ยงได้จากการลดการฝังกลบ เทียบกับที่ปล่อย (kgCO2e)</h4></div><div class="chartbox"><canvas id="${p}Bal"></canvas></div></div>
+  <div class="card"><div class="cardhead"><h4>แหล่งกำเนิดเศษอาหารที่ช่วยลดการปล่อยก๊าซ (kgCO2e)</h4></div><div class="chartbox"><canvas id="${p}Src"></canvas></div></div>
+  <div class="card"><div class="cardhead"><h4>ฟาร์มที่ช่วยลดการปล่อยก๊าซสุทธิ (kgCO2e)</h4></div><div class="chartbox"><canvas id="${p}Farm"></canvas></div></div>
+</div>`;
+function drawCarbonCharts(p, rows, items, factors) {
+  const r2 = v => Math.round((+v || 0) * 100) / 100;
+  const lf = factors.find(f => f.category === 'landfill' && f.is_primary), pr = factors.find(f => f.category === 'process' && f.is_primary);
+  const mm = {}; for (const r of rows) { const k = String(r.pickup_date).slice(0, 7); const m = mm[k] = mm[k] || { k, tr: 0, av: 0, net: 0 }; m.tr += +r.e_transport || 0; m.av += +r.e_avoided || 0; m.net += +r.e_net || 0; }
+  const ms = Object.values(mm).sort((a, b) => a.k.localeCompare(b.k)); const labels = ms.map(m => thMonth(m.k + '-01'));
+  let cum = 0; const cumNet = ms.map(m => r2(cum += m.net));
+  const base = { responsive: true, maintainAspectRatio: false };
+  const tip = { callbacks: { label: c => `${c.dataset.label}: ${fmt2(c.parsed.y ?? c.parsed.x)} kgCO2e` } };
+  if ($('#' + p + 'Trans') && ms.length) mkChart($('#' + p + 'Trans'), { type: 'bar', data: { labels, datasets: [{ label: 'ปล่อยจากการขนส่ง', data: ms.map(m => r2(m.tr)), backgroundColor: '#C62828' }] }, options: { ...base, plugins: { legend: { display: false }, tooltip: tip }, scales: { y: { beginAtZero: true, title: { display: true, text: 'kgCO2e' } } } } });
+  if ($('#' + p + 'Bal') && ms.length) mkChart($('#' + p + 'Bal'), { data: { labels, datasets: [
+    { type: 'bar', label: 'หลีกเลี่ยงการฝังกลบ', data: ms.map(m => r2(m.av)), backgroundColor: '#2E7D32', yAxisID: 'y' },
+    { type: 'bar', label: 'ปล่อยจากการขนส่ง', data: ms.map(m => r2(m.tr)), backgroundColor: '#C62828', yAxisID: 'y' },
+    { type: 'line', label: 'สุทธิสะสม', data: cumNet, borderColor: '#1F3A5F', backgroundColor: '#1F3A5F', tension: .2, pointRadius: 2, yAxisID: 'y2' }] },
+    options: { ...base, plugins: { legend: { position: 'bottom' }, tooltip: tip }, scales: { y: { beginAtZero: true, title: { display: true, text: 'รายเดือน' } }, y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'สะสม' } } } } });
+  const sm = {}; for (const i of items) { sm[i.source_name] = (sm[i.source_name] || 0) + (+i.weight_kg || 0); }
+  const ss = Object.entries(sm).map(([n, kg]) => ({ n, av: lf ? kg * lf.value : 0, pc: pr ? kg * pr.value : 0 })).sort((a, b) => b.av - a.av).slice(0, 12);
+  if ($('#' + p + 'Src') && ss.length) mkChart($('#' + p + 'Src'), { type: 'bar', data: { labels: ss.map(s => s.n), datasets: [{ label: 'หลีกเลี่ยงการฝังกลบ', data: ss.map(s => r2(s.av)), backgroundColor: '#2E7D32' }, { label: 'หลีกเลี่ยง − หักการเลี้ยงหนอน', data: ss.map(s => r2(s.av - s.pc)), backgroundColor: '#7CB342' }] }, options: { ...base, indexAxis: 'y', plugins: { legend: { position: 'bottom' }, tooltip: tip }, scales: { x: { beginAtZero: true, title: { display: true, text: 'kgCO2e' } } } } });
+  const fm = {}; for (const r of rows) { const f = fm[r.farm_name] = fm[r.farm_name] || { n: r.farm_name, av: 0, tr: 0, net: 0 }; f.av += +r.e_avoided || 0; f.tr += +r.e_transport || 0; f.net += +r.e_net || 0; }
+  const fs = Object.values(fm).sort((a, b) => b.net - a.net);
+  if ($('#' + p + 'Farm') && fs.length) mkChart($('#' + p + 'Farm'), { type: 'bar', data: { labels: fs.map(f => f.n), datasets: [{ label: 'สุทธิ (หลีกเลี่ยง − ขนส่ง)', data: fs.map(f => r2(f.net)), backgroundColor: '#1F3A5F' }, { label: 'ปล่อยจากการขนส่ง', data: fs.map(f => r2(f.tr)), backgroundColor: '#C62828' }] }, options: { ...base, indexAxis: 'y', plugins: { legend: { position: 'bottom' }, tooltip: tip }, scales: { x: { beginAtZero: true, title: { display: true, text: 'kgCO2e' } } } } });
+}
+function carbonReport({ groups, factors, sources = [], monthly = null, groupTitle = 'รายฟาร์มและเส้นทาง', firstCol = 'ฟาร์ม · เส้นทาง', chartsHtml = '' }) {
   const T = carbonGroup(groups, () => 'all', () => 'รวม')[0] || { label: 'รวม', ...Object.fromEntries(CARBON_KEYS.map(x => [x, 0])) };
   const prim = c => factors.find(f => f.category === c && f.is_primary) || null;
   const lf = prim('landfill'), pr = prim('process'), fe = prim('fuel_economy');
@@ -546,6 +574,7 @@ function carbonReport({ groups, factors, sources = [], monthly = null, groupTitl
     <div class="banner" style="margin-top:8px"><b>วิธีคิด</b> · หลีกเลี่ยงการฝังกลบ = กก. × ${cite(lf)} · ขนส่ง = ลิตร × EF เชื้อเพลิงของรถ (ลิตร = ลิตรจริง หรือ กม. ÷ กม./ลิตร) · สุทธิ = หลีกเลี่ยง − ขนส่ง · หักการเลี้ยงหนอน = กก. × ${cite(pr)}${pr && !String(pr.code).includes('LESS') ? ' <b>(ค่าอ้างอิงจากงานวิจัยต่างประเทศ)</b>' : ''}</div>
     ${T.pickups_no_distance ? `<div class="banner warn" style="margin-top:8px"><b>${fmtInt(T.pickups_no_distance)} จาก ${fmtInt(T.pickups)} รอบยังไม่รู้ระยะทาง ค่าขนส่งของรอบเหล่านี้จึงนับเป็น 0</b> (ตัวเลขสุทธิจึงสูงกว่าความจริง) · สาเหตุ: รอบไม่ได้ระบุเส้นทาง/กม./ลิตร และฟาร์มนั้นยังไม่มีเส้นทาง หรือมีหลายเส้นทางแต่ยังไม่ได้เลือก "เส้นทางหลัก" · วิธีแก้: สร้างเส้นทางของฟาร์มที่เมนู เส้นทางรถ (ฟาร์มที่มีเส้นทางเดียวระบบใช้ให้อัตโนมัติ) หรือเลือกเส้นทางหลักที่ จัดการ → ฟาร์ม</div>` : ''}
     ${T.pickups_estimated ? `<div class="muted" style="margin-top:6px">${fmtInt(T.pickups_estimated)} รอบใช้ค่าประมาณ: รอบที่ไม่ได้บันทึกเส้นทางเอง ใช้ระยะทางจากเส้นทางของฟาร์ม (ถือว่าทุกเที่ยววิ่งเส้นนั้น) · รถที่ยังไม่ระบุ กม./ลิตร ใช้ค่าสมมติ ${fe ? fmt(fe.value) + ' ' + esc(fe.unit) : '-'}</div>` : ''}</div>
+    ${chartsHtml}
     <div class="card"><div class="cardhead"><h4>${esc(groupTitle)}</h4></div><div class="tscroll"><table>${head(esc(firstCol))}<tbody>${groups.length ? carbonGroup(groups, g => g._key || g.label, g => g._label || g.label).map(row).join('') : '<tr><td colspan="10" class="muted">ยังไม่มีข้อมูล</td></tr>'}${row({ ...T, label: 'รวม' }).replace('<tr>', '<tr style="font-weight:600;background:#f8fafc">')}</tbody></table></div></div>
     ${monthly ? `<div class="card"><div class="cardhead"><h4>รายเดือน</h4></div><div class="tscroll"><table>${head('เดือน')}<tbody>${monthly.map(row).join('')}</tbody></table></div></div>` : ''}
     <div class="card"><div class="cardhead"><h4>รายแหล่งกำเนิดเศษอาหาร (ฝังกลบที่หลีกเลี่ยงได้)</h4></div><div class="muted">ค่าขนส่งไม่แบ่งลงรายแหล่ง (คิดรายเส้นทาง) · ใช้ค่าหลัก ${cite(lf)}</div><div class="tscroll"><table><thead><tr><th>แหล่งกำเนิดเศษอาหาร</th><th class="num">กก.</th><th class="num">หลีกเลี่ยงการฝังกลบ</th><th class="num">หักเลี้ยงหนอน</th><th class="num">หลีกเลี่ยง − หักหนอน</th></tr></thead><tbody>${srcRows || '<tr><td colspan="5" class="muted">ยังไม่มีข้อมูล</td></tr>'}</tbody></table></div></div>

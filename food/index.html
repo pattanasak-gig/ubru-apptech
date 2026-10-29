@@ -6,11 +6,11 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261030e">
+<link rel="stylesheet" href="../common.css?v=20261030f">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261030e"></script>
+<script src="../common.js?v=20261030f"></script>
 </head>
 <body>
 <header>
@@ -291,8 +291,12 @@ async function pageDashboard(view) {
       <div class="card"><div class="cardhead"><h4>สัดส่วนตามฟาร์ม</h4></div><div class="chartbox"><canvas id="cFarm"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>ตามแหล่งกำเนิดเศษอาหาร (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}<div class="cardhead" style="margin-top:14px"><h4>ตามประเภทแหล่งกำเนิดเศษอาหาร</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
       <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
-      <div class="card" style="grid-column:1/-1"><div class="cardhead"><h4>ตารางรายเดือน</h4></div>${pagedTable('tblMonthly', mArr.slice().reverse().map(m => ({ m: m.m, n: m.n.size, kg: Math.round(m.kg * 100) / 100, avg: Math.round(m.kg / m.n.size * 100) / 100 })), [{ label: 'เดือน', key: 'm', cls: 'nowrap' }, { label: 'รอบ', key: 'n', cls: 'num' }, { label: 'กก.', key: 'kg', cls: 'num' }, { label: 'เฉลี่ย/รอบ', key: 'avg', cls: 'num' }], r => `<tr><td class="nowrap">${thMonth(r.m + '-01')}</td><td class="num">${fmtInt(r.n)}</td><td class="num">${fmt(r.kg)}</td><td class="num">${fmt(r.avg)}</td></tr>`, { resetPage: true })}</div>
     </div>`;
+  try {   // DEC-116 กราฟคาร์บอนบนแดชบอร์ด (ตัวกรองเดียวกัน) · ถ้าฐานข้อมูลยังไม่มี view คาร์บอน ข้ามไป
+    const oc = { eq: { ...scopeEq() } }; if (st.from) oc.gte = { pickup_date: st.from }; if (st.to) oc.lte = { pickup_date: st.to }; if (st.farm) oc.eq.farm_id = st.farm; if (st.project) oc.eq.project_id = st.project;
+    const [cRows, cFac] = await Promise.all([api.list('food.v_pickup_carbon', oc), api.list('food.carbon_factor', { eq: { status: 'active' } })]);
+    if (cRows.length) { view.insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:14px"><div class="cardhead"><h4>การลดก๊าซเรือนกระจก</h4><a class="small" href="#carbon">ดูรายละเอียดและวิธีคิด ›</a></div></div>` + carbonChartCards('dc')); drawCarbonCharts('dc', cRows, items, cFac); }
+  } catch (e) { console.warn('carbon charts skipped:', e && e.message); }
   if (canWrite()) view.insertAdjacentHTML('beforeend', `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>`);
   S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่งกำเนิดเศษอาหาร: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
   if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.m + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[0] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
@@ -315,12 +319,12 @@ async function pageCarbon(view) {
   catch (e) { const f = friendlyError(e); return view.innerHTML = `<div class="card"><h3 style="margin-top:0">คาร์บอน</h3><div class="banner warn">${esc(f.title)}</div><div class="muted" style="margin-top:6px">${esc(f.hint)} (เจ้าของโครงการต้องรันไฟล์ sql/009_carbon.sql ก่อน)</div></div>`; }
   S._coRows = rows.map(r => ({ วันที่: r.pickup_date, ฟาร์ม: r.farm_name, โครงการ: projOf(r.project_id).code || '', เส้นทาง: r.route_name || '', ที่มาระยะทาง: ({ liters: 'ลิตรจริง', typed: 'กม.ที่บันทึก', route: 'เส้นทางในรอบ', main_route: 'เส้นทางหลักฟาร์ม (ประมาณ)', farm_route: 'เส้นทางเดียวของฟาร์ม (ประมาณ)', none: 'ไม่มี' })[r.km_source], 'กม.': r.km, 'กม./ลิตร': r.kmpl, ลิตร: r.liters == null ? '' : (+r.liters).toFixed(3), เชื้อเพลิง: FUEL_LABELS[r.fuel_code] || r.fuel_code, 'เศษอาหาร กก.': r.kg, 'ขนส่ง kgCO2e': r.e_transport == null ? '' : (+r.e_transport).toFixed(4), 'หลีกเลี่ยงฝังกลบ kgCO2e': r.e_avoided == null ? '' : (+r.e_avoided).toFixed(4), 'สุทธิ kgCO2e': r.e_net == null ? '' : (+r.e_net).toFixed(4), 'สุทธิหักเลี้ยงหนอน kgCO2e': r.e_net_after_process == null ? '' : (+r.e_net_after_process).toFixed(4), ค่าประมาณ: r.is_estimated ? 'ใช่' : '' }));
   const groups = rows.map(r => ({ ...r, _key: r.farm_id + '|' + (r.route_id || ''), _label: `${r.farm_name} · ${r.route_name || 'ไม่มีเส้นทาง'}` }));
-  const monthly = carbonGroup(rows, r => String(r.pickup_date).slice(0, 7), r => thMonth(String(r.pickup_date).slice(0, 7) + '-01')).sort((a, b) => (a.first || '').localeCompare(b.first || ''));
   const sm = {}; for (const i of items) { sm[i.source_id] = sm[i.source_id] || { name: i.source_name, kg: 0 }; sm[i.source_id].kg += +i.weight_kg; }
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>คาร์บอน ${helpBtn('carbon')}</h4><button class="small secondary" onclick="exportCsv(S._coRows,'carbon_pickups')">ส่งออก CSV (รายรอบ)</button></div>
     <div class="row">${projectFilter('S._co.project', st.project)}<select style="width:auto" onchange="S._co.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.filter(f => !st.project || f.project_id === st.project).map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._co.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._co.to=this.value;render()" style="width:auto"></label>${isAdmin() ? '<a href="#admin/carbon" class="small">แก้ค่าสัมประสิทธิ์</a>' : ''}</div></div>
-    ${carbonReport({ groups, factors, sources: Object.values(sm), monthly, groupTitle: 'รายฟาร์มและเส้นทาง' })}`;
+    ${carbonReport({ groups, factors, sources: Object.values(sm), groupTitle: 'รายฟาร์มและเส้นทาง', chartsHtml: carbonChartCards('cc') })}`;
+  drawCarbonCharts('cc', rows, items, factors);
 }
 async function pageMap(view) {
   const st = S._map = S._map || { project: '' };
