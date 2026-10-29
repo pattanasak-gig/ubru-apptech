@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UBRU AppTech System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="common.css?v=20261029c">
+<link rel="stylesheet" href="common.css?v=20261030a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="common.js?v=20261029c"></script>
+<script src="common.js?v=20261030a"></script>
 </head>
 <body>
 <header>
@@ -59,7 +59,14 @@ async function render() {
         <div class="card"><div class="cardhead"><h4>ฟาร์มที่นำไปใช้ประโยชน์</h4></div><div class="tscroll"><table><thead><tr><th>ฟาร์ม</th><th class="nowrap">โครงการ</th><th class="num">รอบ</th><th class="num">กก.</th><th class="nowrap">ล่าสุด</th></tr></thead><tbody>${F.map(f => `<tr><td>${esc(f.farm_name)}</td><td class="nowrap">${esc(f.project_code)}</td><td class="num">${fmtInt(f.pickups)}</td><td class="num">${fmt(f.total_kg)}</td><td class="nowrap" data-sort-value="${f.last_date || ''}">${f.last_date ? thDay(f.last_date) : '-'}</td></tr>`).join('')}</tbody></table></div></div>
       </div>
       ${code ? '' : `<h3>ระบบงาน</h3><div class="grid2">${MODULES.map(m => `<a class="modcard" href="${m.href}"><b>${esc(m.name)}</b><div class="muted">${esc(m.desc)}</div></a>`).join('')}</div>`}
-      <div class="muted" style="margin-top:10px">ตัวเลขเป็นยอดรวมจากรายการที่เจ้าหน้าที่บันทึก (เฉพาะโครงการที่เผยแพร่) · ยังไม่รวมการคำนวณคาร์บอน · ฉบับ ${esc(CREDIT.updated)}</div>`;
+      <div id="carbonBox"></div>
+      <div class="muted" style="margin-top:10px">ตัวเลขเป็นยอดรวมจากรายการที่เจ้าหน้าที่บันทึก (เฉพาะโครงการที่เผยแพร่) · คาร์บอนคำนวณสดจากค่าสัมประสิทธิ์ที่แสดงพร้อมแหล่งอ้างอิง · ฉบับ ${esc(CREDIT.updated)}</div>`;
+    // DEC-113 คาร์บอน (สาธารณะ) — ถ้าฐานข้อมูลยังไม่มี view คาร์บอน ข้ามส่วนนี้ไปโดยไม่กระทบหน้าอื่น
+    try {
+      const [cRows, cFac] = await Promise.all([api.list('food.v_public_carbon', {}), api.list('food.v_public_carbon_factor', { order: ['sort_order'] })]);
+      const C = pick(cRows).map(r => ({ ...r, _key: r.project_code + '|' + r.farm_name, _label: code ? r.farm_name : `${r.project_code} · ${r.farm_name}` }));
+      if (C.length) $('#carbonBox').innerHTML = `<h3>การลดก๊าซเรือนกระจก</h3>` + carbonReport({ groups: C, factors: cFac, sources: sArr.map(s => ({ name: s.name, kg: s.kg })), groupTitle: code ? 'รายฟาร์ม' : 'รายโครงการและฟาร์ม', firstCol: code ? 'ฟาร์ม' : 'โครงการ · ฟาร์ม' });
+    } catch (e) { console.warn('carbon section skipped:', e && e.message); }
     if (mArr.length) mkChart($('#cMonth'), { type: 'bar', data: { labels: mArr.map(m => thMonth(m.k + '-01')), datasets: [{ label: 'กก.', data: mArr.map(m => Math.round(m.kg * 100) / 100), backgroundColor: PALETTE[1] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
   } catch (e) { const f = friendlyError(e, 'โหลดข้อมูลไม่สำเร็จ'); console.error(e); view.innerHTML = `<div class="card"><b style="color:var(--danger)">${esc(f.title)}</b><div style="margin-top:6px">${esc(f.hint)}</div><div class="row" style="margin-top:10px"><button class="secondary" onclick="render()">ลองใหม่</button></div></div>`; }
   finally { setTimeout(() => makeSortable(view), 0); }
