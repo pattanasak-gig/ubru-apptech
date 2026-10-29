@@ -208,8 +208,8 @@ const DemoBackend = () => {
   const s1 = add('food.source', { org_id: o1.id, source_type_id: stOf('ตลาด'), name: 'ตลาดตัวอย่าง ถัง 1', lat: 15.228, lng: 104.857 });
   const s2 = add('food.source', { org_id: o1.id, source_type_id: stOf('ตลาด'), name: 'ตลาดตัวอย่าง ถัง 2', lat: 15.228, lng: 104.857 });
   const s3 = add('food.source', { org_id: o1.id, source_type_id: stOf('ร้านอาหาร'), name: 'ร้านอาหารตัวอย่าง ก', lat: 15.235, lng: 104.85 });
-  const s4 = add('food.source', { org_id: o1.id, source_type_id: stOf('ร้านอาหาร'), name: 'ร้านอาหารตัวอย่าง ข', lat: 15.24, lng: 104.87 });
-  add('food.source', { org_id: o1.id, source_type_id: stOf('หน่วยงาน/สถานศึกษา'), name: 'โรงเรียนตัวอย่าง (ยังไม่เคยรับ)' });
+  const s4 = add('food.source', { org_id: o1.id, source_type_id: stOf('ร้านอาหาร'), name: 'ร้านอาหารตัวอย่าง ข', lat: 15.24, lng: 104.87, project_id: p68.id });   // ผูกโครงการ P68
+  add('food.source', { org_id: o1.id, source_type_id: stOf('หน่วยงาน/สถานศึกษา'), name: 'โรงเรียนตัวอย่าง (ยังไม่เคยรับ)', project_id: pBsf.id });   // ผูกโครงการ BSF
   add('food.source', { org_id: o2.id, name: 'แหล่งกำเนิดเศษอาหารของหน่วยงานสอง' });
   const v1 = add('food.vehicle', { org_id: o1.id, name: 'กระบะตัวอย่าง', plate_no: 'ตัวอย่าง-1', fuel_type: 'ดีเซล' });
   // รอบเข้ารับตัวอย่าง 12 สัปดาห์ย้อนหลัง (ตัวเลขสุ่มแบบคงที่ เพื่อให้แดชบอร์ดมีข้อมูล)
@@ -238,7 +238,7 @@ const DemoBackend = () => {
   const projOf = p => byId('core.project', p.project_id || byId('food.farm', p.farm_id).project_id);
   const pubProj = pj => pj.is_public && pj.status === 'active';
   const views = {
-    'food.v_pickup': () => D['food.pickup'].map(p => { const f = byId('food.farm', p.farm_id), pj = projOf(p), its = itemsOf(p.id); return { ...p, org_code: byId('core.org', p.org_id).code, farm_name: f.name, project_id: pj.id, project_code: pj.code, project_name: pj.name, project_overridden: !!p.project_id, vehicle_name: p.vehicle_id ? byId('food.vehicle', p.vehicle_id).name : null, created_by_name: userName(p.created_by), updated_by_name: userName(p.updated_by), items: its.length, total_kg: r2(sum(its, 'weight_kg')), avg_quality: avg(its.map(i => i.quality)), photo_count: D['food.pickup_photo'].filter(x => x.pickup_id === p.id && x.status === 'active').length }; }),
+    'food.v_pickup': () => D['food.pickup'].map(p => { const f = byId('food.farm', p.farm_id), pj = projOf(p), its = itemsOf(p.id); return { ...p, org_code: byId('core.org', p.org_id).code, farm_name: f.name, project_id: pj.id, project_code: pj.code, project_name: pj.name, project_overridden: !!p.project_id && p.project_id !== f.project_id, vehicle_name: p.vehicle_id ? byId('food.vehicle', p.vehicle_id).name : null, created_by_name: userName(p.created_by), updated_by_name: userName(p.updated_by), items: its.length, total_kg: r2(sum(its, 'weight_kg')), avg_quality: avg(its.map(i => i.quality)), photo_count: D['food.pickup_photo'].filter(x => x.pickup_id === p.id && x.status === 'active').length }; }),
     'food.v_pickup_item': () => D['food.pickup_item'].map(i => { const p = byId('food.pickup', i.pickup_id), f = byId('food.farm', p.farm_id), pj = projOf(p), s = byId('food.source', i.source_id); return { ...i, pickup_date: p.pickup_date, pickup_time: p.pickup_time, farm_id: p.farm_id, farm_name: f.name, project_id: pj.id, project_code: pj.code, source_name: s.name, source_type_id: s.source_type_id, source_type_name: s.source_type_id ? byId('food.source_type', s.source_type_id).name : null, pickup_status: p.status, created_by_name: userName(i.created_by) }; }),
     'food.v_farm_summary': () => D['food.farm'].map(f => { const pj = byId('core.project', f.project_id); const ps = D['food.pickup'].filter(p => p.farm_id === f.id && p.status === 'active'); const its = ps.flatMap(p => itemsOf(p.id)); const ds = ps.map(p => p.pickup_date).sort(); return { farm_id: f.id, org_id: f.org_id, farm_name: f.name, project_id: f.project_id, project_code: pj.code, project_name: pj.name, lat: f.lat, lng: f.lng, status: f.status, pickups: ps.length, total_kg: r2(sum(its, 'weight_kg')), first_date: ds[0] || null, last_date: ds[ds.length - 1] || null }; }),
     'food.v_source_summary': () => D['food.source'].map(s => { const its = D['food.pickup_item'].filter(i => i.source_id === s.id && i.status === 'active' && byId('food.pickup', i.pickup_id).status === 'active'); const ds = its.map(i => byId('food.pickup', i.pickup_id).pickup_date).sort(); return { source_id: s.id, org_id: s.org_id, source_name: s.name, source_type_id: s.source_type_id, source_type_name: s.source_type_id ? byId('food.source_type', s.source_type_id).name : null, lat: s.lat, lng: s.lng, status: s.status, pickups: new Set(its.map(i => i.pickup_id)).size, total_kg: r2(sum(its, 'weight_kg')), avg_quality: avg(its.map(i => i.quality)), first_date: ds[0] || null, last_date: ds[ds.length - 1] || null }; }),
@@ -283,6 +283,8 @@ const DemoBackend = () => {
       if (name === 'food.route_stop') r.org_id = byId('food.route', r.route_id).org_id;
       if (['food.farm', 'food.source', 'food.vehicle', 'food.route'].includes(name) && me.role === 'recorder') throw new Error('permission denied: row-level security');
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
+      if (name === 'food.pickup') { const fp = byId('food.farm', r.farm_id).project_id; if (me.role !== 'super_admin' || !r.project_id) r.project_id = fp; if (me.role === 'recorder' && me.project_id && me.project_id !== r.project_id) throw new Error('ฟาร์มนี้อยู่นอกโครงการที่บัญชีของคุณสังกัด ให้ admin ตรวจสอบ'); const vpj = r.vehicle_id ? byId('food.vehicle', r.vehicle_id).project_id : null; if (vpj && vpj !== r.project_id) throw new Error('รถที่เลือกอยู่คนละโครงการกับรอบนี้'); }   // DEC-112
+      if (name === 'food.pickup_item') { const pk = byId('food.pickup', r.pickup_id), spj = byId('food.source', r.source_id).project_id; if (spj && pk.project_id && spj !== pk.project_id) throw new Error('แหล่งกำเนิดที่เลือกอยู่คนละโครงการกับรอบนี้'); }
       if (name === 'food.pickup_item' && D['food.pickup_item'].some(i => i.pickup_id === r.pickup_id && i.source_id === r.source_id)) throw new Error('duplicate key: แหล่งกำเนิดเศษอาหารนี้มีในรอบแล้ว');
       if (name === 'food.pickup_photo') { const mx = parseInt((D['core.app_setting'].find(s => s.key === 'max_photos_per_pickup') || {}).value || '3'); if (D['food.pickup_photo'].filter(x => x.pickup_id === r.pickup_id && x.status === 'active').length >= mx) throw new Error(`รอบนี้มีรูปครบ ${mx} รูปแล้ว ให้ admin ยกเลิกรูปเก่าก่อนจึงเพิ่มได้`); }
       r.created_by = me.id; r.updated_by = me.id;
@@ -292,6 +294,7 @@ const DemoBackend = () => {
     async update(name, id, patch, pk = 'id') {
       const r = D[name].find(x => x[pk] === id); if (!r) throw new Error('ไม่พบข้อมูล');
       if (me.role === 'recorder' && patch.status === 'inactive') throw new Error('ผู้บันทึกยกเลิกไม่ได้ ต้องให้ admin ทำ');
+      if (name === 'food.pickup' && ('farm_id' in patch || 'project_id' in patch)) { const fp = byId('food.farm', patch.farm_id || r.farm_id).project_id; if (me.role !== 'super_admin' || !patch.project_id) patch.project_id = fp; }   // DEC-112 ล็อกตามฟาร์ม
       Object.assign(r, patch, { updated_at: now(), updated_by: me.id }); return { ...r };
     },
     async remove(name, id) { const i = D[name].findIndex(r => r.id === id); if (i >= 0) D[name].splice(i, 1); },
@@ -479,7 +482,7 @@ async function crudSection(spec) {
   if (st.sort) { const c = spec.cols.find(x => x.key === st.sort.key); const lab = c && c.type === 'select' ? (r => (c.options().find(o => o.value === r[c.key]) || {}).label || '') : (r => r[st.sort.key]); filtered = [...filtered].sort((a, b) => sortCmp(lab(a), lab(b), st.sort.dir)); }
   const pages = Math.max(1, Math.ceil(filtered.length / st.size)); st.page = Math.min(st.page, pages - 1);
   const slice = filtered.slice(st.page * st.size, (st.page + 1) * st.size);
-  const cell = (r, c) => c.type === 'select' ? esc((c.options().find(o => o.value === r[c.key]) || {}).label || '') : c.type === 'status' ? (r[c.key] === 'active' ? '<span class="pill">ใช้งาน</span>' : '<span class="pill" style="background:#fee2e2">ปิด</span>') : c.type === 'bool' ? (r[c.key] ? 'ใช่' : 'ไม่') : c.type === 'latlng' ? (r.lat != null ? `${r.lat}, ${r.lng}` : '<span class="muted">ยังไม่มี</span>') : esc(r[c.key] ?? '');
+  const cell = (r, c) => c.type === 'select' ? esc((c.options().find(o => o.value === r[c.key]) || {}).label || (r[c.key] == null && c.nullLabel ? c.nullLabel : '')) : c.type === 'status' ? (r[c.key] === 'active' ? '<span class="pill">ใช้งาน</span>' : '<span class="pill" style="background:#fee2e2">ปิด</span>') : c.type === 'bool' ? (r[c.key] ? 'ใช่' : 'ไม่') : c.type === 'latlng' ? (r.lat != null ? `${r.lat}, ${r.lng}` : '<span class="muted">ยังไม่มี</span>') : esc(r[c.key] ?? '');
   return `<div class="card" id="${id}"><div class="row" style="justify-content:space-between"><h4 style="margin:0">${spec.title} (${fmtInt(rows.length)})${spec.help ? ' ' + helpBtn(spec.help) : ''}</h4><div class="row">${spec.extraBtn || ''}${spec.noAdd ? '' : `<button class="small" onclick="crudForm('${spec.table}')">＋ เพิ่ม</button>`}</div></div>
     ${spec.intro ? `<div class="muted" style="margin:4px 0 8px">${spec.intro}</div>` : ''}
     ${rows.length > 10 ? `<div class="row" style="margin:6px 0"><input type="search" aria-label="ค้นหาใน${esc(spec.title)}" placeholder="ค้นหา…" value="${esc(st.q || '')}" style="flex:1;min-width:160px" onchange="crudState('${spec.table}',{q:this.value,page:0})"></div>` : ''}
@@ -489,7 +492,7 @@ async function crudSection(spec) {
 function crudForm(table, id) {
   const spec = SPECS[table]; const r = id ? spec._rows.find(x => (x.id || x.key) === id) : {};
   const field = c => {
-    if (c.type === 'select') return `<select id="c_${c.key}">${(c.nullable ? '<option value="">—</option>' : '') + c.options().map(o => `<option value="${o.value}" ${o.value === r[c.key] ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
+    if (c.type === 'select') return `<select id="c_${c.key}">${(c.nullable ? `<option value="">${esc(c.nullLabel || '—')}</option>` : '') + c.options().map(o => `<option value="${o.value}" ${o.value === r[c.key] ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
     if (c.type === 'status') return `<select id="c_${c.key}"><option value="active" ${r[c.key] !== 'inactive' ? 'selected' : ''}>ใช้งาน</option><option value="inactive" ${r[c.key] === 'inactive' ? 'selected' : ''}>ปิดใช้งาน</option></select>`;
     if (c.type === 'bool') return `<select id="c_${c.key}"><option value="true" ${r[c.key] !== false ? 'selected' : ''}>ใช่</option><option value="false" ${r[c.key] === false ? 'selected' : ''}>ไม่</option></select>`;
     if (c.type === 'textarea') return `<textarea id="c_${c.key}" rows="2">${esc(r[c.key] ?? '')}</textarea>`;
@@ -552,7 +555,8 @@ function fillGps(latSel = '#c_lat', lngSel = '#c_lng') {
 function userForm(orgId) {
   const superRole = isSuper() ? `<label>บทบาท</label><select id="u_role"><option value="recorder">ผู้บันทึก</option><option value="admin">admin</option></select>` : '';
   const code = (orgOf(orgId).code || 'app').toLowerCase();
-  openModal(`<h3 style="margin-top:0">เพิ่มบัญชี</h3><label>ชื่อล็อกอิน (a-z 0-9 . _ - เช่น ${esc(code)}-rec2)</label><input id="u_name" autocapitalize="none"><label>ชื่อแสดง</label><input id="u_disp" maxlength="200">${superRole}<label>รหัสผ่าน (ว่าง = สุ่มแบบจำง่าย รหัสองค์กร + เลข 4 หลัก · ตั้งเอง 6–30 ตัว อังกฤษ/ตัวเลข)</label><input id="u_pw" autocapitalize="none" autocomplete="off" maxlength="30">
+  const projOpts = S.projects.filter(p => p.org_id === orgId && p.status === 'active').map(p => `<option value="${p.id}">${esc(p.code)} · ${esc(p.name)}</option>`).join('');
+  openModal(`<h3 style="margin-top:0">เพิ่มบัญชี</h3><label>ชื่อล็อกอิน (a-z 0-9 . _ - เช่น ${esc(code)}-rec2)</label><input id="u_name" autocapitalize="none"><label>ชื่อแสดง</label><input id="u_disp" maxlength="200">${superRole}<label>โครงการวิจัยที่สังกัด</label><select id="u_project"><option value="">ทุกโครงการ (ไม่จำกัด)</option>${projOpts}</select><div class="hint">ผู้บันทึกที่สังกัดโครงการ จะเห็นและบันทึกได้เฉพาะฟาร์มของโครงการนั้น · admin เห็นทั้งหมด ค่านี้เป็นค่าเริ่มต้นตัวกรอง</div><label>รหัสผ่าน (ว่าง = สุ่มแบบจำง่าย รหัสองค์กร + เลข 4 หลัก · ตั้งเอง 6–30 ตัว อังกฤษ/ตัวเลข)</label><input id="u_pw" autocapitalize="none" autocomplete="off" maxlength="30">
     <div class="row" style="margin-top:12px"><button id="u_save">สร้างบัญชี</button><button class="secondary" onclick="closeModal()">ยกเลิก</button></div><div class="muted">รหัสผ่านแสดงครั้งเดียว ให้พิมพ์ใบส่งมอบหรือจดส่งต่อผู้ใช้</div>`);
   $('#u_save').onclick = async () => {
     const b = $('#u_save'); b.disabled = true; b.textContent = 'กำลังสร้าง…';
@@ -561,7 +565,9 @@ function userForm(orgId) {
     if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(uname)) { reset(); return needField('#u_name', 'ชื่อล็อกอินใช้ได้เฉพาะ a-z 0-9 . _ - ยาว 3–30 ตัว ไม่มีช่องว่างและภาษาไทย'); }
     if (!$('#u_disp').value.trim()) { reset(); return needField('#u_disp', 'กรอกชื่อแสดง (ชื่อ-สกุล หรือชื่อตำแหน่ง)'); }
     const upw = $('#u_pw').value.trim(); if (upw && !/^[A-Za-z0-9]{6,30}$/.test(upw)) { reset(); return needField('#u_pw', 'รหัสผ่านต้องยาว 6–30 ตัว เฉพาะตัวอักษรอังกฤษและตัวเลข หรือเว้นว่าง'); }
-    try { const r = await api.engine('create_user', { username: uname, display_name: $('#u_disp').value.trim(), role: isSuper() ? $('#u_role').value : 'recorder', org_id: orgId, password: upw || undefined }); showCredentials([r.account], { org: orgOf(orgId).name, code: orgOf(orgId).code }); } catch (e) { fail(e, 'สร้างบัญชีไม่สำเร็จ'); reset(); }
+    try { const r = await api.engine('create_user', { username: uname, display_name: $('#u_disp').value.trim(), role: isSuper() ? $('#u_role').value : 'recorder', org_id: orgId, password: upw || undefined });
+      const pj = $('#u_project').value; if (pj && r.account && r.account.id) { try { await api.update('core.app_user', r.account.id, { project_id: pj }); } catch (e) { toast('สร้างบัญชีแล้ว แต่ผูกโครงการไม่สำเร็จ: ' + friendlyError(e).title + ' (ตั้งได้ที่ปุ่ม "โครงการ" ในตาราง)', true); } }
+      showCredentials([r.account], { org: orgOf(orgId).name, code: orgOf(orgId).code }); } catch (e) { fail(e, 'สร้างบัญชีไม่สำเร็จ'); reset(); }
   };
 }
 async function resetPw(userId, username, role) {
