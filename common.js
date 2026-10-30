@@ -11,7 +11,7 @@
 const CREDIT = {
   short: 'UBRU AppTech System © 2569 ผศ.พัฒนศักดิ์ ปทุมวัน มหาวิทยาลัยราชภัฏอุบลราชธานี · ศูนย์การเรียนรู้และถ่ายทอดเทคโนโลยี BSF · พัฒนาร่วมกับ Claude (Anthropic)',
   url: 'https://pattanasak-gig.github.io/ubru-apptech/',
-  updated: '26 ตุลาคม 2569'
+  updated: '31 ตุลาคม 2569'
 };
 // คีย์ Esri (ArcGIS Location Platform · บัญชี pattanasak_ubru · คีย์ ubwast-web · referrer pattanasak-gig.github.io) ใช้ร่วมกับ UBWast — โควตา 2,000,000 tiles/เดือนรวมกัน (DEC-106)
 const ESRI_API_KEY = 'AAPTaz2yquT3mlhd2KhO06JTObQ..5rwTSeqqDn5CZE5c_TFew0ZOqIYDnUL0n6f_CwMe1mydOLm94XyZpTdGpwqP4ICukNktygiAAgqKr1meMxiXzq_UbJrSCupTJjxJSxnoZ1IEntrrj-KQpbnjUdPd_ZgKX1lxGr4IqNmJABAftrlqtnWoDsM5j8rQ0AntYTCjDYi4Vu6oIF3OShnQicYxwSoDAuNLYMqrFgkpdSsEAK01XEFYzslf3YMrgc1vvJ8Ca2miOUbz9FOqtzg-UIQMgUYLAT1_KkeQUgaP';
