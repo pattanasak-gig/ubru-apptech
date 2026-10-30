@@ -6,11 +6,13 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261030f">
+<link rel="stylesheet" href="../common.css?v=20261030g">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261030f"></script>
+<script src="../common.js?v=20261030g"></script>
+<script src="../hh-check.js?v=20261030g"></script>
+<script src="../hh.js?v=20261030g"></script>
 </head>
 <body>
 <header>
@@ -32,7 +34,7 @@
 //   super admin: + ส่วนกลาง (องค์กร ประเภทแหล่งกำเนิดเศษอาหาร ตั้งค่าระบบ)
 // =====================================================================
 const TABS = () => [
-  ['#home', 'แดชบอร์ด'], ['#pickups', 'รายการรอบ'], ['#map', 'แผนที่'], ['#routes', 'เส้นทางรถ'], ['#carbon', 'คาร์บอน'],
+  ['#home', 'แดชบอร์ด'], ['#pickups', 'รายการรอบ'], ['#map', 'แผนที่'], ['#routes', 'เส้นทางรถ'], ['#carbon', 'คาร์บอน'], ...((S.hhLinks || []).length ? [['#hh', 'ครัวเรือน AppTech']] : []),
   ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ...(isSuper() ? [['#super', 'ส่วนกลาง']] : []), ['#help', 'ช่วยเหลือ']
 ];
 function renderTabs() { $('#tabs').innerHTML = S.me ? TABS().map(([h, l]) => `<a href="${h}" class="${location.hash.startsWith(h) ? 'active' : ''}">${l}</a>`).join('') : ''; }
@@ -56,6 +58,7 @@ async function render() {
     if (h.startsWith('#dashboard')) return pageDashboard(view);
     if (h.startsWith('#routes')) return pageRoutes(view);
     if (h.startsWith('#carbon')) return pageCarbon(view);
+    if (h.startsWith('#hh')) return pageHH(view);
     if (h.startsWith('#map')) return pageMap(view);
     if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageDashboard(view);
     if (h.startsWith('#super')) return isSuper() ? pageSuper(view) : pageDashboard(view);
@@ -75,7 +78,8 @@ async function loadMasters(force) {
   const [farms, sources, vehicles, types, routes] = await Promise.all([
     api.list('food.farm', { eq: scopeEq(), order: ['name'] }), api.list('food.source', { eq: scopeEq(), order: ['name'] }),
     api.list('food.vehicle', { eq: scopeEq(), order: ['name'] }), api.list('food.source_type', { order: ['sort_order'] }), api.list('food.route', { eq: scopeEq(), order: ['name'] })]);
-  S.cache[key] = { farms, sources, vehicles, types, routes }; Object.assign(S, S.cache[key]);
+  let hhLinks = []; try { hhLinks = await api.list('hh.link', { eq: { status: 'active' } }); } catch (e) { hhLinks = []; }   // DEC-117 ยังไม่รัน 014 / ยังไม่เปิดสคีมา hh = ไม่มีเมนู
+  S.cache[key] = { farms, sources, vehicles, types, routes, hhLinks }; Object.assign(S, S.cache[key]);
 }
 const farmOf = id => S.farms.find(f => f.id === id) || {};
 const sourceOf = id => S.sources.find(s => s.id === id) || {};
@@ -557,13 +561,16 @@ window.HELP = {
   'admin-source': { title: 'แหล่งกำเนิดเศษอาหาร', steps: ['เพิ่มแหล่งกำเนิดเศษอาหารใหม่ได้ทันที ผู้บันทึกจะเห็นในฟอร์มรอบถัดไป', 'ใส่ประเภทเพื่อใช้สรุปในแดชบอร์ด', '"โครงการหลัก": แหล่งที่ส่งให้โครงการเดียว เลือกโครงการนั้น → ฟอร์มรอบของโครงการอื่นจะไม่แสดง · แหล่งที่ส่งให้หลายโครงการ เลือก "ส่วนกลาง"', 'ปิดใช้งานแทนการลบ'] },
   'admin-project': { title: 'โครงการวิจัย', steps: ['คำย่อใช้แสดงในตาราง/ตัวกรอง/ลิงก์หน้าสาธารณะ · ชื่อเต็มแสดงในรายละเอียด', 'ฟาร์มแต่ละแห่งมีโครงการประจำ · ทุกรอบเข้ารับนับเข้าโครงการของฟาร์มโดยอัตโนมัติ (ล็อกที่ฐานข้อมูล) · super admin แก้ย้อนหลังได้ที่หน้าแก้ไขรอบ → "ปลดล็อก"', 'แหล่งกำเนิด รถ และบัญชี ตั้ง "โครงการหลัก" ได้ที่เมนูจัดการ · ว่าง = ส่วนกลาง ใช้ร่วมทุกโครงการ', 'ติ๊ก "เผยแพร่สาธารณะ" เฉพาะโครงการที่ต้องการแสดงยอดบนหน้าสาธารณะ'] },
   'admin-users': { title: 'บัญชีผู้ใช้', steps: ['"＋ เพิ่มบัญชี" ใส่ชื่อล็อกอินและชื่อแสดง เลือกโครงการที่สังกัด ระบบสุ่มรหัสผ่านให้ (แสดงครั้งเดียว) พิมพ์ใบส่งมอบ', 'ผู้บันทึกที่สังกัดโครงการ เห็นและบันทึกได้เฉพาะฟาร์มของโครงการนั้น · เปลี่ยนได้ที่ปุ่ม "โครงการ"', 'ลืมรหัส → "รีเซ็ตรหัส"', 'คนลาออก → "ปิด" (ประวัติการบันทึกยังอยู่)'], note: 'ต้องเชื่อมระบบหลังบ้าน (เจ้าของโครงการติดตั้ง) จึงเพิ่ม/รีเซ็ตได้' },
+  hh: { title: 'ครัวเรือน AppTech', why: 'ข้อมูลครัวเรือนสมาชิกโครงการ บพท.69_AppTech ที่ซิงก์จาก Google Sheet "ข้อมูลครัวเรือน โครงการ BSF" ทุกแท็บ (ทะเบียน รายได้ อาหารสัตว์ ปุ๋ย หนี้สิน คัดกรองและประเมินนวัตกร)', steps: ['ภาพรวม = สถิติแบบแท็บ 90 (คำนวณจากข้อมูลจริง)', 'แท็บย่อย = ข้อมูลแต่ละแท็บของชีต กรอง ค้นหา ส่งออก CSV และแก้ได้', 'กดรหัสครัวเรือน → เห็นข้อมูลทุกแท็บของครัวเรือนนั้นในหน้าเดียว', 'แผนที่ครัวเรือน = พิกัดจากทะเบียน (แสดงเฉพาะเมนูนี้)', 'ซิงก์กับชีต = ตรวจ/อัปเดตระหว่างระบบกับชีต (กดเอง ไม่อัตโนมัติ)'], note: 'เห็นได้เฉพาะ super admin · admin · ผู้บันทึกที่สังกัดโครงการ บพท.69_AppTech · มีข้อมูลส่วนบุคคล ห้ามถ่ายภาพหน้าจอเผยแพร่' },
+  'hh-check': { title: 'ตรวจความสอดคล้อง', steps: ['ระบบตรวจข้อมูลทุกแท็บด้วยกฎเดียวกับรายงานที่ส่งให้ทีม', 'กดการ์ด ต้องแก้/ควรตรวจ/ข้อสังเกต เพื่อกรอง', 'ส่งออก CSV ส่งให้ทีมแก้ในชีต แล้วกดซิงก์ใหม่'], note: 'อ้างเฉพาะรหัสครัวเรือน ไม่แสดงชื่อหรือเลขบัตร' },
+  'hh-sync': { title: 'ซิงก์กับชีต', steps: ['กด "ตรวจกับชีต" → ระบบหลังบ้านอ่านชีตและระบบ แล้วสรุปว่าแต่ละแท็บจะเปลี่ยนอะไร', 'ถ้ามีข้อขัดแย้ง เลือกว่าจะใช้ค่าในชีตหรือในระบบรายช่อง', 'admin กด "อัปเดตตามนี้" → ระบบและชีตตรงกัน'], done: 'ประวัติการซิงก์มีแถวใหม่ และตัวเลข "ไม่เปลี่ยน" เท่ากับจำนวนแถว', note: 'ครั้งแรกจะเป็น "ใหม่จากชีต" ทั้งหมด · ช่องสูตรในชีตไม่ถูกเขียนทับ · ถ้าแก้หัวคอลัมน์ในชีต ให้ตรวจ "ตั้งค่าคอลัมน์" หลังซิงก์' },
   carbon: { title: 'คาร์บอน', why: 'คำนวณ 2 ค่า: ก๊าซที่หลีกเลี่ยงได้เมื่อนำเศษอาหารมาเลี้ยงหนอนแทนการฝังกลบ และก๊าซที่ปล่อยจากรถที่ไปรับ แล้วแสดงสุทธิ', steps: ['เลือกโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'การ์ดบนสุดคือผลรวม · ตารางถัดไปแยกรายฟาร์มและเส้นทาง รายเดือน และรายแหล่งกำเนิด', 'ตาราง "เทียบวิธีคำนวณ" แสดงผลเมื่อใช้ค่าฝังกลบและอัตราสิ้นเปลืองต่างกัน', 'ตาราง "ค่าสัมประสิทธิ์" แสดงทุกค่าพร้อมแหล่งอ้างอิง'], done: 'เห็นตัวเลขสุทธิทั้งแบบไม่หักและหักการเลี้ยงหนอน', note: 'ระยะทางมาจากเส้นทางรถ: admin สร้างเส้นทางของฟาร์มที่เมนู "เส้นทางรถ" กด "ลากเส้นตามถนน" แล้วตั้ง "เส้นทางหลัก" ของฟาร์มที่ จัดการ → ฟาร์ม · รถให้ระบุเชื้อเพลิงและ กม./ลิตร ที่ จัดการ → รถ' },
   'admin-carbon': { title: 'ค่าคาร์บอน', steps: ['ดูค่าทั้งหมดพร้อมแหล่งอ้างอิง · ค่าที่ติด "ค่าหลัก" คือค่าที่ใช้คำนวณ', 'เปลี่ยนค่าหลัก: แก้รายการ → ค่าหลัก = ใช่ → บันทึก (ค่าหลักเดิมของหมวดเดียวกันถูกยกเลิกให้)', 'เพิ่มค่าใหม่: ใส่หมวด ค่า หน่วย และอ้างอิงให้ครบ · ยังไม่ได้เปิดต้นฉบับ ให้ตั้ง "ยืนยันแล้ว = ไม่"'], note: 'ค่านี้ใช้ร่วมทุกองค์กร ผลในหน้าคาร์บอนและหน้าสาธารณะเปลี่ยนทันที' },
   routes: { title: 'เส้นทางเดินรถ', why: 'ดูว่ารถวิ่งจากจุดเริ่มต้น ไปรับที่แหล่งกำเนิดตามลำดับ แล้วส่งที่ฟาร์มไหน พร้อมระยะทางบนถนนจริง', steps: ['admin กด "＋ เพิ่มเส้นทาง": ตั้งชื่อ เลือกฟาร์มปลายทาง เลือกจุดเริ่มต้นจากรายชื่อฟาร์ม (หรือ "อื่น ๆ" แล้วใส่ชื่อ+พิกัด/ลิงก์ Google Maps) แล้วเพิ่มจุดรับตามลำดับ', 'กด "ลากเส้นตามถนน" ระบบคำนวณเส้นบนถนนและระยะทาง (ต้องมีพิกัดครบทุกจุด)', 'ถ้าเส้นไม่ตรงกับที่รถวิ่งจริง กด "ปรับเส้นทาง" แล้วคลิกบนแผนที่ตรงถนนที่ต้องการให้ผ่าน = "จุดแวะ" (ไม่นับเป็นจุดรับ ใช้ดึงเส้นเท่านั้น วางได้ทั้งขาไปและขากลับ) จากนั้นกด "คำนวณใหม่"', 'ติ๊ก "ไป–กลับ" ในฟอร์ม ถ้ารถวิ่งกลับจุดเริ่มต้นทางเดิม ระยะทางจะรวมขากลับให้', 'ติ๊ก/เอาติ๊กออกหน้าชื่อเส้นทางเพื่อเลือกแสดง · เลือกฟาร์มปลายทางด้านบนเพื่อกรอง'], note: 'เส้นทางคำนวณด้วยบริการฟรี OSRM เฉพาะตอนกดปุ่ม แล้วเก็บไว้ จึงเปิดดูได้แม้บริการล่ม' },
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
 function pageHelp(view) {
-  const rec = ['home', 'pickup-new', 'pickups', 'map', 'routes', 'carbon', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-carbon', 'admin-users'];
+  const rec = ['home', 'pickup-new', 'pickups', 'map', 'routes', 'carbon', 'hh', 'hh-check', 'hh-sync', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-carbon', 'admin-users'];
   const sec = (title, keys) => `<div class="card"><h3 style="margin-top:0">${title}</h3>${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>`;
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ</h3><div class="muted">ทุกหน้ามีไอคอน (?) · บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ติดปัญหา: ผู้บันทึกติดต่อ admin · admin ติดต่อเจ้าของโครงการ</div></div>
     ${sec('สำหรับผู้บันทึก', rec)}${isAdmin() ? sec('สำหรับ admin', adm) : ''}

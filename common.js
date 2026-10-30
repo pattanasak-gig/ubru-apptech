@@ -188,7 +188,7 @@ const SupaBackend = () => {
 const DemoBackend = () => {
   const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
   const now = () => new Date().toISOString();
-  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [] };
+  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [], 'hh.link': [], 'hh.tab': [], 'hh.col': [], 'hh.row': [], 'hh.sync_log': [] };
   const add = (t, row) => { const r = { id: uid(), status: 'active', created_at: now(), updated_at: now(), ...row }; D[t].push(r); return r; };
   const o1 = add('core.org', { code: 'DEMO', name: 'ศูนย์สาธิต (ตัวอย่าง)', max_recorders: 10 });
   const o2 = add('core.org', { code: 'DEMO2', name: 'หน่วยงานสาธิต สอง', max_recorders: 10 });
@@ -239,6 +239,36 @@ const DemoBackend = () => {
     for (const [c, n, o] of [['FUEL_DIESEL_B7', 'ดีเซล B7 (ดีเซลหมุนเร็วทั่วไปหน้าปั๊ม)', 11], ['FUEL_DIESEL_B20', 'ดีเซล B20', 13], ['FUEL_DIESEL', 'ดีเซลไม่ผสมไบโอดีเซล (B0)', 14], ['FUEL_GASOLINE', 'เบนซิน 95 (ไม่ผสมเอทานอล)', 15], ['FUEL_E10', 'แก๊สโซฮอล์ 95 (E10)', 16], ['FUEL_E20', 'แก๊สโซฮอล์ E20', 18], ['FUEL_E85', 'แก๊สโซฮอล์ E85', 19]]) Object.assign(byCode(c), { name: n, sort_order: o }); }
   Object.assign(rt1, { path_distance_m: 8200, path_duration_s: 900, path_source: 'สาธิต', round_trip: true }); f1.main_route_id = rt1.id; Object.assign(v1, { fuel_code: 'diesel_b7', km_per_liter: 11, vehicle_type: 'pickup' });
   add('food.route', { org_id: o1.id, name: 'สายตัวอย่าง ร้าน ข–ฟาร์ม ข', farm_id: f2.id, start_name: 'ศูนย์สาธิต', start_lat: 15.235, start_lng: 104.84, via: [] });
+  // DEC-117 ครัวเรือน AppTech (สาธิต): ข้อมูลสมมุติทั้งหมด ไม่ใช่บุคคลจริง
+  { const hl = add('hh.link', { org_id: o1.id, project_id: pBsf.id, name: 'ข้อมูลครัวเรือน (สาธิต)', spreadsheet_id: 'demo', code_pattern: '^BSF-[0-9]+$', last_sync_at: null });
+    const T = {}, mk = (k, sn, lb, kind, keys, o) => (T[k] = add('hh.tab', { link_id: hl.id, tab_key: k, sheet_name: sn, label: lb, kind, key_headers: keys || ['รหัสครัวเรือน'], sync: kind !== 'reference', sort_order: o }));
+    mk('01', '01_ทะเบียนครัวเรือน', 'ทะเบียนครัวเรือน', 'master', null, 1); mk('02', '02_รายได้ตามแหล่ง', 'รายได้ตามแหล่ง', 'child', null, 2); mk('03', '03_ต้นทุนอาหารสัตว์', 'ต้นทุนอาหารสัตว์', 'child', null, 3);
+    mk('04', '04_ต้นทุนปุ๋ย', 'ต้นทุนปุ๋ย', 'child', null, 4); mk('05', '05_หนี้สิน', 'หนี้สิน', 'child', null, 5); mk('06', '06_คัดกรองนวัตกร', 'คัดกรองนวัตกร', 'child', null, 6);
+    mk('07', '07_ประเมินนวัตกร', 'ประเมินนวัตกร', 'round', ['รหัสครัวเรือน', 'รอบการประเมิน'], 7); mk('09', '09_สรุปพัฒนาการ', 'สรุปพัฒนาการ', 'summary', null, 9);
+    mk('08', '08_เกณฑ์อ้างอิง', 'เกณฑ์อ้างอิง', 'reference', [], 8).meta = { read_at: now(), values: [['ระดับ', 'มิติ 1 ความรู้และเทคโนโลยี', 'มิติ 2 การจัดกระบวนการเรียนรู้', 'มิติ 3 เครือข่ายความร่วมมือ'], ['1', 'มีความรู้เดิม (ตัวอย่าง)', 'เรียนรู้ในกลุ่มเล็ก', 'สัมพันธ์ในกลุ่มตน'], ['2', 'ใช้ BSF ในครัวเรือนได้', 'ช่วยเพื่อนเรียนรู้', 'เชื่อมกลุ่มอาชีพ']] };
+    const C = { '01': [['รหัสครัวเรือน', 'code', 1], ['สถานะข้อมูล', 'status', 1, 0, 0, ['รอสำรวจ', 'ข้อมูลครบ', 'ต้องยืนยัน']], ['วันที่สำรวจ'], ['กลุ่มหลัก', 'group', 1, 0, 0, ['A', 'B', 'C']], ['ชื่อ-สกุล', 'name', 1], ['เลขบัตรประชาชน', 'national_id', 0, 0, 1], ['โทรศัพท์', 'phone', 0, 0, 1], ['ตำบล', 'tambon', 1, 0, 0, ['ตำบลสาธิต ก', 'ตำบลสาธิต ข']], ['ละติจูด', 'lat'], ['ลองจิจูด', 'lng'], ['สมาชิกครัวเรือน (คน)', 'members', 1], ['ชาย'], ['หญิง'], ['รายได้รวม/เดือน (อัตโนมัติ)', 'income', 1, 1], ['ความสม่ำเสมอรายได้', 'income_regularity', 0, 0, 0, ['ประจำสม่ำเสมอ', 'ตามฤดูกาล', 'ไม่แน่นอน']], ['รายจ่ายครัวเรือนรวม/เดือน', 'expense'], ['ค่าอาหารสัตว์รวม/เดือน (อัตโนมัติ)', 'feed_cost', 0, 1], ['ค่าปุ๋ยรวม/เดือน (อัตโนมัติ)', 'fert_cost', 0, 1], ['Baseline BSF ทดแทน/เดือน (อัตโนมัติ)', 'baseline', 0, 1], ['ต้องการหนอน BSF (กก./เดือน)', 'larvae_need'], ['ความยินยอม PDPA', 'pdpa', 0, 0, 0, ['ยินยอม', 'ไม่ยินยอม']], ['หมายเหตุ']],
+      '02': [['รหัสครัวเรือน', 'code', 1], ['ชื่อ-สกุล (อัตโนมัติ)', null, 1, 1], ['แหล่งรายได้', 'income_source', 1], ['รายได้ต่อเดือน (บาท)', 'income_amount', 1], ['หมายเหตุ']],
+      '03': [['รหัสครัวเรือน', 'code', 1], ['ชื่อ-สกุล (อัตโนมัติ)', null, 1, 1], ['ชนิดสัตว์', 'animal', 1], ['จำนวน (ตัว)', 'animal_count', 1], ['ค่าอาหาร/เดือน (บาท)', 'feed_amount', 1], ['ตรวจสอบ (อัตโนมัติ)', 'feed_check', 1, 1]],
+      '04': [['รหัสครัวเรือน', 'code', 1], ['พืช/การใช้', 'crop', 1], ['ค่าปุ๋ย/ปี (บาท)', 'fert_year', 1]], '05': [['รหัสครัวเรือน', 'code', 1], ['ประเภทหนี้', 'debt_type', 1], ['ยอดคงค้าง (บาท)', 'debt_balance', 1], ['ผ่อน/เดือน (บาท)', 'debt_month', 1], ['ดอกเบี้ย (%)', null, 1]],
+      '06': [['รหัสครัวเรือน', 'code', 1], ['ชื่อ-สกุล (อัตโนมัติ)', null, 1, 1], ['ผลตรวจเกณฑ์ 1', null, 1, 0, 0, ['ผ่าน', 'ไม่ผ่าน', 'รอข้อมูล']], ['หลักฐานเกณฑ์ 1'], ['จำนวนเกณฑ์ที่ผ่าน (อัตโนมัติ)', 'criteria_passed', 1, 1], ['สรุปศักยภาพนวัตกร', 'screen_result', 1, 0, 0, ['ใช่', 'รอพิจารณา', 'ไม่']], ['วันที่คัดกรอง', 'screen_date', 1]],
+      '07': [['รหัสครัวเรือน', 'code', 1], ['รอบการประเมิน', 'round', 1, 0, 0, ['1 ก่อนพัฒนา', '2 ระหว่างพัฒนา', '3 ประเมินเพื่อให้ระดับ']], ['วันที่ประเมิน', 'assess_date', 1], ['มิติ 1 ความรู้และเทคโนโลยี (1-4)', 'dim1', 1, 0, 0, ['1', '2', '3', '4']], ['หลักฐานมิติ 1']],
+      '09': [['รหัสครัวเรือน', 'code', 1], ['สถานะการประเมิน', 'assess_status', 1, 1]] };
+    for (const [k, cs] of Object.entries(C)) cs.forEach(([h, role, inl, f, sens, opts], i) => add('hh.col', { tab_id: T[k].id, header: h, col_index: i + 1, role: role || null, in_list: !!inl, is_formula: !!f, sensitive: !!sens, options: opts || null, present: true }));
+    const HH = [['BSF-001', 'ข้อมูลครบ', 'A', 'ครัวเรือนสาธิต หนึ่ง', 'ตำบลสาธิต ก', 15.2410, 104.8950, 4, 2, 2, 8000, 9500, 1200, 300, 'ไก่ไข่, ปลา', 1100, 'ใช่'],
+                ['BSF-002', 'ข้อมูลครบ', 'A', 'ครัวเรือนสาธิต สอง', 'ตำบลสาธิต ก', 15.2433, 104.9012, 3, 1, 2, 6500, 7000, 800, 200, 'ไก่เนื้อ/ไก่พื้นบ้าน', 800, 'รอพิจารณา'],
+                ['BSF-003', 'ข้อมูลครบ', 'B', 'ครัวเรือนสาธิต สาม', 'ตำบลสาธิต ข', 15.2361, 104.9105, 5, 2, 2, 15000, 12000, 0, 500, '', 0, 'ใช่'],
+                ['BSF-004', 'ข้อมูลครบ', 'A', 'ครัวเรือนสาธิต สี่', 'ตำบลสาธิต ข', 15.2361, 104.9105, 2, 1, 1, 4000, 6000, 600, 0, 'เป็ด', 600, 'ไม่'],
+                ['BSF-005', 'รอสำรวจ', 'A', 'ครัวเรือนสาธิต ห้า', 'ตำบลสาธิต ก', null, null, null, null, null, null, null, 0, 0, '', 0, ''],
+                ['BSF-006', 'ข้อมูลครบ', 'C', 'ร้านอาหารสาธิต', 'ตำบลสาธิต ข', 15.2385, 104.8870, 2, 1, 1, 30000, 25000, 0, 0, '', 0, '']];
+    const row = (k, key, code, data) => add('hh.row', { org_id: o1.id, project_id: pBsf.id, tab_id: T[k].id, row_key: key, hh_code: code, data, sync_base: { ...data }, sheet_row: null, synced_at: now() });
+    HH.forEach(([c, st, g, nm, tb, la, lo, mem, m, f, inc, exp, feed, fert, ani, feedAmt, scr], i) => {
+      row('01', c, c, { 'รหัสครัวเรือน': c, 'สถานะข้อมูล': st, 'วันที่สำรวจ': '2569-10-0' + (i + 1), 'กลุ่มหลัก': g, 'ชื่อ-สกุล': nm, 'เลขบัตรประชาชน': null, 'โทรศัพท์': '080-000-000' + (i + 1), 'ตำบล': tb, 'ละติจูด': la, 'ลองจิจูด': lo, 'สมาชิกครัวเรือน (คน)': mem, 'ชาย': m, 'หญิง': f, 'รายได้รวม/เดือน (อัตโนมัติ)': inc, 'ความสม่ำเสมอรายได้': inc ? 'ไม่แน่นอน' : null, 'รายจ่ายครัวเรือนรวม/เดือน': exp, 'ค่าอาหารสัตว์รวม/เดือน (อัตโนมัติ)': feed, 'ค่าปุ๋ยรวม/เดือน (อัตโนมัติ)': fert, 'Baseline BSF ทดแทน/เดือน (อัตโนมัติ)': feed + fert, 'ต้องการหนอน BSF (กก./เดือน)': g === 'A' ? 20 : null, 'ความยินยอม PDPA': 'ยินยอม', 'หมายเหตุ': 'ข้อมูลสาธิต' });
+      if (inc) row('02', c, c, { 'รหัสครัวเรือน': c, 'ชื่อ-สกุล (อัตโนมัติ)': nm, 'แหล่งรายได้': g === 'C' ? 'ค้าขาย/ธุรกิจ' : 'การเกษตร (พืช), ปศุสัตว์/ประมง', 'รายได้ต่อเดือน (บาท)': inc, 'หมายเหตุ': null });
+      if (ani) row('03', c, c, { 'รหัสครัวเรือน': c, 'ชื่อ-สกุล (อัตโนมัติ)': nm, 'ชนิดสัตว์': ani, 'จำนวน (ตัว)': 50, 'ค่าอาหาร/เดือน (บาท)': feedAmt, 'ตรวจสอบ (อัตโนมัติ)': '✓ สอดคล้อง' });
+      if (scr) row('06', c, c, { 'รหัสครัวเรือน': c, 'ชื่อ-สกุล (อัตโนมัติ)': nm, 'ผลตรวจเกณฑ์ 1': 'ผ่าน', 'หลักฐานเกณฑ์ 1': scr === 'ใช่' ? 'สมัครใจร่วมโครงการ' : null, 'จำนวนเกณฑ์ที่ผ่าน (อัตโนมัติ)': 1, 'สรุปศักยภาพนวัตกร': scr, 'วันที่คัดกรอง': '2569-10-15' });
+    });
+    row('07', 'BSF-001|1 ก่อนพัฒนา', 'BSF-001', { 'รหัสครัวเรือน': 'BSF-001', 'รอบการประเมิน': '1 ก่อนพัฒนา', 'วันที่ประเมิน': '2569-10-20', 'มิติ 1 ความรู้และเทคโนโลยี (1-4)': 1, 'หลักฐานมิติ 1': 'สัมภาษณ์ (สาธิต)' });
+  }
   let me = null;
   const byId = (t, id) => D[t].find(r => r.id === id) || {};
   const userName = id => (D['core.app_user'].find(u => u.id === id) || {}).display_name || null;
@@ -287,6 +317,12 @@ const DemoBackend = () => {
   const scope = (name, rows) => {
     if (PUBLIC.includes(name)) return rows;
     if (!me) throw new Error('ไม่ได้ล็อกอิน');
+    if (name.startsWith('hh.')) {   // DEC-117 สิทธิ์ครัวเรือน: super · admin ขององค์กร · ผู้บันทึกที่สังกัดโครงการของไฟล์
+      const ok = l => me.role === 'super_admin' || (l.org_id === me.org_id && (me.role === 'admin' || (me.role === 'recorder' && me.project_id === l.project_id)));
+      const links = D['hh.link'].filter(ok), lids = links.map(l => l.id), tids = D['hh.tab'].filter(t => lids.includes(t.link_id)).map(t => t.id);
+      if (name === 'hh.link') return rows.filter(ok); if (name === 'hh.tab') return rows.filter(t => lids.includes(t.link_id)); if (name === 'hh.col') return rows.filter(c => tids.includes(c.tab_id));
+      if (name === 'hh.sync_log') return rows.filter(l => lids.includes(l.link_id)); return rows.filter(r => tids.includes(r.tab_id));
+    }
     if (me.role === 'super_admin' || GLOBAL.includes(name)) return rows;
     if (name === 'core.app_user') return rows.filter(r => r.id === me.id || (me.role === 'admin' && r.org_id === me.org_id));
     if (name === 'core.org') return rows.filter(r => r.id === me.org_id);
@@ -313,6 +349,7 @@ const DemoBackend = () => {
       if (['food.farm', 'food.source', 'food.vehicle', 'food.pickup', 'food.route', 'core.project'].includes(name) && !r.org_id) r.org_id = me.org_id;
       if (name === 'food.pickup_item' || name === 'food.pickup_photo') r.org_id = byId('food.pickup', r.pickup_id).org_id;
       if (name === 'food.route_stop') r.org_id = byId('food.route', r.route_id).org_id;
+      if (name === 'hh.row') { const l = byId('hh.link', byId('hh.tab', r.tab_id).link_id); r.org_id = l.org_id; r.project_id = l.project_id; }   // = ทริกเกอร์ hh.row_before
       if (['food.farm', 'food.source', 'food.vehicle', 'food.route', 'food.carbon_factor'].includes(name) && me.role === 'recorder') throw new Error('permission denied: row-level security');
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
       if (name === 'food.pickup') { const fp = byId('food.farm', r.farm_id).project_id; if (me.role !== 'super_admin' || !r.project_id) r.project_id = fp; if (me.role === 'recorder' && me.project_id && me.project_id !== r.project_id) throw new Error('ฟาร์มนี้อยู่นอกโครงการที่บัญชีของคุณสังกัด ให้ admin ตรวจสอบ'); const vpj = r.vehicle_id ? byId('food.vehicle', r.vehicle_id).project_id : null; if (vpj && vpj !== r.project_id) throw new Error('รถที่เลือกอยู่คนละโครงการกับรอบนี้'); }   // DEC-112
@@ -336,6 +373,14 @@ const DemoBackend = () => {
       if (action === 'create_user') { const oid = me.role === 'super_admin' ? payload.org_id : me.org_id; const org = byId('core.org', oid); const cnt = D['core.app_user'].filter(u => u.org_id === oid && u.role === 'recorder' && u.status === 'active').length; if (payload.role === 'recorder' && cnt >= org.max_recorders) throw new Error(`บัญชีผู้บันทึกขององค์กรนี้ครบเพดาน ${org.max_recorders} บัญชีแล้ว`); const u = add('core.app_user', { username: payload.username, display_name: payload.display_name, role: payload.role, org_id: oid }); return { ok: true, account: { ...u, password: pw(org.code, payload.password) } }; }
       if (action === 'reset_password') { const t = byId('core.app_user', payload.user_id); return { ok: true, username: t.username, role: t.role, password: pw(t.org_id ? byId('core.org', t.org_id).code : 'app', payload.password) }; }
       if (action === 'whoami') return { ok: true, me };
+      if (action === 'hh_sync') {   // สาธิต: ไม่มีชีตจริง ทุกแท็บถือว่าตรงกัน
+        await new Promise(r => setTimeout(r, 400)); const l = byId('hh.link', payload.link_id);
+        if (payload.mode === 'apply' && !['admin', 'super_admin'].includes(me.role)) throw new Error('การอัปเดตทำได้เฉพาะ admin หรือ super admin');
+        const tabs = D['hh.tab'].filter(t => t.link_id === l.id).sort((a, b) => a.sort_order - b.sort_order).map(t => t.kind === 'reference' ? { tab_key: t.tab_key, label: t.label, kind: t.kind, reference_rows: (t.meta && t.meta.values || []).length } : { tab_key: t.tab_key, label: t.label, kind: t.kind, sheet_rows: D['hh.row'].filter(r => r.tab_id === t.id).length, new_from_sheet: 0, update_from_sheet: 0, update_to_sheet: 0, new_to_sheet: 0, removed_in_sheet: 0, conflicts: 0, unchanged: D['hh.row'].filter(r => r.tab_id === t.id).length, duplicate_keys: [], samples: [] });
+        if (payload.mode === 'apply') l.last_sync_at = now();
+        add('hh.sync_log', { link_id: l.id, project_id: l.project_id, mode: payload.mode, run_by: me.id, run_at: now(), summary: { by: me.username, tabs: tabs.map(t => ({ tab: t.tab_key })) } });
+        return { ok: true, mode: payload.mode, tabs, conflicts: [], warnings: ['โหมดสาธิต: ไม่มี Google Sheet จริง ผลนี้จำลองว่าทุกแท็บตรงกัน'] };
+      }
       if (action === 'resolve_link') { await new Promise(r => setTimeout(r, 300)); return { ok: true, url: 'https://www.google.com/maps/place/demo/@15.240311,104.823275,17z' }; }   // สาธิต: คืนพิกัดตัวอย่าง
       throw new Error('สาธิต: ไม่รองรับ ' + action);
     },
