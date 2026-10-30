@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>กระบะเลี้ยงหนอน BSF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../common.css?v=20261031b">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../common.js?v=20261031b"></script>
+<style>
+.bcard h4 a { text-decoration:none; font-size:20px; }
+.bcard .acts { margin-top:8px; gap:6px; }
+.bcard .acts button { min-height:44px; }
+.alert-decide { background:#eff6ff; color:#1e40af; }
+.alert-due { background:#fff7ed; color:#9a3412; }
+.alert-overdue { background:#fee2e2; color:#991b1b; }
+.code { font-size:26px; font-weight:700; letter-spacing:.5px; font-variant-numeric:tabular-nums; }
+tr.off td { color:#94a3b8; text-decoration:line-through; }
+.chk { display:flex; align-items:center; gap:8px; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"><a href="../">UBRU AppTech</a> › กระบะเลี้ยง</h1>
+  <span id="who" class="muted" style="color:#dbeafe;font-size:13px"></span>
+  <button onclick="go('#me')">บัญชี</button>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<main id="view"></main>
+<footer class="credit" id="credit"></footer>
+<div id="toastHost" role="status" aria-live="polite"></div>
+
+<script>
+// =====================================================================
+// โมดูล 4: กระบะเลี้ยง (bsf) — DEC-118
+//   รุ่น = ไข่ที่ลงวันเดียวกัน 1 ชุด · อนุบาล → (ครบ 5 วัน) แจก/เลี้ยงต่อ → เก็บเกี่ยว (อายุ 15–20 วัน)
+//   ผู้บันทึก: ลงไข่ · ให้อาหาร · แบ่งกระบะ · ออกจากรุ่น · เก็บเกี่ยว · admin: + แก้/ยกเลิก · ชนิดอาหาร
+//   ต้องรัน sql/016_bsf_batch.sql และเปิดสคีมา bsf ใน Exposed schemas
+// =====================================================================
+const STAGE = { nursery: 'อนุบาล', grow: 'เลี้ยงต่อ', harvested: 'เก็บเกี่ยวแล้ว' };
+const ALERT = { decide: 'ครบอนุบาล: ตัดสินใจแจก/เลี้ยงต่อ', due: 'ถึงเวลาเก็บเกี่ยว', overdue: 'เลยกำหนดเก็บเกี่ยว' };
+const ALERT_RANK = { overdue: 0, due: 1, decide: 2 };
+const OUT_TYPES = { household: 'แจกครัวเรือน', process: 'ส่งแปรรูป', sell: 'ขาย', pupa: 'ปล่อยเป็นดักแด้', dead: 'ตาย/ทิ้ง' };
+const FEED_STAGE = { nursery: 'อนุบาล', grow: 'เลี้ยงต่อ', any: 'ทุกระยะ' };
+const BSF_SETTINGS = { bsf_nursery_days: 'อนุบาลกี่วัน', bsf_harvest_min_days: 'เก็บเกี่ยวได้ตั้งแต่อายุ (วัน)', bsf_harvest_max_days: 'ควรเก็บเกี่ยวไม่เกินอายุ (วัน)' };
+const canWrite = () => S.me.role !== 'super_admin' || !!S.scopeOrg;
+const projectsOfScope = () => S.projects.filter(x => (!S.scopeOrg || x.org_id === S.scopeOrg) && x.status === 'active');
+const alertPill = a => a ? `<span class="pill alert-${a}">${ALERT[a]}</span>` : '';
+const dayLabel = b => b.stage === 'harvested' ? `เก็บเกี่ยวเมื่ออายุ ${b.age_days} วัน` : `วันที่ ${b.age_days} · ${STAGE[b.stage]}`;
+const ratioText = b => b.larvae_per_waste == null ? '-' : fmt(b.larvae_per_waste, 3) + (b.ratio_complete ? '' : ' *');
+const feedTypeOf = id => (S.feedTypes || []).find(t => t.id === id) || {};
+
+const TABS = () => [['#home', 'รุ่นที่เลี้ยงอยู่'], ['#batches', 'ทุกรุ่น'], ['#summary', 'สรุปผล'], ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ['#help', 'ช่วยเหลือ'], ['../food/', 'เศษอาหาร ›']];
+function renderTabs() { $('#tabs').innerHTML = S.me ? TABS().map(([h, l]) => `<a href="${h}" class="${location.hash.startsWith(h) || (h === '#home' && !location.hash) ? 'active' : ''}">${l}</a>`).join('') : ''; }
+window.addEventListener('hashchange', render);
+async function render() {
+  destroyCharts();
+  const view = $('#view');
+  try {
+    if (!S.me) S.me = await api.me();
+    if (location.hash.startsWith('#about')) { renderTabs(); return pageAbout(view); }
+    if (!S.me) { renderTabs(); $('#who').textContent = ''; return pageLogin(view, '#home'); }
+    await loadCore(); await loadBsf();
+    $('#who').textContent = `${S.me.display_name} · ${roleLabel(S.me.role)}${S.me.org_id ? ' · ' + (orgOf(S.me.org_id).code || '') : ''}`;
+    const h = location.hash || '#home'; renderTabs();
+    if (h.startsWith('#batches')) return pageBatches(view);
+    if (h.startsWith('#batch/')) return pageBatch(view, h.split('/')[1]);
+    if (h.startsWith('#summary')) return pageSummary(view);
+    if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageHome(view);
+    if (h.startsWith('#me')) return pageMe(view);
+    if (h.startsWith('#help')) return pageHelp(view);
+    return pageHome(view);
+  } catch (e) { const f = friendlyError(e, 'เปิดหน้านี้ไม่สำเร็จ'); console.error(e); if (f.kind === 'session' && S.me && api.name === 'supabase') return sessionLost();
+    view.innerHTML = `<div class="card"><b style="color:var(--danger)">${esc(f.title)}</b>${f.hint ? `<div style="margin-top:6px">${esc(f.hint)}</div>` : ''}${f.raw && f.raw !== f.title ? `<div class="muted" style="margin-top:6px;word-break:break-all">${esc(f.raw)}</div>` : ''}<div class="row" style="margin-top:10px"><button class="secondary" onclick="render()">ลองใหม่</button><button class="secondary" onclick="S.cache={};location.reload()">รีเฟรชทั้งหน้า</button></div></div>`; }
+  finally { setTimeout(() => { bindLabels(view); makeSortable(view); }, 0); }
+}
+async function loadBsf(force) {
+  const key = 'bsf_' + S.scopeOrg;
+  if (S.cache[key] && !force) { Object.assign(S, S.cache[key]); return; }
+  const feedTypes = await api.list('bsf.feed_type', { eq: scopeEq(), order: ['sort_order'] });
+  S.cache[key] = { feedTypes }; Object.assign(S, S.cache[key]);
+}
+async function listBatches(extra = {}) {
+  const rows = await api.list('bsf.v_batch', { eq: { ...scopeEq(), ...(extra.eq || {}) }, order: ['lay_date', false], order2: ['code', false] });
+  S._batchIdx = Object.fromEntries(rows.map(r => [r.id, r]));
+  return rows;
+}
+async function batchById(id) { const r = (await api.list('bsf.v_batch', { eq: { id } }))[0]; if (!r) throw new Error('ไม่พบรุ่นนี้ (อาจถูกยกเลิก หรืออยู่นอกโครงการของบัญชี)'); (S._batchIdx = S._batchIdx || {})[id] = r; return r; }
+const refresh = () => { S.cache = {}; render(); };
+
+// =====================================================================
+// รุ่นที่เลี้ยงอยู่ (หน้าแรก)
+// =====================================================================
+async function pageHome(view) {
+  const rows = (await listBatches({ eq: { status: 'active' } }));
+  const live = rows.filter(b => b.stage !== 'harvested').sort((a, b) => (ALERT_RANK[a.alert] ?? 9) - (ALERT_RANK[b.alert] ?? 9) || a.lay_date.localeCompare(b.lay_date));
+  const done = rows.filter(b => b.stage === 'harvested').slice(0, 5);
+  const due = live.filter(b => b.alert === 'due' || b.alert === 'overdue').length;
+  view.innerHTML = `${scopeSelector()}
+    <div class="kpis"><div class="kpi hero"><div class="l">รุ่นที่เลี้ยงอยู่</div><div class="v">${fmtInt(live.length)}</div></div>
+      <div class="kpi"><div class="l">กระบะรวม</div><div class="v">${fmtInt(sum(live, 'trays_now'))}</div></div>
+      <div class="kpi"><div class="l">ถึง/เลยเวลาเก็บเกี่ยว</div><div class="v" style="${due ? 'color:var(--warn)' : ''}">${fmtInt(due)}</div></div>
+      <div class="kpi"><div class="l">อนุบาลอยู่</div><div class="v">${fmtInt(live.filter(b => b.stage === 'nursery').length)}</div></div></div>
+    <div class="cardhead" style="margin:4px 0 8px"><h4>รุ่นที่เลี้ยงอยู่ ${helpBtn('bsf-home')}</h4><a href="#batches">ทุกรุ่น ›</a></div>
+    ${live.length ? live.map(batchCard).join('') : `<div class="card muted">ยังไม่มีรุ่นที่เลี้ยงอยู่ · กดปุ่ม "＋ ลงไข่รุ่นใหม่" เพื่อเริ่มรุ่นแรก</div>`}
+    ${done.length ? `<div class="card"><div class="cardhead"><h4>เก็บเกี่ยวล่าสุด</h4><a href="#summary">สรุปผล ›</a></div><div class="tscroll"><table><thead><tr><th>รุ่น</th><th>เก็บเกี่ยว</th><th class="num">หนอน กก.</th><th class="num">มูล กก.</th><th class="num">หนอน/เศษอาหาร</th></tr></thead><tbody>${done.map(b => `<tr><td><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a></td><td class="nowrap">${thDay(b.harvest_date)}</td><td class="num">${fmt(b.larvae_kg)}</td><td class="num">${fmt(b.frass_kg)}</td><td class="num">${ratioText(b)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${canWrite() ? `<button class="fab" onclick="batchForm()">＋ ลงไข่รุ่นใหม่</button>` : ''}`;
+}
+function batchCard(b) {
+  const harvested = b.stage === 'harvested';
+  return `<div class="card bcard"><div class="cardhead"><h4><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a> <span class="pill">${esc(dayLabel(b))}</span></h4>${alertPill(b.alert)}</div>
+    <div class="muted">${esc(b.project_code)} · ลงไข่ ${thDay(b.lay_date)} · ไข่ ${fmt(b.egg_g)} ก. · กระบะ <b>${fmtInt(b.trays_now)}</b> · อาหาร ${fmt(b.feed_kg)} กก.${b.last_feed_date ? ` (ล่าสุด ${thDay(b.last_feed_date)})` : ' (ยังไม่ให้อาหาร)'}</div>
+    ${canWrite() && !harvested ? `<div class="row acts"><button class="small" onclick="feedForm('${b.id}')">ให้อาหาร</button><button class="small secondary" onclick="splitForm('${b.id}')">แบ่งกระบะ</button><button class="small secondary" onclick="outForm('${b.id}')">ออกจากรุ่น</button>${b.stage !== 'nursery' ? `<button class="small secondary" onclick="harvestForm('${b.id}')">เก็บเกี่ยว</button>` : ''}</div>` : ''}</div>`;
+}
+
+// =====================================================================
+// ทุกรุ่น
+// =====================================================================
+async function pageBatches(view) {
+  const st = S._bt = S._bt || { project: '', stage: '', from: '', to: '' };
+  const eq = isAdmin() ? {} : { status: 'active' };
+  if (st.project) eq.project_id = st.project;
+  let rows = await listBatches({ eq });
+  if (st.stage) rows = rows.filter(b => b.stage === st.stage);
+  if (st.from) rows = rows.filter(b => b.lay_date >= st.from); if (st.to) rows = rows.filter(b => b.lay_date <= st.to);
+  S._btRows = rows;
+  const cols = [{ label: 'รุ่น', key: 'code' }, { label: 'ลงไข่', key: 'lay_date' }, { label: 'อายุ (วัน)', key: 'age_days', cls: 'num' }, { label: 'ระยะ', key: 'stage' }, { label: 'กระบะ', key: 'trays_now', cls: 'num' }, { label: 'อาหาร กก.', key: 'feed_kg', cls: 'num' }, { label: 'หนอน กก.', key: 'larvae_kg', cls: 'num' }, { label: 'หนอน/เศษอาหาร', key: 'larvae_per_waste', cls: 'num' }];
+  const row = b => `<tr class="${b.status !== 'active' ? 'off' : ''}"><td class="nowrap"><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a><div class="muted">${esc(b.project_code)}</div></td><td class="nowrap">${thDay(b.lay_date)}</td><td class="num">${fmtInt(b.age_days)}</td><td>${esc(STAGE[b.stage])} ${alertPill(b.alert)}${b.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิก</span>' : ''}</td><td class="num">${b.stage === 'harvested' ? '-' : fmtInt(b.trays_now)}</td><td class="num">${fmt(b.feed_kg)}</td><td class="num">${b.stage === 'harvested' ? fmt(b.larvae_kg) : '-'}</td><td class="num">${ratioText(b)}</td></tr>`;
+  view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>ทุกรุ่น (${fmtInt(rows.length)}) ${helpBtn('bsf-batches')}</h4><button class="small secondary" onclick="exportBatches()">ส่งออก CSV</button></div>
+    <div class="row"><select style="width:auto;max-width:300px" aria-label="กรองโครงการวิจัย" onchange="S._bt.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projectsOfScope().map(x => `<option value="${x.id}" ${x.id === st.project ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select>
+      <select style="width:auto" aria-label="กรองระยะ" onchange="S._bt.stage=this.value;render()"><option value="">ทุกระยะ</option>${Object.entries(STAGE).map(([k, l]) => `<option value="${k}" ${k === st.stage ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label style="margin:0">ลงไข่ตั้งแต่ <input type="date" value="${st.from}" onchange="S._bt.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._bt.to=this.value;render()" style="width:auto"></label></div>
+    <div class="muted" style="margin:6px 0">* = รุ่นที่มีการออกจากรุ่นก่อนเก็บเกี่ยว (เช่น แจกครัวเรือน) อัตราจึงต่ำกว่าความจริง ไม่นำไปรวมในสรุปผล</div>
+    ${pagedTable('tblBatches', rows, cols, row, { empty: 'ยังไม่มีรุ่น', resetPage: true })}</div>
+    ${canWrite() ? `<button class="fab" onclick="batchForm()">＋ ลงไข่รุ่นใหม่</button>` : ''}`;
+}
+function exportBatches() {
+  const rows = S._btRows || []; if (!rows.length) return toast('ไม่มีข้อมูล', true);
+  exportCsv(rows.map(b => ({ รหัสรุ่น: b.code, โครงการ: b.project_code, วันลงไข่: b.lay_date, ไข่_กรัม: b.egg_g, กระบะตั้งต้น: b.trays_start, กระบะตอนนี้: b.trays_now, อายุ_วัน: b.age_days, ระยะ: STAGE[b.stage], อาหารรวม_กก: b.feed_kg, เศษอาหาร_กก: b.feed_waste_kg, อาหารอื่น_กก: b.feed_other_kg, ออกก่อนเก็บเกี่ยว_กระบะ: b.out_trays_before_harvest, ออกก่อนเก็บเกี่ยว_กก: b.out_kg_before_harvest, วันเก็บเกี่ยว: b.harvest_date || '', หนอน5มม_กก: b.larvae_5mm_kg ?? '', หนอน3มม_กก: b.larvae_3mm_kg ?? '', มูล_กก: b.frass_kg ?? '', หนอนต่อเศษอาหาร: b.larvae_per_waste ?? '', อัตราสมบูรณ์: b.ratio_complete ? 'ใช่' : 'ไม่', สถานะ: b.status === 'active' ? 'ใช้งาน' : 'ยกเลิก', หมายเหตุ: b.note || '' })), 'กระบะเลี้ยง_' + todayISO());
+}
+
+// =====================================================================
+// รายละเอียดรุ่น: สรุป + ไทม์ไลน์ (ให้อาหาร + เหตุการณ์)
+// =====================================================================
+async function pageBatch(view, id) {
+  const b = await batchById(id);
+  const [feeds, events] = await Promise.all([api.list('bsf.v_batch_feed', { eq: { batch_id: id }, order: ['feed_date'] }), api.list('bsf.v_batch_event', { eq: { batch_id: id }, order: ['event_date'] })]);
+  const showOff = isAdmin();
+  const tl = [...feeds.map(f => ({ ...f, _t: 'feed', _d: f.feed_date })), ...events.map(e => ({ ...e, _t: e.kind, _d: e.event_date }))]
+    .filter(x => showOff || x.status === 'active').sort((a, c) => a._d.localeCompare(c._d) || String(a.created_at).localeCompare(String(c.created_at)));
+  const what = x => x._t === 'feed' ? `ให้อาหาร: ${esc(x.feed_type_name)}${x.minced ? ' (บดสับ)' : ''}` : x._t === 'split' ? 'แบ่งกระบะ' : x._t === 'harvest' ? '<b>เก็บเกี่ยว</b>' : `ออกจากรุ่น: ${esc(OUT_TYPES[x.out_type] || x.out_type)}${x.hh_code ? ' ' + esc(x.hh_code) : ''}${x.after_harvest ? ' <span class="pill">หลังเก็บเกี่ยว</span>' : ''}`;
+  const detail = x => x._t === 'feed' ? `${fmt(x.kg)} กก.` : x._t === 'split' ? `${x.trays_delta > 0 ? '+' : ''}${fmtInt(x.trays_delta)} กระบะ${x.kg != null ? ` · ชั่ง ${fmt(x.kg)} กก.` : ''}` : x._t === 'harvest' ? `หนอน 5 มม. ${fmt(x.larvae_5mm_kg)} · 3 มม. ${fmt(x.larvae_3mm_kg)} · มูล ${fmt(x.frass_kg)} กก.` : [x.trays ? fmtInt(x.trays) + ' กระบะ' : '', x.kg != null ? fmt(x.kg) + ' กก.' : ''].filter(Boolean).join(' · ');
+  const byType = {}; feeds.filter(f => f.status === 'active').forEach(f => { byType[f.feed_type_name] = (byType[f.feed_type_name] || 0) + Number(f.kg); });
+  const harvested = b.stage === 'harvested';
+  view.innerHTML = `<div class="card"><div class="cardhead"><div><div class="code mono">${esc(b.code)}</div><div class="muted">${esc(b.project_code)} · ${esc(b.project_name || '')}</div></div><div>${alertPill(b.alert)}${b.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิกแล้ว</span>' : ''}</div></div>
+      <div class="kpis" style="margin-top:8px"><div class="kpi hero"><div class="l">${harvested ? 'เก็บเกี่ยวเมื่ออายุ' : 'อายุ · ' + STAGE[b.stage]}</div><div class="v">${fmtInt(b.age_days)} วัน</div></div>
+        <div class="kpi"><div class="l">${harvested ? 'หนอนที่เก็บเกี่ยว' : 'กระบะตอนนี้'}</div><div class="v">${harvested ? fmt(b.larvae_kg) + ' กก.' : fmtInt(b.trays_now)}</div></div>
+        <div class="kpi"><div class="l">อาหารรวม (เศษอาหาร)</div><div class="v">${fmt(b.feed_kg)} <span style="font-size:15px">(${fmt(b.feed_waste_kg)})</span> กก.</div></div>
+        <div class="kpi"><div class="l">หนอน ÷ เศษอาหาร</div><div class="v">${ratioText(b)}</div></div></div>
+      <div class="muted" style="margin-top:6px">ลงไข่ ${thDay(b.lay_date)} · ไข่ ${fmt(b.egg_g)} กรัม · กระบะตั้งต้น ${fmtInt(b.trays_start)} · บันทึกโดย ${esc(b.created_by_name || '-')}${b.note ? ' · ' + esc(b.note) : ''}</div>
+      ${harvested ? `<div class="banner info" style="margin-top:8px">เก็บเกี่ยว ${thDay(b.harvest_date)}: หนอน 5 มม. ${fmt(b.larvae_5mm_kg)} · 3 มม. ${fmt(b.larvae_3mm_kg)} · มูล ${fmt(b.frass_kg)} กก. · ออกหลังเก็บเกี่ยว ${fmt(b.out_kg_after_harvest)} กก. · <b>คงเหลือ ${fmt(b.larvae_left_kg)} กก.</b></div>` : ''}
+      ${!b.ratio_complete && harvested ? `<div class="banner warn">รุ่นนี้มีการออกจากรุ่นก่อนเก็บเกี่ยว ${fmtInt(b.out_trays_before_harvest)} กระบะ${Number(b.out_kg_before_harvest) ? ' / ' + fmt(b.out_kg_before_harvest) + ' กก.' : ''} อัตราจึงต่ำกว่าความจริง (*)</div>` : ''}
+      ${canWrite() && b.status === 'active' ? `<div class="row acts" style="margin-top:8px">${!harvested ? `<button class="small" onclick="feedForm('${b.id}')">ให้อาหาร</button><button class="small secondary" onclick="splitForm('${b.id}')">แบ่งกระบะ</button>` : ''}<button class="small secondary" onclick="outForm('${b.id}')">ออกจากรุ่น</button>${!harvested && b.stage !== 'nursery' ? `<button class="small secondary" onclick="harvestForm('${b.id}')">เก็บเกี่ยว</button>` : ''}${isAdmin() ? `<button class="small secondary" onclick="batchEditForm('${b.id}')">แก้ข้อมูลรุ่น</button>` : ''}</div>` : ''}</div>
+    <div class="card"><div class="cardhead"><h4>บันทึกของรุ่น (${fmtInt(tl.filter(x => x.status === 'active').length)}) ${helpBtn('bsf-timeline')}</h4></div>
+      <div class="tscroll"><table><thead><tr><th>วันที่</th><th>รายการ</th><th>รายละเอียด</th><th>ผู้บันทึก</th>${isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
+      ${tl.map(x => `<tr class="${x.status !== 'active' ? 'off' : ''}"><td class="nowrap">${thDay(x._d)}<div class="muted">วันที่ ${fmtInt(x.day_no)}</div></td><td>${what(x)}${x.note ? `<div class="muted">${esc(x.note)}</div>` : ''}</td><td>${detail(x)}</td><td class="muted">${esc(x.created_by_name || '-')}</td>${isAdmin() ? `<td>${x.status === 'active' ? `<button class="small secondary" onclick="cancelEntry('${x._t === 'feed' ? 'bsf.batch_feed' : 'bsf.batch_event'}','${x.id}')">ยกเลิก</button>` : '<span class="muted">ยกเลิกแล้ว</span>'}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5" class="muted">ยังไม่มีบันทึก</td></tr>`}
+      </tbody></table></div>
+      ${Object.keys(byType).length ? `<div class="muted" style="margin-top:8px">อาหารแยกชนิด: ${Object.entries(byType).map(([k, v]) => `${esc(k)} ${fmt(v)} กก.`).join(' · ')}</div>` : ''}</div>
+    <div class="row"><a class="btn secondary" style="text-decoration:none" href="#home">‹ รุ่นที่เลี้ยงอยู่</a></div>`;
+}
+async function cancelEntry(table, id) {
+  if (!confirm('ยกเลิกรายการนี้? (ไม่ลบทิ้ง ยังเห็นในประวัติแบบขีดฆ่า และไม่นับในยอด)')) return;
+  try { await api.update(table, id, { status: 'inactive' }); toast('ยกเลิกแล้ว'); refresh(); } catch (e) { fail(e, 'ยกเลิกไม่สำเร็จ'); }
+}
+
+// =====================================================================
+// แบบฟอร์ม
+// =====================================================================
+const numIn = (id, label, opt = {}) => `<label for="${id}">${label}${opt.req ? ' *' : ''}</label><input id="${id}" type="number" ${opt.int ? 'step="1" inputmode="numeric"' : 'step="any" inputmode="decimal"'} ${opt.min != null ? `min="${opt.min}"` : ''} value="${opt.value ?? ''}">${opt.hint ? `<div class="muted">${opt.hint}</div>` : ''}`;
+const dateIn = (id, label, min, value = todayISO()) => `<label for="${id}">${label} *</label><input id="${id}" type="date" value="${value}" ${min ? `min="${min}"` : ''} max="${todayISO()}">`;
+const val = id => { const v = $('#' + id).value; return v === '' ? null : Number(v); };
+const btns = '<div class="row" style="margin-top:12px"><button id="f_save">บันทึก</button><button class="secondary" onclick="closeModal()">ยกเลิก</button></div>';
+async function saveWith(fn, okMsg) {
+  const b = $('#f_save'); b.disabled = true;
+  try { const r = await fn(); closeModal(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg); refresh(); return r; }
+  catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); b.disabled = false; }
+}
+function defaultProject() {
+  const pjs = projectsOfScope();
+  return S.me.project_id || (pjs.find(p => /apptech/i.test(p.code)) || pjs[0] || {}).id || '';
+}
+function batchForm() {
+  const pjs = projectsOfScope(), def = defaultProject(), locked = S.me.role === 'recorder' && !!S.me.project_id;
+  openModal(`<h3 style="margin-top:0">ลงไข่รุ่นใหม่ ${helpBtn('bsf-new')}</h3>
+    <label for="b_pj">โครงการวิจัย *</label><select id="b_pj" ${locked ? 'disabled' : ''}>${pjs.map(p => `<option value="${p.id}" ${p.id === def ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
+    ${dateIn('b_date', 'วันลงไข่ (วัน 0)')}
+    ${numIn('b_egg', 'น้ำหนักไข่ (กรัม)', { req: true, min: 0 })}
+    ${numIn('b_trays', 'จำนวนกระบะ', { req: true, int: true, min: 1, value: 1 })}
+    <label for="b_note">หมายเหตุ</label><textarea id="b_note" rows="2"></textarea>
+    <div class="banner info" style="margin-top:10px">ระบบตั้งรหัสรุ่นให้หลังบันทึก (เช่น 69-1031-01) · เขียนรหัสนี้ติดกระบะ</div>${btns}`);
+  $('#f_save').onclick = () => {
+    const egg = val('b_egg'), trays = val('b_trays');
+    if (!$('#b_date').value) return needField('#b_date', 'เลือกวันลงไข่');
+    if (!(egg > 0)) return needField('#b_egg', 'ใส่น้ำหนักไข่เป็นกรัม (มากกว่า 0)');
+    if (!(trays >= 1) || !Number.isInteger(trays)) return needField('#b_trays', 'จำนวนกระบะต้องเป็นจำนวนเต็มตั้งแต่ 1');
+    saveWith(async () => api.insert('bsf.batch', { project_id: $('#b_pj').value || null, lay_date: $('#b_date').value, egg_g: egg, trays, note: $('#b_note').value.trim() || null }))
+      .then(r => { if (r) openModal(`<h3 style="margin-top:0">บันทึกรุ่นแล้ว</h3><div class="muted">รหัสรุ่น (เขียนติดกระบะ)</div><div class="code mono" style="font-size:40px;margin:6px 0">${esc(r.code)}</div><div class="row"><button onclick="closeModal();go('#batch/${r.id}')">ไปหน้ารุ่นนี้</button><button class="secondary" onclick="closeModal()">ปิด</button></div>`); });
+  };
+}
+function feedForm(id) {
+  const b = S._batchIdx[id], types = (S.feedTypes || []).filter(t => t.status === 'active');
+  const rank = t => (t.stage === (b.stage === 'nursery' ? 'nursery' : 'grow') ? 0 : t.stage === 'any' ? 1 : 2);
+  const sorted = [...types].sort((x, y) => rank(x) - rank(y) || x.sort_order - y.sort_order);
+  if (!sorted.length) return toastErr('ยังไม่มีชนิดอาหาร', 'ให้ admin เพิ่มที่ จัดการ → ชนิดอาหาร (หรือรัน sql/016 ซ้ำเพื่อสร้างชนิดตั้งต้น)');
+  openModal(`<h3 style="margin-top:0">ให้อาหาร · <span class="mono">${esc(b.code)}</span></h3><div class="muted">${esc(dayLabel(b))}</div>
+    ${dateIn('f_date', 'วันที่ให้อาหาร', b.lay_date)}
+    <label for="f_type">ชนิดอาหาร *</label><select id="f_type" onchange="mincedToggle()">${sorted.map(t => `<option value="${t.id}">${esc(t.name)}${rank(t) === 2 ? ` (ปกติใช้ช่วง${FEED_STAGE[t.stage]})` : ''}</option>`).join('')}</select>
+    <label class="chk" id="f_mwrap"><input type="checkbox" id="f_minced"> บดสับ</label>
+    ${numIn('f_kg', 'น้ำหนัก (กก.)', { req: true, min: 0 })}
+    <label for="f_note">หมายเหตุ</label><textarea id="f_note" rows="2"></textarea>${btns}`);
+  mincedToggle();
+  $('#f_save').onclick = () => {
+    const kg = val('f_kg'); if (!(kg > 0)) return needField('#f_kg', 'ใส่น้ำหนักอาหารเป็น กก. (มากกว่า 0)');
+    const t = feedTypeOf($('#f_type').value);
+    saveWith(() => api.insert('bsf.batch_feed', { batch_id: id, feed_date: $('#f_date').value, feed_type_id: t.id, kg, minced: !!t.allow_minced && $('#f_minced').checked, note: $('#f_note').value.trim() || null }), `บันทึกให้อาหาร ${fmt(kg)} กก. แล้ว`);
+  };
+}
+function mincedToggle() { const t = feedTypeOf($('#f_type').value); $('#f_mwrap').classList.toggle('hidden', !t.allow_minced); if (!t.allow_minced) $('#f_minced').checked = false; }
+function splitForm(id) {
+  const b = S._batchIdx[id];
+  openModal(`<h3 style="margin-top:0">แบ่งกระบะ · <span class="mono">${esc(b.code)}</span></h3><div class="muted">ตอนนี้ ${fmtInt(b.trays_now)} กระบะ</div>
+    ${dateIn('s_date', 'วันที่', b.lay_date)}
+    ${numIn('s_delta', 'จำนวนกระบะที่เพิ่มขึ้น', { req: true, int: true, hint: 'แบ่ง 2 กระบะเป็น 4 = ใส่ 2 · รวมกระบะลดลง = ใส่ค่าติดลบ เช่น -1' })}
+    ${numIn('s_kg', 'น้ำหนักที่ชั่ง (กก.) ถ้ามี', { min: 0 })}
+    <label for="s_note">หมายเหตุ</label><textarea id="s_note" rows="2"></textarea>${btns}`);
+  $('#f_save').onclick = () => {
+    const d = val('s_delta'); if (!d || !Number.isInteger(d)) return needField('#s_delta', 'ใส่จำนวนกระบะที่เพิ่ม (หรือลดเป็นค่าติดลบ) เป็นจำนวนเต็ม ไม่เป็น 0');
+    if (b.trays_now + d < 0) return needField('#s_delta', `ลดได้ไม่เกิน ${b.trays_now} กระบะ`);
+    saveWith(() => api.insert('bsf.batch_event', { batch_id: id, event_date: $('#s_date').value, kind: 'split', trays_delta: d, kg: val('s_kg'), note: $('#s_note').value.trim() || null }), `บันทึกแล้ว กระบะตอนนี้ ${fmtInt(b.trays_now + d)}`);
+  };
+}
+async function hhCodes() {
+  if (S._hhCodes) return S._hhCodes;
+  try { const rows = await api.list('hh.row', { eq: { status: 'active' } }); S._hhCodes = [...new Set(rows.map(r => r.hh_code))].sort(); } catch (e) { S._hhCodes = []; }
+  return S._hhCodes;
+}
+async function outForm(id) {
+  const b = S._batchIdx[id], harvested = b.stage === 'harvested', codes = await hhCodes();
+  openModal(`<h3 style="margin-top:0">ออกจากรุ่น · <span class="mono">${esc(b.code)}</span></h3>
+    <div class="muted">${harvested ? `หลังเก็บเกี่ยว: หนอนคงเหลือ ${fmt(b.larvae_left_kg)} กก. · ใส่เป็น กก.` : `ตอนนี้ ${fmtInt(b.trays_now)} กระบะ · ใส่จำนวนกระบะที่ออก (และ กก. ถ้าชั่ง)`}</div>
+    ${dateIn('o_date', 'วันที่', b.lay_date)}
+    <label for="o_type">ออกไปที่ *</label><select id="o_type" onchange="$('#o_hhwrap').classList.toggle('hidden',this.value!=='household')">${Object.entries(OUT_TYPES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+    <div id="o_hhwrap"><label for="o_hh">รหัสครัวเรือน *</label><input id="o_hh" list="o_hhlist" placeholder="BSF-001" autocomplete="off"><datalist id="o_hhlist">${codes.map(c => `<option value="${esc(c)}">`).join('')}</datalist>${codes.length ? '' : '<div class="muted">ไม่มีรายชื่อครัวเรือนให้เลือก พิมพ์รหัสเอง (ระบบตรวจกับทะเบียนครัวเรือนของโครงการ)</div>'}</div>
+    ${harvested ? '' : numIn('o_trays', 'จำนวนกระบะที่ออก', { int: true, min: 0 })}
+    ${numIn('o_kg', 'น้ำหนัก (กก.)' + (harvested ? '' : ' ถ้าชั่ง'), { min: 0, req: harvested })}
+    <label for="o_note">หมายเหตุ</label><textarea id="o_note" rows="2"></textarea>${btns}`);
+  $('#f_save').onclick = () => {
+    const type = $('#o_type').value, trays = harvested ? null : val('o_trays'), kg = val('o_kg'), hh = $('#o_hh').value.trim();
+    if (type === 'household' && !hh) return needField('#o_hh', 'ใส่รหัสครัวเรือนที่รับไป');
+    if (trays != null && (!Number.isInteger(trays) || trays < 0)) return needField('#o_trays', 'จำนวนกระบะต้องเป็นจำนวนเต็ม');
+    if (!(trays > 0) && !(kg > 0)) return needField(harvested ? '#o_kg' : '#o_trays', harvested ? 'ใส่น้ำหนักที่ออกเป็น กก.' : 'ใส่จำนวนกระบะหรือ กก. อย่างน้อย 1 ช่อง');
+    if (!harvested && trays > b.trays_now) return needField('#o_trays', `ออกได้ไม่เกิน ${b.trays_now} กระบะ`);
+    saveWith(() => api.insert('bsf.batch_event', { batch_id: id, event_date: $('#o_date').value, kind: 'out', out_type: type, trays: trays || null, kg, hh_code: type === 'household' ? hh : null, note: $('#o_note').value.trim() || null }), 'บันทึกออกจากรุ่นแล้ว');
+  };
+}
+function harvestForm(id) {
+  const b = S._batchIdx[id];
+  openModal(`<h3 style="margin-top:0">เก็บเกี่ยว · <span class="mono">${esc(b.code)}</span></h3><div class="muted">${esc(dayLabel(b))} · ${fmtInt(b.trays_now)} กระบะ · 1 รุ่นเก็บเกี่ยวได้ครั้งเดียว</div>
+    ${dateIn('h_date', 'วันที่เก็บเกี่ยว', b.lay_date)}
+    ${numIn('h_5', 'หนอน ตะแกรง 5 มม. (กก.)', { min: 0 })}
+    ${numIn('h_3', 'หนอน ตะแกรง 3 มม. (กก.)', { min: 0 })}
+    ${numIn('h_f', 'มูลหนอน (กก.)', { min: 0 })}
+    <label for="h_note">หมายเหตุ</label><textarea id="h_note" rows="2"></textarea>${btns}`);
+  $('#f_save').onclick = () => {
+    const a = val('h_5'), c = val('h_3'), f = val('h_f');
+    if (![a, c, f].some(x => x > 0)) return needField('#h_5', 'ใส่น้ำหนักอย่างน้อย 1 ช่อง');
+    if ([a, c, f].some(x => x != null && x < 0)) return needField('#h_5', 'น้ำหนักต้องไม่ติดลบ');
+    if (!confirm(`ยืนยันเก็บเกี่ยวรุ่น ${b.code}? หนอน ${fmt((a || 0) + (c || 0))} กก. · มูล ${fmt(f || 0)} กก. (บันทึกแล้วรุ่นนี้ปิดการให้อาหาร/แบ่งกระบะ)`)) return;
+    saveWith(() => api.insert('bsf.batch_event', { batch_id: id, event_date: $('#h_date').value, kind: 'harvest', larvae_5mm_kg: a, larvae_3mm_kg: c, frass_kg: f, note: $('#h_note').value.trim() || null }), 'บันทึกเก็บเกี่ยวแล้ว');
+  };
+}
+function batchEditForm(id) {
+  const b = S._batchIdx[id];
+  openModal(`<h3 style="margin-top:0">แก้ข้อมูลรุ่น <span class="mono">${esc(b.code)}</span></h3><div class="muted">รหัสรุ่นเปลี่ยนไม่ได้ (ใช้อ้างตอนแจกและรับซื้อคืน)</div>
+    ${isSuper() ? `<label for="e_pj">โครงการวิจัย</label><select id="e_pj">${projectsOfScope().map(p => `<option value="${p.id}" ${p.id === b.project_id ? 'selected' : ''}>${esc(p.code)}</option>`).join('')}</select>` : ''}
+    ${dateIn('e_date', 'วันลงไข่', null, b.lay_date)}
+    ${numIn('e_egg', 'น้ำหนักไข่ (กรัม)', { req: true, min: 0, value: b.egg_g })}
+    ${numIn('e_trays', 'จำนวนกระบะตอนลงไข่', { req: true, int: true, min: 1, value: b.trays_start })}
+    <label for="e_note">หมายเหตุ</label><textarea id="e_note" rows="2">${esc(b.note || '')}</textarea>
+    <div class="row" style="margin-top:12px"><button id="f_save">บันทึก</button><button class="secondary" onclick="closeModal()">ปิด</button><button class="secondary" style="color:var(--danger);border-color:var(--danger)" onclick="cancelBatch('${id}')">ยกเลิกรุ่นนี้</button></div>`);
+  $('#f_save').onclick = () => {
+    const egg = val('e_egg'), trays = val('e_trays');
+    if (!(egg > 0)) return needField('#e_egg', 'น้ำหนักไข่ต้องมากกว่า 0');
+    if (!(trays >= 1) || !Number.isInteger(trays)) return needField('#e_trays', 'จำนวนกระบะต้องเป็นจำนวนเต็มตั้งแต่ 1');
+    const patch = { lay_date: $('#e_date').value, egg_g: egg, trays, note: $('#e_note').value.trim() || null }; if (isSuper()) patch.project_id = $('#e_pj').value;
+    saveWith(() => api.update('bsf.batch', id, patch), 'แก้ข้อมูลรุ่นแล้ว');
+  };
+}
+async function cancelBatch(id) {
+  if (!confirm('ยกเลิกรุ่นนี้? (ไม่ลบทิ้ง แต่ไม่แสดงในรุ่นที่เลี้ยงอยู่และไม่นับในสรุปผล)')) return;
+  try { await api.update('bsf.batch', id, { status: 'inactive' }); closeModal(); toast('ยกเลิกรุ่นแล้ว'); go('#batches'); refresh(); } catch (e) { fail(e, 'ยกเลิกไม่สำเร็จ'); }
+}
+
+// =====================================================================
+// สรุปผล: อัตราแปลงเศษอาหาร → หนอน (เฉพาะรุ่นที่สมบูรณ์)
+// =====================================================================
+async function pageSummary(view) {
+  const st = S._sm = S._sm || { project: '' };
+  const eq = { status: 'active' }; if (st.project) eq.project_id = st.project;
+  const rows = (await listBatches({ eq })).filter(b => b.stage === 'harvested').sort((a, b) => a.harvest_date.localeCompare(b.harvest_date));
+  const comp = rows.filter(b => b.ratio_complete && Number(b.feed_waste_kg) > 0);
+  const wasteC = sum(comp, 'feed_waste_kg'), larvC = sum(comp, 'larvae_kg');
+  view.innerHTML = `${scopeSelector()}<div class="row" style="margin-bottom:8px"><select style="width:auto;max-width:300px" aria-label="กรองโครงการวิจัย" onchange="S._sm.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projectsOfScope().map(x => `<option value="${x.id}" ${x.id === st.project ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select> ${helpBtn('bsf-summary')}</div>
+    <div class="kpis"><div class="kpi hero"><div class="l">หนอน ÷ เศษอาหาร (รุ่นสมบูรณ์ ${fmtInt(comp.length)} รุ่น)</div><div class="v">${wasteC > 0 ? fmt(larvC / wasteC, 3) : '-'}</div></div>
+      <div class="kpi"><div class="l">รุ่นที่เก็บเกี่ยวแล้ว</div><div class="v">${fmtInt(rows.length)}</div></div>
+      <div class="kpi"><div class="l">หนอนรวม (5 มม. + 3 มม.)</div><div class="v">${fmt(sum(rows, 'larvae_kg'))} กก.</div></div>
+      <div class="kpi"><div class="l">มูลรวม</div><div class="v">${fmt(sum(rows, 'frass_kg'))} กก.</div></div></div>
+    <div class="muted" style="margin:6px 0 10px">อัตรา = หนอนที่เก็บเกี่ยว (กก.) ÷ เศษอาหารที่ให้ทั้งรุ่น (สด + หมัก กก.) · ไม่นับรำ/อาหารไก่ · รุ่นที่มีการออกก่อนเก็บเกี่ยว (*) ไม่นำมาคิดอัตรารวม เพราะหนอนส่วนที่ออกไปไม่ได้ถูกชั่งตอนเก็บเกี่ยว</div>
+    ${comp.length ? `<div class="card"><h4 style="margin-top:0">หนอน ÷ เศษอาหาร รายรุ่น (รุ่นสมบูรณ์)</h4><div style="position:relative;height:260px"><canvas id="chRatio" aria-label="กราฟอัตราแปลงรายรุ่น"></canvas></div></div>` : ''}
+    <div class="card"><div class="cardhead"><h4>รุ่นที่เก็บเกี่ยวแล้ว (${fmtInt(rows.length)})</h4></div><div class="tscroll"><table data-sort="data"><thead><tr><th>รุ่น</th><th>เก็บเกี่ยว</th><th class="num">อายุ</th><th class="num">ไข่ ก.</th><th class="num">เศษอาหาร กก.</th><th class="num">อาหารอื่น กก.</th><th class="num">หนอน 5 มม.</th><th class="num">หนอน 3 มม.</th><th class="num">มูล กก.</th><th class="num">หนอน/เศษอาหาร</th></tr></thead><tbody>
+    ${rows.map(b => `<tr><td><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a></td><td class="nowrap">${thDay(b.harvest_date)}</td><td class="num">${fmtInt(b.age_days)}</td><td class="num">${fmt(b.egg_g)}</td><td class="num">${fmt(b.feed_waste_kg)}</td><td class="num">${fmt(b.feed_other_kg)}</td><td class="num">${fmt(b.larvae_5mm_kg)}</td><td class="num">${fmt(b.larvae_3mm_kg)}</td><td class="num">${fmt(b.frass_kg)}</td><td class="num">${ratioText(b)}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">ยังไม่มีรุ่นที่เก็บเกี่ยว</td></tr>'}
+    </tbody></table></div></div>`;
+  if (comp.length && window.Chart) mkChart($('#chRatio'), { type: 'bar', data: { labels: comp.map(b => b.code), datasets: [{ label: 'หนอน ÷ เศษอาหาร', data: comp.map(b => +Number(b.larvae_per_waste).toFixed(3)), backgroundColor: PALETTE[1] }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+}
+
+// =====================================================================
+// จัดการ (admin): ชนิดอาหาร · ค่าตั้งต้น
+// =====================================================================
+SPECS['bsf.feed_type'] = { table: 'bsf.feed_type', title: 'ชนิดอาหารหนอน', order: ['sort_order'], help: 'bsf-admin',
+  intro: '"นับเป็นเศษอาหาร" = ใช้คิดอัตราแปลงหนอน ÷ เศษอาหาร · "บดสับได้" = แสดงช่องติ๊กบดสับตอนให้อาหาร · เลิกใช้ = สถานะปิดใช้งาน (ประวัติเดิมไม่หาย)',
+  cols: [{ key: 'name', label: 'ชื่อชนิดอาหาร', required: true }, { key: 'stage', label: 'ใช้ช่วง', type: 'select', options: () => Object.entries(FEED_STAGE).map(([value, label]) => ({ value, label })) },
+    { key: 'is_food_waste', label: 'นับเป็นเศษอาหาร', type: 'bool' }, { key: 'allow_minced', label: 'บดสับได้', type: 'bool' }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }],
+  prefill: () => ({ stage: 'grow', is_food_waste: false, allow_minced: false, sort_order: (S.feedTypes || []).length + 1 }),
+  defaults: () => ({ org_id: S.scopeOrg }) };
+async function pageAdmin(view) {
+  const tab = location.hash.split('/')[1] || 'feed';
+  const tabs = [['feed', 'ชนิดอาหาร'], ['settings', 'ค่าตั้งต้น']];
+  let body = '';
+  if (tab === 'feed') body = await crudSection({ ...SPECS['bsf.feed_type'], eq: scopeEq() });
+  else body = `<div class="card"><h4 style="margin-top:0">ค่าตั้งต้นกระบะเลี้ยง ${helpBtn('bsf-admin')}</h4>${isSuper() ? '' : '<div class="banner info">แก้ได้เฉพาะ super admin (ใช้ร่วมทุกองค์กร)</div>'}
+    ${Object.entries(BSF_SETTINGS).map(([k, l]) => `<label for="st_${k}">${l} <span class="mono muted">${k}</span></label><div class="row"><input id="st_${k}" type="number" step="1" min="1" value="${esc(setting(k))}" ${isSuper() ? '' : 'readonly'} style="flex:1">${isSuper() ? `<button class="small" onclick="saveBsfSetting('${k}')">บันทึก</button>` : ''}</div>`).join('')}
+    <div class="muted" style="margin-top:8px">ระบบใช้ค่าเหล่านี้ขึ้นป้าย "ครบอนุบาล" "ถึงเวลาเก็บเกี่ยว" และ "เลยกำหนดเก็บเกี่ยว" · ถ้าค่าว่างใช้ 5 / 15 / 20 วัน</div></div>`;
+  view.innerHTML = `${scopeSelector()}<div class="subtabs">${tabs.map(([k, l]) => `<a href="#admin/${k}" class="${tab === k ? 'active' : ''}">${l}</a>`).join('')}</div>${body}`;
+}
+async function saveBsfSetting(key) {
+  const v = $('#st_' + key).value.trim(); if (!/^[1-9][0-9]{0,2}$/.test(v)) return needField('#st_' + key, 'ใส่จำนวนวันเป็นจำนวนเต็ม 1–999');
+  try { await api.update('core.app_setting', key, { value: v }, 'key'); toast('บันทึกแล้ว'); S.cache.coreLoaded = false; render(); } catch (e) { fail(e); }
+}
+
+// =====================================================================
+// ช่วยเหลือ
+// =====================================================================
+window.HELP = {
+  'bsf-home': { title: 'รุ่นที่เลี้ยงอยู่', why: '1 รุ่น = ไข่ที่ลงวันเดียวกัน 1 ชุด · ระบบนับอายุจากวันลงไข่ (วัน 0) ให้เอง', steps: ['รุ่นที่ต้องทำก่อนอยู่บนสุด: เลยกำหนดเก็บเกี่ยว → ถึงเวลาเก็บเกี่ยว → ครบอนุบาล', 'กดปุ่มใต้รุ่นเพื่อบันทึก: ให้อาหาร · แบ่งกระบะ · ออกจากรุ่น · เก็บเกี่ยว', 'กดรหัสรุ่นเพื่อดูประวัติทั้งหมดของรุ่น'], done: 'ตัวเลขกระบะ/อาหารของรุ่นเปลี่ยนทันทีหลังบันทึก', note: 'ต้องมีสัญญาณอินเทอร์เน็ตตอนบันทึก (โมดูลนี้ยังไม่มีปุ่ม "รอส่ง" แบบรอบเข้ารับเศษอาหาร)' },
+  'bsf-new': { title: 'ลงไข่รุ่นใหม่', steps: ['เลือกโครงการวิจัย (ผู้บันทึกที่สังกัดโครงการ ระบบเลือกให้)', 'วันลงไข่ = วัน 0', 'ชั่งไข่เป็นกรัม · ใส่จำนวนกระบะอนุบาล', 'กดบันทึก แล้วเขียนรหัสรุ่นที่ระบบให้ติดกระบะ'], done: 'เห็นรหัสรุ่นตัวใหญ่ เช่น 69-1031-01 (ปี พ.ศ. 2 หลัก-เดือนวัน-ลำดับของวันนั้น)' },
+  'bsf-batches': { title: 'ทุกรุ่น', steps: ['กรองตามโครงการ ระยะ หรือช่วงวันลงไข่', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์เปิดใน Excel/Google Sheets'], note: '* ท้ายอัตรา = รุ่นที่มีการออกจากรุ่นก่อนเก็บเกี่ยว อัตราต่ำกว่าความจริง' },
+  'bsf-timeline': { title: 'บันทึกของรุ่น', steps: ['เรียงตามวันที่ "วันที่ N" = นับจากวันลงไข่', 'บันทึกผิด: ผู้บันทึกแจ้ง admin · admin กด "ยกเลิก" แล้วบันทึกใหม่ (รายการที่ยกเลิกยังเห็นแบบขีดฆ่า)'] },
+  'bsf-summary': { title: 'สรุปผล', why: 'อัตราแปลงเศษอาหารเป็นหนอน ใช้ประเมินการเลี้ยงและรายงานวิจัย', steps: ['อัตรา = หนอน (5 มม. + 3 มม.) ÷ เศษอาหารที่ให้ (สด + หมัก)', 'รุ่นที่แจกกระบะออกก่อนเก็บเกี่ยวไม่นำมาคิดอัตรารวม', 'กดรหัสรุ่นเพื่อดูรายละเอียด'] },
+  'bsf-admin': { title: 'จัดการ (admin)', steps: ['ชนิดอาหาร: เพิ่ม/แก้ชื่อ ช่วงที่ใช้ นับเป็นเศษอาหารหรือไม่ บดสับได้หรือไม่', 'ค่าตั้งต้น: จำนวนวันอนุบาลและช่วงอายุเก็บเกี่ยว (super admin แก้)', 'แก้ข้อมูลรุ่น/ยกเลิกรุ่น: เปิดหน้ารุ่น → "แก้ข้อมูลรุ่น"'] }
+};
+function pageHelp(view) {
+  const keys = ['bsf-home', 'bsf-new', 'bsf-batches', 'bsf-timeline', 'bsf-summary', ...(isAdmin() ? ['bsf-admin'] : [])];
+  view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ: กระบะเลี้ยง</h3><div class="muted">บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ผู้บันทึกเพิ่มรายการได้ · แก้/ยกเลิกต้องให้ admin</div>
+    ${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>
+    <div class="card"><h3 style="margin-top:0">วงจรของรุ่น</h3><ol style="padding-left:22px"><li>ลงไข่ในกระบะอนุบาล (วัน 0) ให้รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)</li><li>ครบ ${esc(setting('bsf_nursery_days') || '5')} วัน: แจกครัวเรือน (ออกจากรุ่น → แจกครัวเรือน) หรือเลี้ยงต่อ</li><li>เลี้ยงต่อด้วยเศษอาหารสด/หมัก (บดสับได้) หรือรำหยาบ+อาหารไก่ (17%) · แบ่งกระบะเมื่อแน่น</li><li>อายุ ${esc(setting('bsf_harvest_min_days') || '15')}–${esc(setting('bsf_harvest_max_days') || '20')} วัน: เก็บเกี่ยว ชั่งหนอนตะแกรง 5 มม. / 3 มม. และมูล</li><li>หลังเก็บเกี่ยว: ออกจากรุ่น → ส่งแปรรูป / ขาย / ปล่อยเป็นดักแด้</li></ol></div>
+    <div class="row"><a class="btn secondary" style="text-decoration:none" href="#about">เกี่ยวกับระบบ</a></div>`;
+}
+
+// =====================================================================
+// โหมดสาธิต (?demo=1): ข้อมูลตัวอย่าง + เลียนแบบทริกเกอร์/RLS ของ sql/016
+// =====================================================================
+function installBsfDemo(d) {
+  const { D, add, byId, views, ext } = d;
+  for (const t of ['bsf.feed_type', 'bsf.batch', 'bsf.batch_feed', 'bsf.batch_event']) D[t] = D[t] || [];
+  if (D['bsf.feed_type'].length) return;
+  const iso = n => { const x = new Date(); x.setDate(x.getDate() - n); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const days = (a, b) => Math.round((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000);
+  const setv = (k, d0) => parseInt((D['core.app_setting'].find(s => s.key === k) || {}).value) || d0;
+  [['bsf_nursery_days', '5'], ['bsf_harvest_min_days', '15'], ['bsf_harvest_max_days', '20']].forEach(([key, value]) => { if (!D['core.app_setting'].some(s => s.key === key)) add('core.app_setting', { key, value, description: BSF_SETTINGS[key] }); });
+  for (const o of D['core.org']) [['รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)', 'nursery', false, false, 1], ['เศษอาหารสด', 'grow', true, true, 2], ['เศษอาหารหมัก', 'grow', true, true, 3], ['รำหยาบ+อาหารไก่ (โปรตีน 17%)', 'grow', false, false, 4]]
+    .forEach(([name, stage, w, m, s]) => add('bsf.feed_type', { org_id: o.id, name, stage, is_food_waste: w, allow_minced: m, sort_order: s }));
+  const nextCode = (org, dt) => { const p = String((Number(dt.slice(0, 4)) + 543) % 100).padStart(2, '0') + '-' + dt.slice(5, 7) + dt.slice(8, 10); const n = Math.max(0, ...D['bsf.batch'].filter(b => b.org_id === org && b.code.startsWith(p + '-')).map(b => +b.code.split('-')[2])) + 1; return p + '-' + String(n).padStart(2, '0'); };
+  const harvestOf = bid => D['bsf.batch_event'].find(e => e.batch_id === bid && e.kind === 'harvest' && e.status === 'active');
+  const traysOf = (bid, skip) => { const b = byId('bsf.batch', bid); return b.trays + D['bsf.batch_event'].filter(e => e.batch_id === bid && e.status === 'active' && e.id !== skip).reduce((s, e) => s + (e.kind === 'split' ? e.trays_delta : e.kind === 'out' && !e.after_harvest ? (e.trays || 0) : 0) * (e.kind === 'split' ? 1 : -1), 0); };
+  const deny = me => { if (me.role === 'recorder') throw new Error('permission denied: row-level security (ผู้บันทึกแก้/ยกเลิกไม่ได้ ต้องให้ admin ทำ)'); };
+  const childCheck = (bid, dt) => { const b = byId('bsf.batch', bid); if (!b.id) throw new Error('ไม่พบรุ่นที่เลือก'); if (b.status !== 'active') throw new Error('รุ่นนี้ถูกยกเลิกแล้ว บันทึกเพิ่มไม่ได้'); if (dt < b.lay_date) throw new Error('วันที่บันทึกอยู่ก่อนวันลงไข่ของรุ่น'); if (dt > todayISO()) throw new Error('วันที่เป็นวันในอนาคต ตรวจวันที่อีกครั้ง'); return b; };
+  ext.beforeInsert['bsf.feed_type'] = (r, me) => { deny(me); r.org_id = r.org_id || me.org_id; };
+  ext.beforeInsert['bsf.batch'] = (r, me) => {
+    r.project_id = r.project_id || me.project_id; if (!r.project_id) throw new Error('ต้องเลือกโครงการของรุ่น');
+    const pj = byId('core.project', r.project_id); r.org_id = pj.org_id;
+    if (me.role === 'recorder' && me.project_id && me.project_id !== r.project_id) throw new Error('โครงการนี้อยู่นอกโครงการที่บัญชีของคุณสังกัด ให้ admin ตรวจสอบ');
+    if (r.lay_date > todayISO()) throw new Error('วันลงไข่เป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
+    r.code = nextCode(r.org_id, r.lay_date);
+  };
+  ext.beforeInsert['bsf.batch_feed'] = r => { const b = childCheck(r.batch_id, r.feed_date); r.org_id = b.org_id; const t = byId('bsf.feed_type', r.feed_type_id); if (t.org_id !== b.org_id) throw new Error('ไม่พบชนิดอาหารที่เลือก'); if (r.minced && !t.allow_minced) throw new Error('ชนิดอาหารนี้ไม่มีตัวเลือกบดสับ'); };
+  ext.beforeInsert['bsf.batch_event'] = r => {
+    const b = childCheck(r.batch_id, r.event_date); r.org_id = b.org_id; const h = harvestOf(b.id);
+    if (r.kind === 'harvest' && h) throw new Error('รุ่นนี้บันทึกการเก็บเกี่ยวแล้ว (1 รุ่น เก็บเกี่ยวได้ครั้งเดียว)');
+    if (r.kind === 'split' && h) throw new Error('รุ่นนี้เก็บเกี่ยวแล้ว แบ่งกระบะไม่ได้');
+    if (r.kind === 'split' && traysOf(b.id) + r.trays_delta < 0) throw new Error('จำนวนกระบะคงเหลือติดลบ ตรวจจำนวนกระบะอีกครั้ง');
+    if (r.kind === 'out') { r.after_harvest = !!h; if (!h && r.trays && traysOf(b.id) - r.trays < 0) throw new Error('จำนวนกระบะคงเหลือติดลบ ตรวจจำนวนกระบะอีกครั้ง');
+      if (r.out_type === 'household') { const links = D['hh.link'].filter(l => l.project_id === b.project_id && l.status === 'active'); if (links.length && !D['hh.row'].some(x => x.project_id === b.project_id && x.hh_code === String(r.hh_code).trim() && x.status === 'active')) throw new Error('ไม่พบรหัสครัวเรือน ' + r.hh_code + ' ในทะเบียนครัวเรือนของโครงการนี้'); r.hh_code = String(r.hh_code).trim(); } else r.hh_code = null; }
+  };
+  for (const t of ['bsf.feed_type', 'bsf.batch_feed', 'bsf.batch_event']) ext.beforeUpdate[t] = (r, p, me) => deny(me);
+  ext.beforeUpdate['bsf.batch'] = (r, p, me) => { deny(me); if (p.code && p.code !== r.code) throw new Error('เปลี่ยนรหัสรุ่นไม่ได้'); };
+  ext.scope.bsf = (name, rows, me) => {
+    if (me.role === 'super_admin') return rows;
+    if (name === 'bsf.feed_type') return rows.filter(r => r.org_id === me.org_id);
+    const okB = b => b.org_id === me.org_id && (me.role !== 'recorder' || !me.project_id || b.project_id === me.project_id);
+    if (name === 'bsf.batch' || name === 'bsf.v_batch') return rows.filter(okB);
+    const vis = new Set(D['bsf.batch'].filter(okB).map(b => b.id)); return rows.filter(r => vis.has(r.batch_id));
+  };
+  views['bsf.v_batch'] = () => { const today = todayISO(), nur = setv('bsf_nursery_days', 5), hmin = setv('bsf_harvest_min_days', 15), hmax = setv('bsf_harvest_max_days', 20);
+    return D['bsf.batch'].map(b => {
+      const pj = byId('core.project', b.project_id), fs = D['bsf.batch_feed'].filter(f => f.batch_id === b.id && f.status === 'active'), es = D['bsf.batch_event'].filter(e => e.batch_id === b.id && e.status === 'active');
+      const h = es.find(e => e.kind === 'harvest'), age = days(h ? h.event_date : today, b.lay_date), outsB = es.filter(e => e.kind === 'out' && !e.after_harvest);
+      const waste = fs.filter(f => byId('bsf.feed_type', f.feed_type_id).is_food_waste).reduce((s, f) => s + +f.kg, 0), feedKg = fs.reduce((s, f) => s + +f.kg, 0);
+      const split = es.filter(e => e.kind === 'split').reduce((s, e) => s + e.trays_delta, 0), larv = h ? (+h.larvae_5mm_kg || 0) + (+h.larvae_3mm_kg || 0) : 0, outA = es.filter(e => e.kind === 'out' && e.after_harvest).reduce((s, e) => s + (+e.kg || 0), 0);
+      const stage = h ? 'harvested' : age < nur ? 'nursery' : 'grow';
+      const alert = h ? null : age > hmax ? 'overdue' : age >= hmin ? 'due' : (age >= nur && age <= nur + 1 && !outsB.length && !split) ? 'decide' : null;
+      return { ...b, project_code: pj.code, project_name: pj.name, trays_start: b.trays, created_by_name: byId('core.app_user', b.created_by).display_name, age_days: age, stage, alert, trays_now: b.trays + split - outsB.reduce((s, e) => s + (e.trays || 0), 0),
+        feeds: fs.length, feed_kg: feedKg, feed_waste_kg: waste, feed_other_kg: feedKg - waste, last_feed_date: fs.map(f => f.feed_date).sort().pop() || null, outs_before_harvest: outsB.length, out_trays_before_harvest: outsB.reduce((s, e) => s + (e.trays || 0), 0), out_kg_before_harvest: outsB.reduce((s, e) => s + (+e.kg || 0), 0),
+        harvest_date: h ? h.event_date : null, larvae_5mm_kg: h ? h.larvae_5mm_kg : null, larvae_3mm_kg: h ? h.larvae_3mm_kg : null, larvae_kg: larv, frass_kg: h ? h.frass_kg : null, out_kg_after_harvest: outA, larvae_left_kg: h ? larv - outA : null,
+        larvae_per_waste: h && waste > 0 ? larv / waste : null, ratio_complete: !!h && !outsB.length };
+    }); };
+  const child = (t, dk) => () => D[t].map(x => { const b = byId('bsf.batch', x.batch_id); return { ...x, batch_code: b.code, project_id: b.project_id, day_no: days(x[dk], b.lay_date), created_by_name: byId('core.app_user', x.created_by).display_name, ...(t === 'bsf.batch_feed' ? { feed_type_name: byId('bsf.feed_type', x.feed_type_id).name, is_food_waste: byId('bsf.feed_type', x.feed_type_id).is_food_waste } : {}) }; });
+  views['bsf.v_batch_feed'] = child('bsf.batch_feed', 'feed_date'); views['bsf.v_batch_event'] = child('bsf.batch_event', 'event_date');
+  // ข้อมูลตัวอย่าง (สมมติ): 6 รุ่นในโครงการ BSF ขององค์กรสาธิต
+  const o1 = D['core.org'][0], pj = D['core.project'].find(p => p.code === 'BSF' && p.org_id === o1.id) || D['core.project'][0];
+  const rec = D['core.app_user'].find(u => u.role === 'recorder' && u.org_id === o1.id) || {}, ft = n => D['bsf.feed_type'].find(t => t.org_id === o1.id && t.name === n).id;
+  const NUR = ft('รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)'), FR = ft('เศษอาหารสด'), FE = ft('เศษอาหารหมัก'), RC = ft('รำหยาบ+อาหารไก่ (โปรตีน 17%)');
+  const mk = (ago, egg, trays) => { const lay = iso(ago); return add('bsf.batch', { org_id: o1.id, project_id: pj.id, code: nextCode(o1.id, lay), lay_date: lay, egg_g: egg, trays, created_by: rec.id }); };
+  const feed = (b, from, to, type, kg, minced) => { for (let i = from; i <= to; i++) { const dt = iso(days(todayISO(), b.lay_date) - i); if (dt <= todayISO()) add('bsf.batch_feed', { org_id: o1.id, batch_id: b.id, feed_date: dt, feed_type_id: type, kg, minced: !!minced, created_by: rec.id }); } };
+  const ev = (b, day, e) => add('bsf.batch_event', { org_id: o1.id, batch_id: b.id, event_date: iso(days(todayISO(), b.lay_date) - day), after_harvest: false, created_by: rec.id, ...e });
+  const A = mk(30, 6, 4); feed(A, 0, 4, NUR, 0.4); feed(A, 5, 16, FR, 2.5, true); feed(A, 8, 14, FE, 1.5); ev(A, 7, { kind: 'split', trays_delta: 2, kg: 3.1 }); ev(A, 17, { kind: 'harvest', larvae_5mm_kg: 6.2, larvae_3mm_kg: 1.8, frass_kg: 9.5 }); ev(A, 18, { kind: 'out', out_type: 'process', kg: 4, after_harvest: true });
+  const B = mk(26, 5, 4); feed(B, 0, 4, NUR, 0.4); feed(B, 5, 18, FE, 2, true); ev(B, 5, { kind: 'out', out_type: 'household', trays: 1, hh_code: 'BSF-001' }); ev(B, 5, { kind: 'out', out_type: 'household', trays: 1, hh_code: 'BSF-002' }); ev(B, 19, { kind: 'harvest', larvae_5mm_kg: 3.4, larvae_3mm_kg: 0.9, frass_kg: 5.1 });
+  const C = mk(22, 5, 3); feed(C, 0, 4, NUR, 0.3); feed(C, 5, 21, FR, 2.2, true); ev(C, 8, { kind: 'split', trays_delta: 1 });
+  const E = mk(16, 4, 3); feed(E, 0, 4, NUR, 0.3); feed(E, 5, 15, RC, 1.2); feed(E, 9, 15, FR, 1.5);
+  const F = mk(5, 5, 4); feed(F, 0, 4, NUR, 0.4);
+  const G = mk(2, 3, 2); feed(G, 0, 2, NUR, 0.25);
+}
+if (api._demo) installBsfDemo(api._demo);
+
+renderCredit(); render();
+</script>
+</body>
+</html>

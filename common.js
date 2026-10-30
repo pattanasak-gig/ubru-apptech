@@ -68,11 +68,13 @@ const ERR_RULES = [   // [ตรวจจับ, หัวข้อ, ทำอ�
   [/foreign key|\b23503\b|ไม่พบ(ฟาร์ม|แหล่ง|รอบ|โครงการ|องค์กร|รถ)ที่เลือก/i, 'รายการที่เลือกไม่มีอยู่แล้ว', 'ฟาร์ม/แหล่ง/โครงการที่เลือกอาจถูกปิดไปเมื่อสักครู่ · กดรีเฟรชหน้า (ลากหน้าจอลง หรือกด F5) แล้วเลือกใหม่'],
   [/fuel_code_check/i, 'ฐานข้อมูลยังไม่รู้จักชนิดเชื้อเพลิงนี้', 'เจ้าของโครงการต้องรันไฟล์ SQL ล่าสุด (012_fuel_options.sql) ก่อน แล้วกด Ctrl+F5 · ระหว่างนี้เลือกเชื้อเพลิงชนิดอื่นไปก่อนได้'],
   [/vehicle_type_check|km_per_liter|fuel_liters/i, 'ค่าของรถหรือเชื้อเพลิงไม่อยู่ในเกณฑ์', 'กม. ต่อลิตรต้องมากกว่า 0 · ลิตรต้องไม่ติดลบ · เลือกประเภทรถจากรายการ'],
+  [/batch_event_shape/i, 'ข้อมูลของรายการนี้ยังไม่ครบ', 'แบ่งกระบะ: ใส่จำนวนกระบะที่เพิ่มหรือลด (ไม่เป็น 0) · ออกจากรุ่น: ใส่จำนวนกระบะหรือ กก. และถ้าแจกครัวเรือนต้องใส่รหัสครัวเรือน · เก็บเกี่ยว: ใส่น้ำหนักอย่างน้อย 1 ช่อง'],
+  [/egg_g|trays_check|_kg_check|larvae_|frass_kg/i, 'ค่าที่กรอกไม่อยู่ในเกณฑ์', 'น้ำหนักไข่ต้องมากกว่า 0 · จำนวนกระบะต้องมากกว่า 0 · กก. ต้องไม่ติดลบ'],
   [/check constraint|\b23514\b|quality|weight_kg|อนาคต/i, 'ค่าที่กรอกไม่อยู่ในเกณฑ์', 'น้ำหนักต้องไม่ติดลบ · คะแนนคัดแยกต้องเป็น 1–5 · วันที่เข้ารับต้องไม่เป็นวันในอนาคต · พิกัดต้องอยู่ในช่วง -90…90 และ -180…180'],
   [/value too long|\b22001\b|ยาวเกิน/i, 'ข้อความยาวเกินกำหนด', 'ย่อข้อความให้สั้นลง (ชื่อไม่เกิน 200 ตัวอักษร)'],
   [/invalid input syntax|\b22P02\b|numeric field overflow|\b22003\b|out of range/i, 'รูปแบบข้อมูลไม่ถูกต้อง', 'ช่องตัวเลขต้องเป็นตัวเลขล้วน (ไม่มีตัวอักษร เครื่องหมาย , หรือหน่วย)'],
   [/PGRST116|multiple \(or no\) rows|Cannot coerce|0 rows/i, 'ไม่พบรายการที่จะบันทึก', 'รายการนี้อาจถูกลบไปแล้ว หรือบัญชีของท่านไม่มีสิทธิ์แก้ไข · รีเฟรชหน้าแล้วลองใหม่'],
-  [/PGRST106|Invalid schema/i, 'ฐานข้อมูลยังไม่เปิดสคีมาให้หน้าเว็บ', 'เจ้าของโครงการต้องเพิ่ม core และ food ใน Supabase → Integrations → Data API → Settings → Exposed schemas'],
+  [/PGRST106|Invalid schema/i, 'ฐานข้อมูลยังไม่เปิดสคีมาให้หน้าเว็บ', 'เจ้าของโครงการต้องเพิ่มสคีมา (core · food · hh · bsf) ใน Supabase → Integrations → Data API → Settings → Exposed schemas แล้วกด Save'],
   [/schema cache|PGRST20[0-9]|Could not find the (table|column|function)/i, 'ฐานข้อมูลยังไม่ได้อัปเดตให้ตรงกับหน้าเว็บรุ่นนี้', 'เจ้าของโครงการต้องรันไฟล์ SQL ฉบับล่าสุดใน Supabase → SQL Editor (ดูลำดับไฟล์ใน README) แล้วกด F5 · ส่วนอื่นของระบบใช้ได้ตามปกติ'],
   [/Unexpected token|not valid JSON|<!DOCTYPE|JSON\.parse|BAD_JSON|ระบบหลังบ้านตอบผิดพลาด/i, 'ระบบหลังบ้าน/ตัวรับรูปตอบกลับไม่ถูกต้อง', 'ลิงก์ระบบหลังบ้านอาจผิด หมดอายุ หรือ deploy โดยไม่ได้เลือก "ทุกคน (Anyone)" · แจ้งเจ้าของโครงการ'],
   [/ENGINE_URL|ยังไม่ได้ตั้งค่าระบบหลังบ้าน/i, 'ยังไม่ได้เชื่อมระบบหลังบ้าน', 'การเพิ่มบัญชี รีเซ็ตรหัส และส่งรูป ต้องรอเจ้าของโครงการติดตั้งระบบหลังบ้าน (ขั้นที่ 4) · ข้อมูลอื่นบันทึกได้ตามปกติ'],
@@ -315,9 +317,11 @@ const DemoBackend = () => {
   };
   const PUBLIC = ['food.v_public_total', 'food.v_public_monthly', 'food.v_public_source', 'food.v_public_farm', 'food.v_public_carbon', 'food.v_public_carbon_factor'];
   const GLOBAL = ['food.source_type', 'core.app_setting', 'food.carbon_factor'];
+  const ext = { scope: {}, beforeInsert: {}, beforeUpdate: {} };   // ส่วนขยายของโมดูลอื่น (เช่น bsf/) ลงทะเบียนเพิ่มผ่าน api._demo
   const scope = (name, rows) => {
     if (PUBLIC.includes(name)) return rows;
     if (!me) throw new Error('ไม่ได้ล็อกอิน');
+    if (ext.scope[name.split('.')[0]]) return ext.scope[name.split('.')[0]](name, rows, me);
     if (name.startsWith('hh.')) {   // DEC-117 สิทธิ์ครัวเรือน: super · admin ขององค์กร · ผู้บันทึกที่สังกัดโครงการของไฟล์
       const ok = l => me.role === 'super_admin' || (l.org_id === me.org_id && (me.role === 'admin' || (me.role === 'recorder' && me.project_id === l.project_id)));
       const links = D['hh.link'].filter(ok), lids = links.map(l => l.id), tids = D['hh.tab'].filter(t => lids.includes(t.link_id)).map(t => t.id);
@@ -338,6 +342,7 @@ const DemoBackend = () => {
   };
   return {
     name: 'demo',
+    _demo: { D, add, byId, views, ext, me: () => me },
     async session() { return me ? { user: { id: me.id }, access_token: 'demo' } : null; },
     async login(username, password) { const u = D['core.app_user'].find(x => x.username === username.trim().toLowerCase()); if (!u || password !== 'demo') throw new Error('ชื่อล็อกอินหรือรหัสผ่านไม่ถูกต้อง (สาธิต: รหัสผ่านคือ demo)'); me = u; return { ...u }; },
     async logout() { me = null; },
@@ -357,6 +362,7 @@ const DemoBackend = () => {
       if (name === 'food.pickup_item') { const pk = byId('food.pickup', r.pickup_id), spj = byId('food.source', r.source_id).project_id; if (spj && pk.project_id && spj !== pk.project_id) throw new Error('แหล่งกำเนิดที่เลือกอยู่คนละโครงการกับรอบนี้'); }
       if (name === 'food.pickup_item' && D['food.pickup_item'].some(i => i.pickup_id === r.pickup_id && i.source_id === r.source_id)) throw new Error('duplicate key: แหล่งกำเนิดเศษอาหารนี้มีในรอบแล้ว');
       if (name === 'food.pickup_photo') { const mx = parseInt((D['core.app_setting'].find(s => s.key === 'max_photos_per_pickup') || {}).value || '3'); if (D['food.pickup_photo'].filter(x => x.pickup_id === r.pickup_id && x.status === 'active').length >= mx) throw new Error(`รอบนี้มีรูปครบ ${mx} รูปแล้ว ให้ admin ยกเลิกรูปเก่าก่อนจึงเพิ่มได้`); }
+      if (ext.beforeInsert[name]) ext.beforeInsert[name](r, me);
       r.created_by = me.id; r.updated_by = me.id;
       return { ...add(name, r) };
     },
@@ -366,6 +372,7 @@ const DemoBackend = () => {
       if (me.role === 'recorder' && patch.status === 'inactive') throw new Error('ผู้บันทึกยกเลิกไม่ได้ ต้องให้ admin ทำ');
       if (name === 'food.carbon_factor') { if (!['admin', 'super_admin'].includes(me.role)) throw new Error('permission denied: row-level security'); if (patch.is_primary) D['food.carbon_factor'].forEach(f => { if (f.id !== id && f.category === r.category && (f.fuel_code || '') === ((patch.fuel_code !== undefined ? patch.fuel_code : r.fuel_code) || '')) f.is_primary = false; }); }
       if (name === 'food.pickup' && ('farm_id' in patch || 'project_id' in patch)) { const fp = byId('food.farm', patch.farm_id || r.farm_id).project_id; if (me.role !== 'super_admin' || !patch.project_id) patch.project_id = fp; }   // DEC-112 ล็อกตามฟาร์ม
+      if (ext.beforeUpdate[name]) ext.beforeUpdate[name](r, patch, me);
       Object.assign(r, patch, { updated_at: now(), updated_by: me.id }); return { ...r };
     },
     async remove(name, id) { const i = D[name].findIndex(r => r.id === id); if (i >= 0) D[name].splice(i, 1); },

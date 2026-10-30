@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UBRU AppTech System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="common.css?v=20261031a">
+<link rel="stylesheet" href="common.css?v=20261031b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="common.js?v=20261031a"></script>
+<script src="common.js?v=20261031b"></script>
 </head>
 <body>
 <header>
@@ -25,7 +25,8 @@
 //   #            ภาพรวมทุกโครงการที่เผยแพร่ + เมนูโมดูล
 //   #p/<รหัสโครงการ>   หน้าแสดงผลของโครงการเดียว (เช่น #p/BPT68 สำหรับงานวิจัยปี 68) — DEC-106
 // =====================================================================
-const MODULES = [{ href: 'food/', name: 'บันทึกการเข้ารับเศษอาหาร', desc: 'สำหรับเจ้าหน้าที่และ admin · บันทึกรอบเข้ารับ แดชบอร์ด แผนที่' }];
+const MODULES = [{ href: 'food/', name: 'บันทึกการเข้ารับเศษอาหาร', desc: 'สำหรับเจ้าหน้าที่และ admin · บันทึกรอบเข้ารับ แดชบอร์ด แผนที่' },
+  { href: 'bsf/', name: 'กระบะเลี้ยงหนอน BSF', desc: 'สำหรับเจ้าหน้าที่ศูนย์ · ลงไข่ ให้อาหาร แบ่งกระบะ แจก เก็บเกี่ยว อัตราแปลงเศษอาหาร → หนอน' }];
 window.addEventListener('hashchange', render);
 async function render() {
   destroyCharts(); const view = $('#view');
