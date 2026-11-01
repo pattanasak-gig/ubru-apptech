@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ความรู้: ก๊าซเรือนกระจกที่หลีกเลี่ยงได้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../common.css?v=20261101k">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../common.js?v=20261101k"></script>
+<script src="../carbon-tree.js?v=20261101k"></script>
+<style>.kb h3{margin:18px 0 6px}.kb p,.kb li{line-height:1.7}.kb .eq{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-variant-numeric:tabular-nums}</style>
+</head>
+<body>
+<header><h1 id="title"><a href="../">UBRU AppTech System</a></h1></header>
+<nav class="tabs" id="kbnav"></nav>
+<main id="view" class="kb"><div class="card muted">กำลังโหลด…</div></main>
+<footer class="credit" id="credit"></footer>
+<div id="toastHost" role="status" aria-live="polite"></div>
+<script>
+// =====================================================================
+// หน้าความรู้ (สาธารณะ · DEC-124 · ตรวจ UX 1 พ.ย. 2569) — หน้าละเรื่อง ลิงก์มาจากปุ่ม ? และแถบลิงก์ใต้ตัวเลข
+//   #method วิธีคำนวณ · #factors ค่าอ้างอิงและแหล่งที่มา · #sensitivity เทียบวิธีคำนวณ · #trees ต้นไม้เทียบเท่า · #scope ขอบเขตและข้อจำกัด
+//   ค่าทุกตัวอ่านสดจาก food.v_public_carbon_factor · ยอดรวมจาก food.v_public_carbon (ไม่ฝังตัวเลขในหน้า)
+// =====================================================================
+let KB = null;
+window.addEventListener('hashchange', render);
+async function load() {
+  if (KB) return KB;
+  const [factors, rows] = await Promise.all([api.list('food.v_public_carbon_factor', { order: ['sort_order'] }), api.list('food.v_public_carbon', {}).catch(() => [])]);
+  const T = { kg: 0, t_fixed: 0, t_km_ef_assumed: 0 }; for (const r of rows) for (const k of Object.keys(T)) T[k] += +r[k] || 0;
+  return KB = { factors, fx: ctFactors(factors), T };
+}
+const cite = f => f ? `<tr><td>${esc(f.name)}<div class="muted">${esc(f.code)}</div></td><td class="num nowrap">${fmtEf(f.value)}<div class="muted">${esc(f.unit)}</div></td><td>${esc(f.source || '')}${f.source_detail ? `<div class="muted">${esc(f.source_detail)}</div>` : ''}${f.note ? `<div class="muted">หมายเหตุ: ${esc(f.note)}</div>` : ''}${f.source_url ? `<div><a href="${esc(f.source_url)}" target="_blank" rel="noopener">เปิดแหล่งอ้างอิง</a></div>` : ''}</td></tr>` : '';
+const PAGES = {
+  method: ({ fx }) => `<h2>วิธีคำนวณ</h2>
+    <p>ระบบคำนวณก๊าซเรือนกระจกที่หลีกเลี่ยงได้ 3 ระดับ จากเศษอาหารที่ส่งไปเลี้ยงหนอน BSF แทนการนำไปฝังกลบ</p>
+    <div class="eq">A = เศษอาหาร (กก.) × ค่าการปล่อยจากการฝังกลบ<br>B = A − การปล่อยจากการขนส่ง<br>C = B − การปล่อยจากการเลี้ยงหนอน (กก. × ${fx.pr ? fmtEf(fx.pr.value) : '-'})</div>
+    <p>ตัวเลขหลักที่ใช้สื่อสารคือ C เพราะหักทุกอย่างแล้ว จึงไม่กล่าวเกินจริง</p>
+    <h3>ค่าการปล่อยจากการฝังกลบ 2 ค่า</h3>
+    <p>คำนวณคู่กันเสมอ: ${fx.lfMain ? fmtEf(fx.lfMain.value) : '-'} (ค่าของกิจกรรมนี้ตามวิธีของ อบก.) และ ${fx.lfAlt ? fmtEf(fx.lfAlt.value) : '-'}* (ค่าของบ่อฝังกลบถูกหลักสุขาภิบาล ใช้เป็นขอบบน) · ดู <a href="#factors">ค่าอ้างอิง</a></p>
+    <h3>ค่าขนส่ง</h3>
+    <p>คิดต่อเที่ยวรถ: ลิตรน้ำมัน × ค่าการปล่อยของน้ำมัน · ลิตร = ลิตรที่เติมจริง หรือ ระยะทาง ÷ กม./ลิตร ของรถ (รถที่ไม่ระบุใช้ค่าสมมติ ${fx.fe ? fmtEf(fx.fe.value) : '-'} กม./ลิตร)</p>
+    <p>ระยะทางเลือกตามลำดับ: ลิตรจริง → กม. ที่บันทึก → เส้นทางที่เลือกในรอบ → เส้นทางหลักของฟาร์ม → เส้นทางเดียวของฟาร์ม (สองแบบหลังเป็นค่าประมาณ)</p>
+    <h3>แบ่งค่าขนส่งให้แต่ละแหล่ง</h3>
+    <div class="eq">ขนส่งของแหล่ง = ขนส่งของเที่ยว × กก. ของแหล่ง ÷ กก. ทั้งเที่ยว</div>
+    <p>แบ่งตามความสัมพันธ์ทางกายภาพ (น้ำหนัก) ตามลำดับขั้นการแบ่งภาระใน ISO 14044:2006 ข้อ 4.3.4.2 · ${CT_ALLOC_NOTE}</p>
+    <h3>เทียบต้นไม้</h3>
+    <div class="eq">ต้นไม้ (ต้น) = C ÷ ${fx.treeMain ? fmtEf(fx.treeMain.value) : '-'} กก./ต้น/ปี · เวลา (เดือน) = C ÷ (${fx.treeMain ? fmtEf(fx.treeMain.value) : '-'} ÷ 12)</div>
+    <p>ดู <a href="#trees">ต้นไม้เทียบเท่าคืออะไร</a></p>
+    <h3>การปัดเลข</h3>
+    <ul><li>ปัดลงทุกค่าที่แสดงต่อประชาชน แต่เก็บค่าจริงในฐานข้อมูล</li><li>kgCO2e ทศนิยม 2 ตำแหน่ง · ตั้งแต่ 1,000 แสดงเป็นตัน</li><li>ต้นไม้: ต่ำกว่า 10 ทศนิยม 1 · 10–999 จำนวนเต็ม · ตั้งแต่ 1,000 ปัดลงหลักร้อย</li><li>เวลา: ปัดลงเป็นเดือน · ตั้งแต่ 12 เดือนแสดงเป็นปีและเดือน</li></ul>
+    <h3>ค่าติดลบ</h3><p>ถ้าการปล่อยจากการขนส่งมากกว่าที่หลีกเลี่ยงได้ ระบบเก็บค่าจริง แต่แสดง 0 พร้อมข้อความ และไม่แปลงเป็นต้นไม้</p>`,
+  factors: ({ fx }) => { const fuel = (fx.fuel || []).find(f => /b7/i.test(f.fuel_code || '') && !/premium/i.test(f.fuel_code || '')); return `<h2>ค่าอ้างอิงและแหล่งที่มา</h2>
+    <p>ค่าที่ใช้ในตัวเลขหลักทั้งหมด พร้อมแหล่ง ฉบับ และหน้า</p>
+    <div class="tscroll"><table><thead><tr><th>รายการ</th><th class="num">ค่า</th><th>แหล่งอ้างอิง</th></tr></thead><tbody>${[fx.lfMain, fx.lfAlt, fuel, fx.pr, fx.treeMain, fx.treeAlt].map(cite).join('')}</tbody></table></div>
+    <p class="muted">${CT_STAR}</p><p class="muted">ค่าอื่นที่ระบบเก็บไว้เทียบ ดูที่ <a href="#sensitivity">เทียบวิธีคำนวณ</a></p>`; },
+  sensitivity: ({ factors, T }) => `<h2>เทียบวิธีคำนวณ</h2>
+    <p>ผลจะเปลี่ยนไปเท่าไรถ้าใช้ค่าการฝังกลบค่าอื่น (แถว) หรืออัตราสิ้นเปลืองค่าอื่นของรถที่ยังไม่ระบุ (คอลัมน์) · ยอดรวมทุกโครงการที่เผยแพร่ หน่วย kgCO2e · ปัดลง</p>
+    ${ctSensitivity(T, factors)}`,
+  trees: ({ fx }) => { const k = fx.treeMain ? +fx.treeMain.value : 15, kA = fx.treeAlt ? +fx.treeAlt.value : 12, lf = fx.lfMain ? +fx.lfMain.value : 0.571; return `<h2>ต้นไม้เทียบเท่าคืออะไร</h2>
+    <p>"ต้นไม้ N ต้น" หมายถึง ก๊าซที่หลีกเลี่ยงได้เท่ากับปริมาณที่ต้นไม้ N ต้นดูดซับรวมกันในเวลา 1 ปี ไม่ได้หมายถึงการปลูกต้นไม้ หรือมีต้นไม้อยู่จริง</p>
+    <p>ถ้าตัวเลขน้อยกว่า 1 ต้น ระบบจะบอกเป็นเวลาแทน เช่น "ต้นไม้ 1 ต้นดูดซับ 4 เดือน"</p>
+    <h3>ค่าที่ใช้</h3>
+    <p>ต้นไม้ 1 ต้นดูดซับคาร์บอนไดออกไซด์เฉลี่ย 9–15 กก./ปี (${fx.treeMain ? esc(fx.treeMain.source) : 'ทส.'}) · ใช้ ${k} เป็นค่าหลัก เพราะเป็นค่าสูงสุดของช่วง จึงได้จำนวนต้นน้อยที่สุด และใช้ ${kA} เป็นค่าเทียบตามรายงานวิจัยฉบับสมบูรณ์</p>
+    <p>ไม่ใช้ 9 เพราะได้จำนวนต้นมากที่สุด และไม่ใช้ค่าของ US EPA (60 กก./ต้น/ปี) เพราะเป็นค่าของต้นไม้ในเมืองของสหรัฐอเมริกา</p>
+    <h3>ตัวอย่าง</h3>
+    <ul><li>เศษอาหาร 10 กก. × ${fmtEf(lf)} = ${ctCO2Text(10 * lf)} → ${ctTreePhrase(10 * lf, k)}</li><li>เศษอาหาร 120 กก. × ${fmtEf(lf)} = ${ctCO2Text(120 * lf)} → ${ctTreePhrase(120 * lf, k)}</li></ul>
+    <p class="muted">การดูดซับของต้นไม้ต่างกันตามชนิด อายุ และสภาพการปลูก ตัวเลขนี้เป็นการเทียบเพื่อการสื่อสารในหน่วยคาร์บอนไดออกไซด์เทียบเท่า</p>`; },
+  scope: () => `<h2>ขอบเขตและข้อจำกัด</h2>
+    <h3>นับอะไรบ้าง</h3>
+    <ul><li>การขนส่ง จากจุดเริ่มต้นของเส้นทาง → แหล่งกำเนิดเศษอาหาร → ฟาร์ม (รวมขากลับเมื่อเส้นทางเป็นไป–กลับ) · ทุกเที่ยวคิดเต็มเส้นทาง</li><li>การฝังกลบที่หลีกเลี่ยงได้ เมื่อเศษอาหารถูกนำไปเลี้ยงหนอน BSF แทนการนำไปฝังกลบรวมกับขยะอื่น</li><li>การปล่อยจากการเลี้ยงหนอน (ค่าจากงานวิจัยต่างประเทศ เพราะในไทยยังไม่มี)</li></ul>
+    <h3>ไม่นับ</h3><ul><li>การแปรรูปผลผลิต การใช้ไฟฟ้าในฟาร์ม และประโยชน์จากการใช้หนอนแทนอาหารสัตว์หรือปุ๋ย</li></ul>
+    <h3>การใช้ตัวเลข</h3>
+    <ul><li>เป็นค่าประมาณเพื่อการสื่อสาร ไม่ใช่การรับรองหรือคาร์บอนเครดิต (ไม่ได้ขึ้นทะเบียน T-VER และไม่ได้ผ่านการทวนสอบ)</li><li>${CT_SRC_NOTE}</li><li>แหล่งกำเนิด ศูนย์ และเทศบาล ต่างอ้างได้ว่ามีส่วนร่วม แต่ห้ามนำตัวเลขของแต่ละฝ่ายมารวมกัน · ภาพรวมของศูนย์คือผลรวมของทุกแหล่งอยู่แล้ว</li></ul>
+    <p class="muted">${CT_STAR}</p>`
+};
+async function render() {
+  const key = (location.hash || '#method').slice(1), view = $('#view');
+  $('#kbnav').innerHTML = CT_KB.map(([h, l]) => `<a href="#${h}" class="${h === key ? 'active' : ''}">${l}</a>`).join('');
+  try { const d = await load(); view.innerHTML = `<div class="card">${(PAGES[key] || PAGES.method)(d)}</div><div class="muted" style="margin:8px 0 16px"><a href="../">‹ กลับหน้าหลัก</a></div>`; document.title = 'ความรู้: ' + ((CT_KB.find(x => x[0] === key) || [0, 'วิธีคำนวณ'])[1]); scrollTo(0, 0); }
+  catch (e) { const f = friendlyError(e, 'โหลดข้อมูลไม่สำเร็จ'); view.innerHTML = `<div class="card"><b style="color:var(--danger)">${esc(f.title)}</b><div>${esc(f.hint || '')}</div></div>`; }
+}
+$('#credit').textContent = CREDIT.short; render();
+</script>
+</body>
+</html>

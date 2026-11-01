@@ -92,47 +92,99 @@ function ctOverallSentence(s, fx, subject = 'ศูนย์', star = '*') {
 const ctCell = (E, floor = true) => (E == null ? '-' : E > 0 ? (floor ? ctF2(E) : Number(E).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : `0<span title="${CT_NEG}" style="color:var(--danger,#c00)">†</span>`);
 const ctTreeCell = (E, k) => (E == null || !k ? '-' : E > 0 ? ctTreeLabel(E / k) : '-');
 
-// การ์ด 2 ระดับ (A ไม่หักการขนส่ง · C หักการขนส่งและการเลี้ยงหนอน) + ตาราง 12 ค่า (+B) กดเปิดได้
-function ctCards(s, fx, { star = '*', open = false } = {}) {
-  const kM = fx.treeMain ? +fx.treeMain.value : null, kA = fx.treeAlt ? +fx.treeAlt.value : null;
-  const aTxt = s.A.alt == null ? ctCO2Text(s.A.main, 'short') : ctRange(s.A.main, s.A.alt, star);
-  const cTxt = s.C.main > 0 ? `ไม่น้อยกว่า ${ctCO2Text(s.C.main, 'short')}` : '0 kgCO2e';
-  const rows = [['A', 'ไม่หักอะไร (หลีกเลี่ยงการฝังกลบ)'], ['B', 'หักการขนส่ง'], ['C', 'หักการขนส่งและการเลี้ยงหนอน']];
-  const efName = (f, alt) => f ? `${fmtEf(f.value)}${alt ? star : ''}` : '-';
-  return `<div class="kpis ct-cards" style="margin-top:8px">
-      <div class="kpi"><div class="l">ไม่หักการขนส่ง (A)</div><div class="v" style="font-size:1.05em">${aTxt}</div><div class="muted">${s.A.main > 0 && kM ? `ต้นไม้ ${ctTreeLabel(s.A.main / kM)} ต้น · 1 ปี` : ''}</div></div>
-      <div class="kpi hero"><div class="l">หักการขนส่งและการเลี้ยงหนอนแล้ว (C)</div><div class="v" style="font-size:1.05em">${cTxt}</div><div class="muted">${s.C.main > 0 && kM ? `ต้นไม้ ${ctTreeLabel(s.C.main / kM)} ต้น · 1 ปี` : CT_NEG}</div></div></div>
-    <details ${open ? 'open' : ''} style="margin-top:8px"><summary>ตัวเลขทั้ง 12 ค่า (EF ฝังกลบ 2 ค่า × 3 ระดับ × การดูดซับ 2 ค่า)</summary>
-      <div class="tscroll"><table><thead><tr><th>ระดับ</th><th>EF ฝังกลบ</th><th class="num">kgCO2e</th><th class="num">ต้นไม้ (k ${kM ?? '-'})</th><th class="num">ต้นไม้ (k ${kA ?? '-'})</th></tr></thead><tbody>
-      ${rows.flatMap(([L, label]) => [['main', fx.lfMain, false], ['alt', fx.lfAlt, true]].filter(([w]) => s[L][w] != null).map(([w, f, alt]) => `<tr><td>${L} · ${label}</td><td class="nowrap">${efName(f, alt)}</td><td class="num">${ctCell(s[L][w])}</td><td class="num">${ctTreeCell(s[L][w], kM)}</td><td class="num">${ctTreeCell(s[L][w], kA)}</td></tr>`)).join('')}
-      </tbody></table></div><div class="muted">ต้นไม้ = จำนวนต้นไม้ที่ต้องใช้ดูดซับเป็นเวลา 1 ปี · ตัวเลขปัดลง${s.B.main <= 0 || s.C.main <= 0 ? ` · † = ${CT_NEG} (แสดง 0)` : ''}</div></details>`;
-}
 const fmtEf = v => Number(v).toLocaleString('th-TH', { maximumFractionDigits: 4 });
-// หมายเหตุท้ายหน้า (6.4) + ค่าที่ใช้พร้อมแหล่ง · opts.source = หมายเหตุรายงานรายแหล่ง (GHG-SRC) · opts.admin = หมายเหตุการแบ่งค่าขนส่ง
-function ctFootnote(fx, { star = true, source = false, admin = false, alloc = false } = {}) {
-  const cite = (f, label, extra = '') => f ? `<li>${label}: ${fmtEf(f.value)} ${esc(f.unit)}${extra} — ${esc(f.source || '')}${f.source_detail ? ` · ${esc(f.source_detail)}` : ''}${f.source_url ? ` <a href="${esc(f.source_url)}" target="_blank" rel="noopener">แหล่ง</a>` : ''}</li>` : '';
-  const fuel = (fx.fuel || []).find(f => /b7/i.test(f.fuel_code || '') && !/premium/i.test(f.fuel_code || '')) || (fx.fuel || [])[0];
-  return `<div class="ct-foot muted" style="margin-top:10px;font-size:.92em"><b>หมายเหตุ</b><ul style="margin:4px 0;padding-left:20px">
-    <li>เป็นค่าประมาณเพื่อการสื่อสาร ไม่ใช่การรับรองหรือคาร์บอนเครดิต</li>
-    <li>การดูดซับของต้นไม้ต่างกันตามชนิด อายุ และสภาพการปลูก · "ต้นไม้ N ต้น" = จำนวนต้นไม้ที่ต้องใช้ดูดซับเป็นเวลา 1 ปี</li>
-    <li>เป็นการเทียบในหน่วยคาร์บอนไดออกไซด์เทียบเท่า · ตัวเลขปัดลงทุกค่า · ช่วงวันที่กำกับทุกตัวเลข</li>
-    <li>A = เศษอาหาร × ค่าการปล่อยจากการฝังกลบ · B = A − การปล่อยจากการขนส่ง · C = B − การปล่อยจากการเลี้ยงหนอน · ค่าต่ำสุด (C · ${fx.lfMain ? fmtEf(fx.lfMain.value) : '-'} · ${fx.treeMain ? fmtEf(fx.treeMain.value) : '-'} กก./ต้น/ปี) ใช้บรรยายแบบ "ไม่น้อยกว่า"</li>
-    ${source ? `<li>${CT_SRC_NOTE}</li>` : ''}
-    ${alloc ? `<li>ค่าขนส่งของแต่ละแหล่ง = ค่าขนส่งของเที่ยว × น้ำหนักของแหล่ง ÷ น้ำหนักทั้งเที่ยว${admin ? ` · ${CT_ALLOC_NOTE}` : ''}</li>` : ''}
-    </ul><b>ค่าที่ใช้</b><ul style="margin:4px 0;padding-left:20px">
-    ${cite(fx.lfMain, 'ฝังกลบ (ค่าหลัก)')}${cite(fx.lfAlt, 'ฝังกลบ (ขอบบน)', admin ? ' · อนุมาน' : star ? '*' : '')}
-    ${cite(fuel, 'เชื้อเพลิง')}${cite(fx.pr, 'การเลี้ยงหนอน')}${cite(fx.treeMain, 'การดูดซับของต้นไม้ (ค่าหลัก)')}${cite(fx.treeAlt, 'การดูดซับของต้นไม้ (ค่าเทียบ)')}
-    </ul>${star && fx.lfAlt ? `<div>${CT_STAR}</div>` : ''}</div>`;
+// ---------------------------------------------------------------------
+// หน้าจอแบบกระชับ (UX ตรวจ 1 พ.ย. 2569): ตัวเลขหลัก 1 ตัว · การ์ด 2 ใบ · หมายเหตุสำคัญ 1–2 บรรทัด
+//   ที่มา/สูตร → ปุ่ม ? (ป๊อปอัป) · ความรู้ยาว → หน้า kb/ แยกตามเรื่อง · ตาราง 12 ค่า → พับไว้
+// ---------------------------------------------------------------------
+const CT_BASE = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src || '').replace(/carbon-tree\.js.*$/, '');
+const CT_KB = [['method', 'วิธีคำนวณ'], ['factors', 'ค่าอ้างอิงและแหล่งที่มา'], ['sensitivity', 'เทียบวิธีคำนวณ'], ['trees', 'ต้นไม้เทียบเท่าคืออะไร'], ['scope', 'ขอบเขตและข้อจำกัด']];
+const ctKb = h => CT_BASE + 'kb/#' + h;
+const ctKbLink = (h, label) => `<a href="${ctKb(h)}" target="_blank" rel="noopener">${label || 'อ่านเพิ่ม: ' + (CT_KB.find(x => x[0] === h) || [h, h])[1]} ›</a>`;
+// ปุ่ม ? เปิดป๊อปอัป (ใช้ openModal ของ common.js · ปิดด้วยปุ่ม แตะพื้นหลัง หรือ Esc)
+const CT_Q = {};
+function ctQ(title, html) {
+  const id = 'q' + Object.keys(CT_Q).length; CT_Q[id] = { title, html };
+  return `<button type="button" class="infobtn ct-q" aria-label="ที่มาของตัวเลข: ${esc(title)}" onclick="ctShowQ('${id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button>`;
 }
-// กล่องสรุปภาพรวม (ประโยค 6.3 + การ์ด + ตาราง 12 ค่า + หมายเหตุ)
-function ctOverallBox(s, fx, { subject = 'ศูนย์', isPublic = true } = {}) {
+function ctShowQ(id) {
+  const q = CT_Q[id]; if (!q) return;
+  openModal(`<h3 style="margin-top:0">${esc(q.title)}</h3><div class="ct-pop">${q.html}</div><div class="row" style="margin-top:12px"><button onclick="closeModal()">ปิด</button></div>`);
+  const esc1 = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc1); } }; document.addEventListener('keydown', esc1);
+}
+const ctCite = f => f ? `${fmtEf(f.value)} ${esc(f.unit)} — ${esc(f.code)}` : '-';
+// เนื้อป๊อปอัปของแต่ละตัวเลข (สูตร + ตัวเลขจริงของตัวนั้น)
+function ctPopTrees(s, fx) {
+  const k = fx.treeMain ? +fx.treeMain.value : null, kA = fx.treeAlt ? +fx.treeAlt.value : null;
+  return `<p>C ${ctNum(ctFloor(s.C.main, 2), 2)} kgCO2e ÷ ${k ?? '-'} กก./ต้น/ปี = ${k && s.C.main > 0 ? ctNum(ctFloor(s.C.main / k, 2), 2) : '0'} ต้น → แสดงแบบปัดลง</p>
+    <p>${k ?? '-'} = ค่าสูงสุดของช่วง 9–15 กก./ต้น/ปี จึงได้จำนวนต้นน้อยที่สุด (บรรยายว่า "ไม่น้อยกว่า")</p>
+    ${s.A.alt != null && kA ? `<p>ขอบบน: A ${ctNum(ctFloor(s.A.alt, 2), 2)}* ÷ ${kA} = ${ctNum(ctFloor(s.A.alt / kA, 2), 2)} ต้น</p>` : ''}
+    <p class="muted">"ต้นไม้ N ต้น" = จำนวนต้นไม้ที่ต้องใช้ดูดซับเป็นเวลา 1 ปี ไม่ใช่การปลูกต้นไม้</p><p>${ctKbLink('trees')}</p>`;
+}
+function ctPopA(s, fx) {
+  return `<p>A = เศษอาหาร × ค่าการปล่อยจากการฝังกลบ</p>
+    <p>${ctNum(ctFloor(s.kg, 2), 2)} กก. × ${fx.lfMain ? fmtEf(fx.lfMain.value) : '-'} = ${ctCO2Text(s.A.main)}<br><span class="muted">${fx.lfMain ? esc(fx.lfMain.code) + ' · ' + esc(fx.lfMain.source || '') : ''}</span></p>
+    ${s.A.alt != null ? `<p>${ctNum(ctFloor(s.kg, 2), 2)} กก. × ${fmtEf(fx.lfAlt.value)}* = ${ctCO2Text(s.A.alt)}<br><span class="muted">${esc(fx.lfAlt.code)} · ค่าของขยะมูลฝอยรวม (อนุมาน) ใช้เป็นขอบบนเท่านั้น</span></p>` : ''}
+    <p>${ctKbLink('factors')}</p>`;
+}
+function ctPopC(s, fx) {
+  return `<p>C = A − ขนส่ง − การเลี้ยงหนอน</p>
+    <p>${ctNum(ctFloor(s.A.main, 2), 2)} − ${ctNum(ctFloor(s.t, 2), 2)} − ${ctNum(ctFloor(s.p, 2), 2)} = ${ctNum(ctFloor(s.C.main, 2), 2)} kgCO2e${s.C.main <= 0 ? ` → แสดง 0 (${CT_NEG})` : ''}</p>
+    <p class="muted">ขนส่ง = ลิตร × ค่าการปล่อยของน้ำมัน · ลิตร = กม. ÷ กม./ลิตร${s.name ? ' · ค่าขนส่งของแหล่ง = ค่าขนส่งของเที่ยว × กก. ของแหล่ง ÷ กก. ทั้งเที่ยว' : ''}<br>การเลี้ยงหนอน = กก. × ${fx.pr ? fmtEf(fx.pr.value) : '-'} (${fx.pr ? esc(fx.pr.code) : '-'})</p>
+    <p>${ctKbLink('method')}</p>`;
+}
+// ตัวเลขหลักตามเกณฑ์ R02 ข้อ 2: N ≥ 1 → จำนวนต้น · 0.1–1 → เวลา (N ต้น) · < 0.1 → เวลา
+function ctBig(E, k, withTime = true) {
+  if (!(E > 0) || !k) return { big: '0 ต้น', sub: CT_NEG };
+  const N = E / k, M = ctMonths(E / (k / 12));
+  if (N >= 1) return { big: `ไม่น้อยกว่า ${ctTreeNum(N)} ต้น`, sub: `ต้นไม้ที่ต้องใช้ดูดซับเป็นเวลา 1 ปี${withTime ? ` · หรือต้นไม้ 1 ต้นดูดซับ ${M}` : ''}` };
+  if (N >= 0.1) return { big: `ต้นไม้ 1 ต้นดูดซับ ${M}`, sub: `(${ctTreeNum(N)} ต้น ถ้าดูดซับเป็นเวลา 1 ปี)` };
+  return { big: `ต้นไม้ 1 ต้นดูดซับ ${M}`, sub: '' };
+}
+// กล่องตัวเลขหลัก · kind: 'overall' (ภาพรวม) | 'source' (รายแหล่ง) · isPublic: * แทน (อนุมาน)
+function ctHero(s, fx, { kind = 'overall', subject = 'ศูนย์', isPublic = true, details = true, links = true, more = '', extra = '', noQ = false } = {}) {
+  const Q = noQ ? () => '' : ctQ;
   if (!fx.ready) return '';
-  const star = isPublic ? '*' : ' (อนุมาน)';
-  return `<div class="card ct-box"><div class="cardhead"><h4>ก๊าซเรือนกระจกที่หลีกเลี่ยงได้ เทียบการดูดซับของต้นไม้</h4></div>
-    <p style="margin:4px 0 0;font-size:1.05em">${esc(ctOverallSentence(s, fx, subject, star))}</p>
-    ${ctCards(s, fx, { star })}
-    ${ctFootnote(fx, { star: isPublic, admin: !isPublic })}</div>`;
+  const kM = +fx.treeMain.value, kA = +fx.treeAlt.value, star = isPublic ? '*' : ' (อนุมาน)', b = ctBig(s.C.main, kM, kind === 'source');
+  const amount = kind === 'source' ? `ส่งเศษอาหาร ${ctNum(ctFloor(s.kg, 2), 2)} กก.` : `${subject}รับเศษอาหาร ${ctNum(ctFloor(s.kg / 1000, 2), 2)} ตัน`;
+  const max = s.A.alt > 0 && kA ? ` · สูงสุดราว ${ctTreeNum(s.A.alt / kA)} ต้น${star}` : '';
+  const aTxt = s.A.alt == null ? ctCO2Text(s.A.main, 'short') : ctRange(s.A.main, s.A.alt, star).replace(' ตันคาร์บอนไดออกไซด์เทียบเท่า', ' tCO2e');
+  const neg = s.B.main <= 0 || s.C.main <= 0;
+  return `<div class="card ct-hero">
+    <div class="ct-lbl">ก๊าซเรือนกระจกที่หลีกเลี่ยงได้ เทียบการดูดซับของต้นไม้ ${Q('จำนวนต้นไม้', ctPopTrees(s, fx))}</div>
+    <div class="ct-big">${b.big}</div>
+    <div class="ct-sub">${b.sub ? b.sub + ' · ' : ''}${amount} · ${ctPeriod(s)}${max}</div>
+    ${extra}<div class="ct-grid">
+      <div class="ct-card"><div class="ct-lbl">ไม่หักการขนส่ง (A) ${Q('ไม่หักการขนส่ง (A)', ctPopA(s, fx))}</div><div class="ct-v">${aTxt}</div></div>
+      <div class="ct-card main"><div class="ct-lbl">หักการขนส่งและการเลี้ยงหนอนแล้ว (C) ${Q('หักการขนส่งและการเลี้ยงหนอน (C)', ctPopC(s, fx))}</div><div class="ct-v">${s.C.main > 0 ? 'ไม่น้อยกว่า ' + ctCO2Text(s.C.main, 'short') : '0 kgCO2e'}</div></div>
+    </div>
+    <div class="ct-note">ค่าประมาณเพื่อการสื่อสาร ไม่ใช่การรับรองหรือคาร์บอนเครดิต · ตัวเลขปัดลง${s.A.alt != null ? `<br>${isPublic ? '*' : '(อนุมาน)'} ขอบบนใช้ค่าการฝังกลบขยะมูลฝอยรวม ไม่ใช่ของเศษอาหารโดยเฉพาะ` : ''}${neg ? `<br><b>${CT_NEG}</b> จึงแสดง 0` : ''}</div>
+    ${details ? ct12(s, fx, star) : ''}
+    ${links ? ctLinks() : ''}${more ? `<div style="margin-top:8px"><a href="${more}">ดูรายละเอียด ›</a></div>` : ''}</div>`;
 }
+// ตาราง 12 ค่า (+B) พับไว้
+function ct12(s, fx, star = '*') {
+  const kM = +fx.treeMain.value, kA = +fx.treeAlt.value;
+  const rows = [['A', 'ไม่หักอะไร'], ['B', 'หักการขนส่ง'], ['C', 'หักการขนส่งและการเลี้ยงหนอน']].flatMap(([L, lb]) => [['main', fx.lfMain, ''], ['alt', fx.lfAlt, star]].filter(([w]) => s[L][w] != null).map(([w, f, st]) => `<tr><td>${L} · ${lb}</td><td class="num">${fmtEf(f.value)}${st}</td><td class="num">${ctCell(s[L][w])}</td><td class="num">${ctTreeCell(s[L][w], kM)}</td><td class="num">${ctTreeCell(s[L][w], kA)}</td></tr>`)).join('');
+  return `<details class="ct-more"><summary>ตัวเลขทั้ง 12 ค่า</summary><div class="tscroll"><table><thead><tr><th>ระดับ</th><th class="num">ค่าฝังกลบ</th><th class="num">kgCO2e</th><th class="num">ต้นไม้ (${kM})</th><th class="num">ต้นไม้ (${kA})</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+const ctLinks = () => `<div class="ct-links">${CT_KB.map(([h, l]) => `<a class="ct-chip" href="${ctKb(h)}" target="_blank" rel="noopener">${l}</a>`).join('')}</div>`;
+// ภาคผนวกสั้นสำหรับ PDF (ป๊อปอัปพิมพ์ไม่ได้) · ค่าที่ใช้แบบย่อ 1 บรรทัดต่อค่า
+function ctAppendix(fx, { source = false } = {}) {
+  const fuel = (fx.fuel || []).find(f => /b7/i.test(f.fuel_code || '') && !/premium/i.test(f.fuel_code || '')) || (fx.fuel || [])[0];
+  const li = (label, f, st = '') => f ? `<li>${label}: ${fmtEf(f.value)}${st} ${esc(f.unit)} — ${esc(f.source || f.code)}</li>` : '';
+  return `<div class="ct-appx"><b>วิธีคิดโดยย่อ</b> A = เศษอาหาร × ค่าการปล่อยจากการฝังกลบ · C = A − ขนส่ง (แบ่งตามน้ำหนักของเที่ยว) − การเลี้ยงหนอน · ต้นไม้ = C ÷ ${fx.treeMain ? fmtEf(fx.treeMain.value) : '-'} กก./ต้น/ปี (จำนวนต้นที่ต้องใช้ดูดซับเป็นเวลา 1 ปี) · ตัวเลขปัดลง
+    <ul>${li('ฝังกลบ', fx.lfMain)}${li('ฝังกลบ ขอบบน', fx.lfAlt, '*')}${li('น้ำมัน', fuel)}${li('การเลี้ยงหนอน', fx.pr)}${li('ต้นไม้', fx.treeMain)}${li('ต้นไม้ (ค่าเทียบ)', fx.treeAlt)}</ul>
+    ${fx.lfAlt ? `<div>${CT_STAR}</div>` : ''}${source ? `<div>${CT_SRC_NOTE}</div>` : ''}<div>รายละเอียด: ${ctKb('method')}</div></div>`;
+}
+// ตารางเทียบวิธีคำนวณ (ความอ่อนไหว): ค่าฝังกลบทุกค่า × อัตราสิ้นเปลือง · T = { kg, t_fixed, t_km_ef_assumed } · F2 = ตัวจัดรูปเลข
+function ctSensitivity(T, factors, F2 = ctF2) {
+  const F = (factors || []).filter(f => f.status === undefined || f.status === 'active'), pr = F.find(f => f.category === 'process' && f.is_primary);
+  const kmpls = F.filter(f => f.category === 'fuel_economy').map(f => +f.value).filter((v, i, a) => v > 0 && a.indexOf(v) === i).sort((a, b) => a - b);
+  const rows = F.filter(f => f.category === 'landfill').sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(f => { const av = T.kg * f.value; return `<tr><td>${esc(f.name)}<div class="muted">${esc(f.code)} · ${fmtEf(f.value)}${f.report_role ? ' · ใช้ในตัวเลขหลัก' : ''}</div></td><td class="num">${F2(av)}</td>${kmpls.map(k => { const tr = (+T.t_fixed || 0) + (+T.t_km_ef_assumed || 0) / k; return `<td class="num">${F2(av - tr - (pr ? T.kg * pr.value : 0))}</td>`; }).join('')}</tr>`; }).join('');
+  return `<div class="tscroll"><table><thead><tr><th>ค่าฝังกลบ</th><th class="num">A</th>${kmpls.map(k => `<th class="num">C @ ${fmtEf(k)} กม./ลิตร</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div><div class="muted">คอลัมน์เปลี่ยนเฉพาะรถที่ยังไม่ระบุ กม./ลิตร · รถที่ระบุ กม./ลิตร หรือกรอกลิตรจริง ใช้ค่าจริงเสมอ</div>`;
+}
+
 // รวมแถวรายรอบ (v_pickup_carbon) หรือรายฟาร์ม (v_public_carbon) เป็นชุดภาพรวม
 function ctSetFromRounds(rows, name = '') {
   let kg = 0, a = 0, aa = 0, t = 0, p = 0, alt = false, first = null, last = null;

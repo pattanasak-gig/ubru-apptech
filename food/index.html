@@ -6,16 +6,16 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261101j">
+<link rel="stylesheet" href="../common.css?v=20261101k">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101j"></script>
-<script src="../hh-check.js?v=20261101j"></script>
-<script src="../carbon-tree.js?v=20261101j"></script>
-<script src="../src-report.js?v=20261101j"></script>
-<script src="../food-src.js?v=20261101j"></script>
-<script src="../hh.js?v=20261101j"></script>
+<script src="../common.js?v=20261101k"></script>
+<script src="../hh-check.js?v=20261101k"></script>
+<script src="../carbon-tree.js?v=20261101k"></script>
+<script src="../src-report.js?v=20261101k"></script>
+<script src="../food-src.js?v=20261101k"></script>
+<script src="../hh.js?v=20261101k"></script>
 </head>
 <body>
 <header>
@@ -303,7 +303,7 @@ async function pageDashboard(view) {
   try {   // DEC-116 กราฟคาร์บอนบนแดชบอร์ด (ตัวกรองเดียวกัน) · ถ้าฐานข้อมูลยังไม่มี view คาร์บอน ข้ามไป
     const oc = { eq: { ...scopeEq() } }; if (st.from) oc.gte = { pickup_date: st.from }; if (st.to) oc.lte = { pickup_date: st.to }; if (st.farm) oc.eq.farm_id = st.farm; if (st.project) oc.eq.project_id = st.project;
     const [cRows, cFac] = await Promise.all([api.list('food.v_pickup_carbon', oc), api.list('food.carbon_factor', { eq: { status: 'active' } })]);
-    if (cRows.length) { view.insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:14px"><div class="cardhead"><h4>ก๊าซเรือนกระจกที่หลีกเลี่ยงได้</h4><a class="small" href="#carbon">ดูรายละเอียดและวิธีคิด ›</a></div></div>` + ctOverallBox(ctSetFromRounds(cRows), ctFactors(cFac), { subject: st.project ? 'โครงการนี้' : 'ศูนย์', isPublic: false }) + carbonChartCards('dc')); drawCarbonCharts('dc', cRows, items, cFac); }
+    if (cRows.length) { view.insertAdjacentHTML('beforeend', '<div style="margin-top:14px"></div>' + ctHero(ctSetFromRounds(cRows), ctFactors(cFac), { subject: st.project ? 'โครงการนี้' : 'ศูนย์', isPublic: false, details: false, links: false, more: '#carbon' }) + carbonChartCards('dc')); drawCarbonCharts('dc', cRows, items, cFac); }
   } catch (e) { console.warn('carbon charts skipped:', e && e.message); }
   if (canWrite()) view.insertAdjacentHTML('beforeend', `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>`);
   S._dashItems = items.map(i => ({ วันที่: i.pickup_date, ฟาร์ม: i.farm_name, โครงการ: i.project_code, แหล่งกำเนิดเศษอาหาร: i.source_name, ประเภท: i.source_type_name || '', น้ำหนัก_กก: i.weight_kg, คะแนน: i.quality ?? '' }));
