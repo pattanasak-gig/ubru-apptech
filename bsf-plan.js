@@ -63,4 +63,16 @@ function bsfSchedule(P, D, b, events, feeds, opt = {}) {
   }
   return rows;
 }
-if (typeof module !== 'undefined') module.exports = { BSF_PARAM_DEFAULT, BSF_K_DEFAULT, bsfParams, bsfPlanDays, bsfKSum, bsfPerTray, bsfFeedDay, bsfFromEggs, bsfFromTarget, bsfSurvival, bsfAddDays, bsfTraysOn, bsfSchedule };
+// วันให้อาหารหลัก (DEC-121): 1 = จันทร์ … 7 = อาทิตย์ · ค่าตั้งต้น จ พ ศ · ไม่บังคับวัน ใช้คิดปริมาณตามแผน
+const bsfIsoDow = iso => { const d = new Date(iso + 'T00:00:00Z').getUTCDay(); return d === 0 ? 7 : d; };
+function bsfParseWeekdays(s) { const w = String(s == null || s === '' ? '1,3,5' : s).split(/[^0-9]+/).map(Number).filter(n => n >= 1 && n <= 7); return w.length ? [...new Set(w)].sort((a, b) => a - b) : [1, 3, 5]; }
+// ปริมาณตามแผนของการให้ 1 ครั้ง (ต่อกระบะ): อาหารรายวันรวมตั้งแต่วันที่ให้ จนถึงก่อนวันให้หลักถัดไป
+function bsfFeedPlan(P, D, lay, date, weekdays, nursery = 5) {
+  const W = weekdays && weekdays.length ? weekdays : [1, 3, 5];
+  let n = 1; while (n < 7 && !W.includes(bsfIsoDow(bsfAddDays(date, n)))) n++;
+  let back = 0; while (back < 6 && !W.includes(bsfIsoDow(bsfAddDays(date, -back)))) back++;
+  const age0 = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(lay + 'T00:00:00Z')) / 864e5); let lo = 0, hi = 0, any = false;
+  for (let i = 0; i < n; i++) { const a = age0 + i; if (a < nursery) continue; const f = bsfFeedDay(P, D, a, 1); if (f) { lo += f.lo; hi += f.hi; any = true; } }
+  return { age: age0, days: n, until: bsfAddDays(date, n - 1), isMain: W.includes(bsfIsoDow(date)), roundStart: bsfAddDays(date, -back), plan: any ? { lo, hi } : null };
+}
+if (typeof module !== 'undefined') module.exports = { BSF_PARAM_DEFAULT, BSF_K_DEFAULT, bsfParams, bsfPlanDays, bsfKSum, bsfPerTray, bsfFeedDay, bsfFromEggs, bsfFromTarget, bsfSurvival, bsfAddDays, bsfTraysOn, bsfSchedule, bsfIsoDow, bsfParseWeekdays, bsfFeedPlan };
