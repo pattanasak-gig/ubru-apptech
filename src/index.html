@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>รายงานการส่งมอบเศษอาหาร</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../common.css?v=20261101g">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../common.js?v=20261101g"></script>
+<script src="../src-report.js?v=20261101g"></script>
+<style id="rpcss"></style>
+<style>@media print { header, .noprint, footer.credit { display:none !important } body { background:#fff } }</style>
+</head>
+<body>
+<header><h1 id="title">UBRU AppTech System</h1></header>
+<main id="view"><div class="card muted">กำลังโหลดรายงาน…</div></main>
+<footer class="credit" id="credit"></footer>
+<div id="toastHost" role="status" aria-live="polite"></div>
+<script>
+// =====================================================================
+// หน้ารายงานสาธารณะของแหล่งกำเนิดเศษอาหาร (DEC-122) — เปิดด้วยลิงก์ที่มีรหัสลับ ?t=… · ไม่ต้องล็อกอิน
+//   ข้อมูลมาจาก food.public_source_report(รหัส) เท่านั้น (เห็นเฉพาะแหล่งของลิงก์นั้น) · admin ยกเลิกลิงก์ได้
+// =====================================================================
+$('#rpcss').textContent = SRC_REPORT_CSS;
+async function main() {
+  const view = $('#view'), t = new URLSearchParams(location.search).get('t') || '';
+  try {
+    const d = await api.rpc('food.public_source_report', { p_token: t });
+    if (!d) { view.innerHTML = `<div class="card"><h3 style="margin-top:0">ไม่พบรายงาน</h3><div>ลิงก์นี้ไม่ถูกต้อง หรือถูกยกเลิกแล้ว · กรุณาติดต่อผู้ส่งลิงก์เพื่อขอลิงก์ใหม่</div></div>`; return; }
+    const lf = (d.factors || []).find(f => f.category === 'landfill'), pr = (d.factors || []).find(f => f.category === 'process');
+    const items = (d.items || []).map(i => ({ date: i.date, kg: Number(i.kg), quality: i.quality }));
+    document.title = 'รายงานการส่งมอบเศษอาหาร · ' + d.source.name;
+    const s = srcReportStats(items, lf ? { value: +lf.value } : null);
+    view.innerHTML = `<div class="row noprint" style="justify-content:flex-end;margin-bottom:8px"><button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>
+      <div class="card">${srcReportBody({ source: d.source, project: d.project, items, lf: lf ? { ...lf, value: +lf.value } : null, pr: pr ? { ...pr, value: +pr.value } : null, issuer: d.org, scopeNote: d.scope_project && d.project ? 'เฉพาะโครงการ ' + d.project.code : '' })}</div>
+      ${s.months.length > 1 && window.Chart ? `<div class="card noprint"><h4 style="margin-top:0">รายเดือน</h4><div style="position:relative;height:240px"><canvas id="m"></canvas></div></div>` : ''}`;
+    if (s.months.length > 1 && window.Chart) mkChart($('#m'), { data: { labels: s.months.map(m => thMonth(m.k + '-01')), datasets: [{ type: 'bar', label: 'เศษอาหาร (กก.)', data: s.months.map(m => +m.kg.toFixed(2)), backgroundColor: PALETTE[0], yAxisID: 'y' }, ...(lf ? [{ type: 'line', label: 'หลีกเลี่ยงการฝังกลบ (kgCO2e)', data: s.months.map(m => +(m.kg * lf.value).toFixed(2)), borderColor: '#2E7D32', backgroundColor: '#2E7D32', yAxisID: 'y2' }] : [])] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true }, y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } } } } });
+  } catch (e) { const f = friendlyError(e, 'เปิดรายงานไม่สำเร็จ'); view.innerHTML = `<div class="card"><b style="color:var(--danger)">${esc(f.title)}</b><div style="margin-top:6px">${esc(f.hint || '')}</div></div>`; }
+}
+$("#credit").textContent = CREDIT.short; main();
+</script>
+</body>
+</html>

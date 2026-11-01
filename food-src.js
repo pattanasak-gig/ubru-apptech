@@ -55,10 +55,12 @@ async function pageSource(view, id) {
   const pids = [...new Set(items.map(i => i.pickup_id))];
   const pk = pids.length ? await api.list('food.v_pickup', { in: { id: pids } }) : [];
   const pkOf = pid => pk.find(p => p.id === pid) || {};
+  let shares = []; if (isAdmin()) { try { shares = await api.list('food.source_share', { eq: { source_id: id }, order: ['created_at', false] }); } catch (e) { shares = null; } }
   const mm = {}; for (const i of items) { const k = String(i.pickup_date).slice(0, 7); const m = mm[k] = mm[k] || { k, kg: 0, n: new Set(), q: [] }; m.kg += +i.weight_kg; m.n.add(i.pickup_id); if (i.quality != null) m.q.push(+i.quality); }
   const months = Object.values(mm).sort((a, b) => a.k.localeCompare(b.k));
   const qd = [1, 2, 3, 4, 5].map(q => items.filter(i => +i.quality === q).length);
-  S._srOne = { src, g, items, months, lf, pr, st, pkOf };
+  S._srOne = { src, g, items, months, lf, pr, st, pkOf, shares };
+  const pjc = srcProject(src, items, st);
   S._srCsv = items.map(i => ({ วันที่: i.pickup_date, เวลา: i.pickup_time || '', ฟาร์มปลายทาง: i.farm_name, โครงการ: i.project_code, เศษอาหาร_กก: i.weight_kg, คะแนนคัดแยก: i.quality ?? '', หลีกเลี่ยงฝังกลบ_kgCO2e: lf ? +(i.weight_kg * lf.value).toFixed(2) : '', หมายเหตุ: i.note || '' }));
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><div><h4 style="margin:0">${esc(g.name || src.name)}</h4><div class="muted">${esc(g.type || '')}${src.address ? ' · ' + esc(src.address) : ''}${src.contact ? ' · ติดต่อ ' + esc(src.contact) : ''}</div></div><div class="row"><button class="small" onclick="printSourceReport()">พิมพ์ / PDF</button><button class="small secondary" onclick="exportCsv(S._srCsv,'แหล่ง_${esc((g.name || '').replace(/[^\\wก-๙]+/g, '_'))}')">CSV</button></div></div>
       ${srcFilters(st)}
@@ -69,7 +71,9 @@ async function pageSource(view, id) {
         <div class="kpi"><div class="l">ก๊าซที่หลีกเลี่ยงได้ (kgCO2e)</div><div class="v" style="color:#2E7D32">${g.av == null ? '-' : fmt2(g.av)}</div></div>
         <div class="kpi"><div class="l">สุทธิหลังหักการเลี้ยงหนอน</div><div class="v">${g.net == null ? '-' : fmt2(g.net)}</div></div></div>
       <div class="muted" style="margin-top:6px">ช่วงข้อมูล ${g.first ? `${thDay(g.first)} – ${thDay(g.last)}` : '-'}${st.project || st.from || st.to ? ' (ตามตัวกรอง)' : ''}</div>
-      ${srcMethod(lf, pr)}</div>
+      ${srcMethod(lf, pr)}
+      <div class="muted" style="margin-top:6px">ท้ายรายงาน: ${pjc.name ? `โครงการวิจัย ${esc(pjc.name)}` : '<b>ยังไม่มีโครงการ</b>'} · หัวหน้าโครงการ ${pjc.leader_name ? esc(pjc.leader_name) : '<b style="color:var(--warn)">ยังไม่ได้ใส่</b>'} · อีเมล ${pjc.contact_email ? esc(pjc.contact_email) : '<b style="color:var(--warn)">ยังไม่ได้ใส่</b>'}${isAdmin() ? ' · แก้ที่ <a href="#admin/project">จัดการ → โครงการวิจัย</a>' : ''}</div></div>
+    ${srcShareSection(id, shares, st)}
     ${months.length ? `<div class="grid-dash"><div class="card"><h4 style="margin-top:0">รายเดือน</h4><div style="position:relative;height:260px"><canvas id="srcMonth" aria-label="กราฟรายเดือนของแหล่ง"></canvas></div></div>
       <div class="card"><h4 style="margin-top:0">คะแนนคัดแยก (จำนวนครั้ง)</h4>${[5, 4, 3, 2, 1].map(q => hbar(`${q} ${(typeof QUALITY !== 'undefined' && QUALITY[q]) || ''}`, qd[q - 1], Math.max(...qd, 1), q >= 4 ? '#2E7D32' : q === 3 ? '#F9A825' : '#C62828', fmtInt(qd[q - 1]))).join('')}<div class="muted">ไม่ได้ให้คะแนน ${fmtInt(items.filter(i => i.quality == null).length)} ครั้ง</div></div></div>` : ''}
     <div class="card"><div class="cardhead"><h4>รายละเอียดการเข้ารับ (${fmtInt(items.length)})</h4></div><div class="tscroll"><table><thead><tr><th>วันที่</th><th>ฟาร์มปลายทาง</th><th class="num">กก.</th><th class="num">คะแนน</th><th class="num">หลีกเลี่ยง kgCO2e</th><th>รูป</th><th>หมายเหตุ</th></tr></thead><tbody>
@@ -82,20 +86,30 @@ async function pageSource(view, id) {
     options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt2(c.parsed.y)}` } } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'กก.' } }, y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'kgCO2e' } } } } });
 }
 
+// โครงการที่แสดงท้ายรายงาน: ตามตัวกรอง → โครงการหลักของแหล่ง → โครงการที่ส่งมอบมากที่สุด (เหมือน food.public_source_report)
+function srcProject(src, items, st) {
+  if (st.project) return projOf(st.project);
+  if (src.project_id) return projOf(src.project_id);
+  const m = {}; for (const i of items) m[i.project_id] = (m[i.project_id] || 0) + Number(i.weight_kg); const top = Object.entries(m).sort((a, b) => b[1] - a[1])[0];
+  return top ? projOf(top[0]) : {};
+}
 // รายงานพิมพ์/PDF สำหรับส่งให้แหล่งกำเนิด (หน้าต่างใหม่ · กดพิมพ์หรือบันทึกเป็น PDF)
 function printSourceReport() {
-  const { src, g, items, months, lf, pr, st } = S._srOne || {}; if (!g) return;
-  const sys = setting('system_name') || CONFIG.SYSTEM_NAME, pj = st.project ? projOf(st.project) : null;
-  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>รายงานการส่งมอบเศษอาหาร · ${esc(g.name)}</title><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;700&display=swap');body{font:14px/1.6 "Noto Sans Thai",system-ui,sans-serif;margin:24px;color:#000}h1{font-size:20px;margin:0}h2{font-size:16px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;margin:6px 0}th,td{border:1px solid #999;padding:4px 6px;text-align:left}td.n,th.n{text-align:right}.k{display:flex;flex-wrap:wrap;gap:8px}.k div{border:1px solid #999;border-radius:6px;padding:6px 10px;min-width:150px}.k b{display:block;font-size:18px}.m{color:#444;font-size:12px}@media print{button{display:none}}</style></head><body>
-    <button onclick="window.print()">พิมพ์ / บันทึก PDF</button>
-    <h1>รายงานการส่งมอบเศษอาหารเพื่อเลี้ยงหนอนแมลงวันลาย (BSF)</h1>
-    <div>${esc(sys)}${pj && pj.name ? ' · ' + esc(pj.name) : ''}</div>
-    <h2>${esc(g.name)}</h2><div class="m">${esc(g.type || '')}${src.address ? ' · ' + esc(src.address) : ''}</div>
-    <div class="m">ช่วงข้อมูล ${g.first ? `${thDay(g.first)} – ${thDay(g.last)}` : '-'} · ออกรายงาน ${thDate(new Date().toISOString())}</div>
-    <h2>สรุป</h2><div class="k"><div>เศษอาหารที่ส่งมอบ<b>${fmt2(g.kg)} กก.</b></div><div>จำนวนครั้งที่เข้ารับ<b>${fmtInt(g.pickups)} ครั้ง</b></div><div>คะแนนคัดแยกเฉลี่ย<b>${g.avgQ == null ? '-' : fmt(g.avgQ, 2) + ' / 5'}</b></div><div>ก๊าซเรือนกระจกที่หลีกเลี่ยงได้<b>${g.av == null ? '-' : fmt2(g.av) + ' kgCO2e'}</b></div></div>
-    <h2>รายเดือน</h2><table><thead><tr><th>เดือน</th><th class="n">ครั้ง</th><th class="n">เศษอาหาร (กก.)</th><th class="n">คะแนนเฉลี่ย</th><th class="n">หลีกเลี่ยงการฝังกลบ (kgCO2e)</th></tr></thead><tbody>${months.map(m => `<tr><td>${thMonth(m.k + '-01')}</td><td class="n">${fmtInt(m.n.size)}</td><td class="n">${fmt2(m.kg)}</td><td class="n">${m.q.length ? fmt(m.q.reduce((a, b) => a + b, 0) / m.q.length, 2) : '-'}</td><td class="n">${lf ? fmt2(m.kg * lf.value) : '-'}</td></tr>`).join('')}</tbody></table>
-    <h2>รายละเอียดการเข้ารับ</h2><table><thead><tr><th>วันที่</th><th class="n">เศษอาหาร (กก.)</th><th class="n">คะแนนคัดแยก</th><th class="n">หลีกเลี่ยง (kgCO2e)</th></tr></thead><tbody>${items.map(i => `<tr><td>${thDay(i.pickup_date)}</td><td class="n">${fmt2(i.weight_kg)}</td><td class="n">${i.quality ?? '-'}</td><td class="n">${lf ? fmt2(i.weight_kg * lf.value) : '-'}</td></tr>`).join('')}</tbody></table>
-    <h2>วิธีคิดและแหล่งอ้างอิง</h2><div class="m">ก๊าซที่หลีกเลี่ยงได้ = เศษอาหาร (กก.) × ${lf ? `${fmt(lf.value, 4)} ${esc(lf.unit)} — ${esc(lf.source || lf.code)}` : 'ยังไม่ได้เลือกค่า'} · คิดจากการนำเศษอาหารไปเลี้ยงหนอนแทนการฝังกลบ · ยังไม่หักการปล่อยจากการขนส่ง${pr ? ` และการเลี้ยงหนอน (${fmt(pr.value, 4)} ${esc(pr.unit)} — ${esc(pr.source || pr.code)})` : ''} · ตัวเลขทศนิยม 2 ตำแหน่ง · 1,000 kgCO2e = 1 tCO2e · คะแนนคัดแยก 1–5 (5 = คัดแยกดีเยี่ยม)</div>
-    </body></html>`;
+  const { src, g, items, lf, pr, st, shares } = S._srOne || {}; if (!g) return;
+  const pj = srcProject(src, items, st), link = (shares || []).find(x => x.status === 'active' && (!x.project_id || x.project_id === st.project));
+  const body = srcReportBody({ source: { name: g.name, type: g.type, address: src.address }, project: pj, items: items.map(i => ({ date: i.pickup_date, kg: Number(i.weight_kg), quality: i.quality })), lf, pr, issuer: orgOf(src.org_id).name || setting('system_name') || CONFIG.SYSTEM_NAME, scopeNote: st.project || st.from || st.to ? 'ตามตัวกรองที่เลือก' : '', link: link ? srcShareUrl(link.token) : '' });
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>รายงานการส่งมอบเศษอาหาร · ${esc(g.name)}</title><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;700&display=swap');body{font:14px/1.6 "Noto Sans Thai",system-ui,sans-serif;margin:24px;color:#000}${SRC_REPORT_CSS}@media print{button{display:none}}</style></head><body><button onclick="window.print()">พิมพ์ / บันทึก PDF</button>${body}</body></html>`;
   const w = window.open('', '_blank'); if (!w) return toast('เบราว์เซอร์กันหน้าต่างใหม่ กรุณาอนุญาตป๊อปอัป', true); w.document.write(withCredit(html)); w.document.close();
 }
+// ลิงก์สาธารณะต่อแหล่ง (admin · DEC-122): สร้าง · คัดลอก · ยกเลิก
+function srcShareSection(id, shares, st) {
+  if (!isAdmin()) return '';
+  if (shares === null) return '<div class="card"><h4 style="margin-top:0">ลิงก์สำหรับแหล่งกำเนิด</h4><div class="banner warn">ฐานข้อมูลยังไม่มีส่วนลิงก์ (sql/019) · ระหว่างนี้ใช้ "พิมพ์ / PDF"</div></div>';
+  const act = shares.filter(x => x.status === 'active');
+  return `<div class="card"><div class="cardhead"><h4>ลิงก์สำหรับแหล่งกำเนิด (เปิดได้โดยไม่ต้องล็อกอิน) ${helpBtn('src-share')}</h4><button class="small" onclick="srcShareNew('${id}')">＋ สร้างลิงก์${st.project ? ' (เฉพาะโครงการ ' + esc(projOf(st.project).code || '') + ')' : ''}</button></div>
+    <div class="muted">ใครมีลิงก์ก็เปิดรายงานของแหล่งนี้ได้ (เห็นเฉพาะแหล่งนี้) · ส่งให้แหล่งกำเนิดทางไลน์/อีเมล · ยกเลิกเมื่อไม่ต้องการให้เปิดได้แล้ว</div>
+    ${act.length ? `<div class="tscroll" style="margin-top:6px"><table><thead><tr><th>ลิงก์</th><th>ขอบเขต</th><th class="num">เปิดดู</th><th>สร้าง</th><th></th></tr></thead><tbody>${act.map(x => `<tr><td><input readonly value="${esc(srcShareUrl(x.token))}" style="min-width:220px" onclick="this.select()"></td><td>${x.project_id ? esc(projOf(x.project_id).code || '') : 'ทุกโครงการ'}</td><td class="num">${fmtInt(x.view_count || 0)}${x.last_viewed_at ? `<div class="muted">${thDate(x.last_viewed_at)}</div>` : ''}</td><td class="nowrap">${thDay(x.created_at)}</td><td class="nowrap"><button class="small" onclick="srcShareCopy('${x.token}')">คัดลอก</button> <a class="btn secondary small" style="text-decoration:none" target="_blank" rel="noopener" href="${esc(srcShareUrl(x.token))}">เปิด</a> <button class="small secondary" onclick="srcShareOff('${x.id}')">ยกเลิก</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted" style="margin-top:6px">ยังไม่มีลิงก์</div>'}</div>`;
+}
+async function srcShareNew(sourceId) { const st = S._sr || {}; try { const r = await api.insert('food.source_share', { source_id: sourceId, project_id: st.project || null }); await srcShareCopy(r.token, true); render(); } catch (e) { fail(e, 'สร้างลิงก์ไม่สำเร็จ'); } }
+async function srcShareCopy(token, created) { const u = srcShareUrl(token); try { await navigator.clipboard.writeText(u); toast((created ? 'สร้างลิงก์แล้ว · ' : '') + 'คัดลอกลิงก์แล้ว วางส่งให้แหล่งกำเนิดได้เลย'); } catch (e) { toast((created ? 'สร้างลิงก์แล้ว · ' : '') + 'คัดลอกเองจากช่องลิงก์'); } }
+async function srcShareOff(id) { if (!confirm('ยกเลิกลิงก์นี้? (คนที่มีลิงก์จะเปิดรายงานไม่ได้อีก)')) return; try { await api.update('food.source_share', id, { status: 'inactive' }); toast('ยกเลิกลิงก์แล้ว'); render(); } catch (e) { fail(e); } }

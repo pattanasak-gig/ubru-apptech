@@ -168,6 +168,7 @@ const SupaBackend = () => {
     async insertMany(name, rows) { if (!rows.length) return []; return unwrap(await from(name).insert(rows).select()); },
     async update(name, id, patch, pk = 'id') { return unwrap(await from(name).update(patch).eq(pk, id).select().single()); },
     async remove(name, id) { unwrap(await from(name).delete().eq('id', id)); },
+    async rpc(name, args) { const [sc, fn] = splitName(name); return unwrap(await sb.schema(sc).rpc(fn, args || {})); },
     async engine(action, payload) {
       if (!CONFIG.ENGINE_URL) throw new Error('ยังไม่ได้ตั้งค่า ENGINE_URL (ระบบหลังบ้าน Apps Script ขั้นที่ 4)');
       const sess = await this.session(); if (!sess) throw new Error('ไม่ได้ล็อกอิน');
@@ -190,7 +191,7 @@ const SupaBackend = () => {
 const DemoBackend = () => {
   const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
   const now = () => new Date().toISOString();
-  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [], 'hh.link': [], 'hh.tab': [], 'hh.col': [], 'hh.row': [], 'hh.sync_log': [] };
+  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [], 'hh.link': [], 'hh.tab': [], 'hh.col': [], 'hh.row': [], 'hh.sync_log': [], 'food.source_share': [] };
   const add = (t, row) => { const r = { id: uid(), status: 'active', created_at: now(), updated_at: now(), ...row }; D[t].push(r); return r; };
   const o1 = add('core.org', { code: 'DEMO', name: 'ศูนย์สาธิต (ตัวอย่าง)', max_recorders: 10 });
   const o2 = add('core.org', { code: 'DEMO2', name: 'หน่วยงานสาธิต สอง', max_recorders: 10 });
@@ -356,6 +357,7 @@ const DemoBackend = () => {
       if (name === 'food.pickup_item' || name === 'food.pickup_photo') r.org_id = byId('food.pickup', r.pickup_id).org_id;
       if (name === 'food.route_stop') r.org_id = byId('food.route', r.route_id).org_id;
       if (name === 'hh.row') { const l = byId('hh.link', byId('hh.tab', r.tab_id).link_id); r.org_id = l.org_id; r.project_id = l.project_id; }   // = ทริกเกอร์ hh.row_before
+      if (name === 'food.source_share') { if (me.role === 'recorder') throw new Error('permission denied: row-level security'); r.org_id = byId('food.source', r.source_id).org_id; r.token = r.token || Array.from({ length: 4 }, () => uid().replace(/-/g, '')).join('').slice(0, 64); r.view_count = 0; }   // = ทริกเกอร์ 019
       if (['food.farm', 'food.source', 'food.vehicle', 'food.route', 'food.carbon_factor'].includes(name) && me.role === 'recorder') throw new Error('permission denied: row-level security');
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
       if (name === 'food.pickup') { const fp = byId('food.farm', r.farm_id).project_id; if (me.role !== 'super_admin' || !r.project_id) r.project_id = fp; if (me.role === 'recorder' && me.project_id && me.project_id !== r.project_id) throw new Error('ฟาร์มนี้อยู่นอกโครงการที่บัญชีของคุณสังกัด ให้ admin ตรวจสอบ'); const vpj = r.vehicle_id ? byId('food.vehicle', r.vehicle_id).project_id : null; if (vpj && vpj !== r.project_id) throw new Error('รถที่เลือกอยู่คนละโครงการกับรอบนี้'); }   // DEC-112
@@ -376,6 +378,17 @@ const DemoBackend = () => {
       Object.assign(r, patch, { updated_at: now(), updated_by: me.id }); return { ...r };
     },
     async remove(name, id) { const i = D[name].findIndex(r => r.id === id); if (i >= 0) D[name].splice(i, 1); },
+    async rpc(name, args) {   // สาธิตของ food.public_source_report (019) · รหัส "demo" = แหล่งแรกที่มีการส่งมอบ
+      if (name !== 'food.public_source_report') throw new Error('สาธิต: ไม่รองรับ ' + name);
+      const t = String((args || {}).p_token || ''); let sh = D['food.source_share'].find(x => x.token === t && x.status === 'active');
+      if (!sh && t === 'demo') { const it = D['food.pickup_item'].find(i => i.status === 'active'); if (it) sh = { source_id: it.source_id, project_id: null, org_id: it.org_id }; }
+      if (!sh) return null; if (sh.id) { sh.view_count = (sh.view_count || 0) + 1; sh.last_viewed_at = now(); }
+      const s = byId('food.source', sh.source_id), its = D['food.pickup_item'].filter(i => i.source_id === s.id && i.status === 'active' && byId('food.pickup', i.pickup_id).status === 'active').map(i => ({ i, p: byId('food.pickup', i.pickup_id) })).filter(x => !sh.project_id || projOf(x.p).id === sh.project_id).sort((a, b) => (a.p.pickup_date + (a.p.pickup_time || '')).localeCompare(b.p.pickup_date + (b.p.pickup_time || '')));
+      const pjId = sh.project_id || s.project_id || (its[0] ? projOf(its[0].p).id : null), pj = pjId ? byId('core.project', pjId) : null;
+      return { source: { name: s.name, type: (byId('food.source_type', s.source_type_id) || {}).name || null, address: s.address || null }, org: byId('core.org', sh.org_id).name, project: pj ? { code: pj.code, name: pj.name, leader_name: pj.leader_name || null, contact_email: pj.contact_email || null } : null, scope_project: !!sh.project_id,
+        factors: D['food.carbon_factor'].filter(f => f.status === 'active' && f.is_primary && ['landfill', 'process'].includes(f.category)).map(f => ({ category: f.category, code: f.code, value: f.value, unit: f.unit, source: f.source })),
+        items: its.map(x => ({ date: x.p.pickup_date, kg: x.i.weight_kg, quality: x.i.quality ?? null })), generated_at: now() };
+    },
     async engine(action, payload) {
       const pw = (code, custom) => custom ? String(custom) : (String(code || 'app').toLowerCase() + String(Math.floor(1000 + Math.random() * 9000)));
       if (action === 'create_user') { const oid = me.role === 'super_admin' ? payload.org_id : me.org_id; const org = byId('core.org', oid); const cnt = D['core.app_user'].filter(u => u.org_id === oid && u.role === 'recorder' && u.status === 'active').length; if (payload.role === 'recorder' && cnt >= org.max_recorders) throw new Error(`บัญชีผู้บันทึกขององค์กรนี้ครบเพดาน ${org.max_recorders} บัญชีแล้ว`); const u = add('core.app_user', { username: payload.username, display_name: payload.display_name, role: payload.role, org_id: oid }); return { ok: true, account: { ...u, password: pw(org.code, payload.password) } }; }
