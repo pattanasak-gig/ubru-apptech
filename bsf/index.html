@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>กระบะเลี้ยงหนอน BSF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../common.css?v=20261101a">
+<link rel="stylesheet" href="../common.css?v=20261101b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101a"></script>
-<script src="../bsf-plan.js?v=20261101a"></script>
+<script src="../common.js?v=20261101b"></script>
+<script src="../bsf-plan.js?v=20261101b"></script>
 <style>
 .bcard h4 a { text-decoration:none; font-size:20px; }
 .bcard .acts, .acts { margin-top:8px; gap:6px; }
@@ -28,6 +28,9 @@ tr.today td { background:#f0fdf4; }
 .hhpick button.sel { background:#eff6ff; font-weight:600; }
 .seg { display:flex; gap:6px; flex-wrap:wrap; }
 .seg button { min-width:56px; }
+.tchips { gap:6px; }
+.tchip { margin:0; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:#fff; min-height:40px; }
+.fcard.focus { outline:3px solid #86efac; }
 </style>
 </head>
 <body>
@@ -66,7 +69,7 @@ const range = (lo, hi, d = 2) => (lo == null || hi == null) ? '-' : (fmt(Math.mi
 const ageOn = (b, date) => Math.round((new Date(date + 'T00:00:00') - new Date(b.lay_date + 'T00:00:00')) / 864e5);
 const P = () => S.bsfP || bsfParams([]), PD = () => S.bsfD || bsfPlanDays(null);
 
-const TABS = () => [['#home', 'รุ่นที่เลี้ยงอยู่'], ['#batches', 'ทุกรุ่น'], ['#plan', 'แผนการผลิต'], ['#summary', 'สรุปผล'], ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ['#help', 'ช่วยเหลือ'], ['../food/', 'เศษอาหาร ›']];
+const TABS = () => [['#home', 'รุ่นที่เลี้ยงอยู่'], ['#feed', 'ให้อาหาร'], ['#batches', 'ทุกรุ่น'], ['#plan', 'แผนการผลิต'], ['#summary', 'สรุปผล'], ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ['#help', 'ช่วยเหลือ'], ['../food/', 'เศษอาหาร ›']];
 function renderTabs() { $('#tabs').innerHTML = S.me ? TABS().map(([h, l]) => `<a href="${h}" class="${location.hash.startsWith(h) || (h === '#home' && !location.hash) ? 'active' : ''}">${l}</a>`).join('') : ''; }
 window.addEventListener('hashchange', render);
 async function render() {
@@ -81,6 +84,7 @@ async function render() {
     const h = location.hash || '#home'; renderTabs();
     if (h.startsWith('#batches')) return pageBatches(view);
     if (h.startsWith('#batch/')) return pageBatch(view, h.split('/')[1]);
+    if (h.startsWith('#feed')) return pageFeed(view);
     if (h.startsWith('#plan')) return pagePlan(view);
     if (h.startsWith('#summary')) return pageSummary(view);
     if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageHome(view);
@@ -95,11 +99,20 @@ async function loadBsf(force) {
   const key = 'bsf_' + S.scopeOrg;
   if (S.cache[key] && !force) { Object.assign(S, S.cache[key]); return; }
   const feedTypes = await api.list('bsf.feed_type', { eq: scopeEq(), order: ['sort_order'] });
-  let params = [], planDays = [], cages = [], has017 = true;
-  try { [params, planDays, cages] = await Promise.all([api.list('bsf.param', { eq: scopeEq(), order: ['sort_order'] }), api.list('bsf.plan_day', { eq: scopeEq(), order: ['age'] }), api.list('bsf.cage', { eq: scopeEq(), order: ['no'] })]); }
-  catch (e) { has017 = false; }   // ยังไม่ได้รัน 017 → ใช้ค่าจากชีตในโค้ด และปิดส่วนโรงบิน
-  S.cache[key] = { feedTypes, bsfParamRows: params, bsfPlanRows: planDays, cages, has017, bsfP: bsfParams(params), bsfD: bsfPlanDays(planDays) }; Object.assign(S, S.cache[key]);
+  let params = [], planDays = [], cages = [], ingredients = [], prices = [], recipeItems = [], has017 = true;
+  try {
+    [params, planDays, cages, ingredients, prices, recipeItems] = await Promise.all([api.list('bsf.param', { eq: scopeEq(), order: ['sort_order'] }), api.list('bsf.plan_day', { eq: scopeEq(), order: ['age'] }), api.list('bsf.cage', { eq: scopeEq(), order: ['no'] }),
+      api.list('bsf.ingredient', { eq: scopeEq(), order: ['sort_order'] }), api.list('bsf.ingredient_price', { eq: { ...scopeEq(), status: 'active' }, order: ['effective_from', false] }), api.list('bsf.recipe_item', { eq: scopeEq(), order: ['sort_order'] })]);
+  } catch (e) { has017 = false; }   // ยังไม่ได้รัน 017 → ใช้ค่าจากชีตในโค้ด และปิดส่วนที่ต้องใช้ตารางใหม่
+  S.cache[key] = { feedTypes, bsfParamRows: params, bsfPlanRows: planDays, cages, ingredients, prices, recipeItems, has017, bsfP: bsfParams(params), bsfD: bsfPlanDays(planDays) }; Object.assign(S, S.cache[key]);
 }
+const ingOf = id => (S.ingredients || []).find(i => i.id === id) || {};
+const priceOn = (ingId, date) => { const p = (S.prices || []).filter(x => x.ingredient_id === ingId && x.effective_from <= date).sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0]; return p ? Number(p.price_per_kg) : null; };
+// แตกน้ำหนักอาหารเป็นวัตถุดิบตามอัตราส่วนของสูตร (ฐานข้อมูลทำแบบเดียวกันตอนบันทึก → bsf.feed_use)
+function recipeSplit(recipeId, kg) { const items = (S.recipeItems || []).filter(i => i.recipe_id === recipeId), tot = items.reduce((s, i) => s + Number(i.parts), 0); return tot > 0 ? items.map(i => ({ ingredient_id: i.ingredient_id, name: ingOf(i.ingredient_id).name || '?', is_water: !!ingOf(i.ingredient_id).is_water, kg: kg * Number(i.parts) / tot })) : []; }
+const recipeText = id => { const items = (S.recipeItems || []).filter(i => i.recipe_id === id); return items.length ? items.map(i => `${ingOf(i.ingredient_id).name || '?'} ${fmt(i.parts)}`).join(' : ') : 'ยังไม่มีส่วนผสม (admin ตั้งที่ จัดการ → ส่วนผสมสูตร)'; };
+const costText = (cost, missing) => (cost == null && !Number(missing)) ? '-' : `${fmt(cost || 0)} บาท${Number(missing) ? ` <span class="muted">(ยังไม่มีราคา ${fmtInt(missing)} รายการ)</span>` : ''}`;
+const trayShort = (b, code) => String(code || '').startsWith(b.code + '-') ? String(code).slice(b.code.length + 1) : code;
 async function listBatches(extra = {}) {
   const rows = await api.list('bsf.v_batch', { eq: { ...scopeEq(), ...(extra.eq || {}) }, order: ['lay_date', false], order2: ['code', false] });
   S._batchIdx = Object.fromEntries(rows.map(r => [r.id, r]));
@@ -112,8 +125,8 @@ const need017 = () => S.has017 ? '' : '<div class="banner warn">ฐานข้�
 // ---- แผนของวันนี้ (การ์ดรุ่น) ----
 function todayPlan(b) {
   if (b.stage === 'harvested') return '';
-  const d = PD()[b.age_days], plan = b.age_days >= nurseryDays() ? bsfFeedDay(P(), PD(), b.age_days, Math.max(b.trays_now, 0)) : null;
-  const parts = []; if (plan) parts.push(`อาหารตามแผน <b>${range(plan.lo, plan.hi)} กก.</b> (${fmtInt(b.trays_now)} กระบะ)`); else if (b.stage === 'nursery') parts.push('อนุบาล: ให้รำหยาบ+อาหารไก่อ่อน กรอกตามจริง');
+  const d = PD()[b.age_days], n = Math.max(b.trays_now, 0), one = b.age_days >= nurseryDays() ? bsfFeedDay(P(), PD(), b.age_days, 1) : null;
+  const parts = []; if (one) parts.push(`อาหารตามแผน <b>${range(one.lo, one.hi)} กก./กระบะ</b> × ${fmtInt(n)} = ${range(one.lo * n, one.hi * n)} กก.`); else if (b.stage === 'nursery') parts.push('อนุบาล: สูตรอนุบาล กรอกตามจริง');
   if (d && d.activity) parts.push(esc(d.activity));
   return parts.length ? `<div class="today-plan">วันนี้: ${parts.join(' · ')}</div>` : '';
 }
@@ -139,8 +152,8 @@ async function pageHome(view) {
 }
 function batchActs(b) {
   if (!canWrite() || b.status !== 'active') return '';
-  const harvested = b.stage === 'harvested', grown = b.age_days >= nurseryDays();
-  return `<div class="row acts">${!harvested ? `<button class="small" onclick="feedForm('${b.id}')">ให้อาหาร</button><button class="small secondary" onclick="splitForm('${b.id}')">แบ่งกระบะ</button>` : ''}${grown ? `<button class="small secondary" onclick="outForm('${b.id}','household')">แจกครัวเรือน</button>` : ''}<button class="small secondary" onclick="outForm('${b.id}')">ออกจากรุ่นอื่น ๆ</button>${!harvested && b.stage !== 'nursery' ? `<button class="small secondary" onclick="harvestForm('${b.id}')">เก็บเกี่ยว</button>` : ''}</div>`;
+  const harvested = b.stage === 'harvested', grown = b.age_days >= nurseryDays(), t = S.has017;
+  return `<div class="row acts">${!harvested ? `<button class="small" onclick="go('#feed/${todayISO()}/${b.id}')">ให้อาหาร</button>${t ? `<button class="small secondary" onclick="splitForm('${b.id}')">แบ่งกระบะ</button>` : ''}` : ''}${grown && t ? `<button class="small secondary" onclick="outForm('${b.id}','household')">แจกครัวเรือน</button>` : ''}${t ? `<button class="small secondary" onclick="outForm('${b.id}')">ออกจากรุ่นอื่น ๆ</button>` : ''}${!harvested && b.stage !== 'nursery' ? `<button class="small secondary" onclick="harvestForm('${b.id}')">เก็บเกี่ยว</button>` : ''}</div>`;
 }
 function batchCard(b) {
   return `<div class="card bcard"><div class="cardhead"><h4><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a> <span class="pill">${esc(dayLabel(b))}</span></h4>${alertPill(b.alert)}</div>
@@ -179,41 +192,48 @@ function exportBatches() {
 // =====================================================================
 async function pageBatch(view, id) {
   const b = await batchById(id);
-  const [feeds, events] = await Promise.all([api.list('bsf.v_batch_feed', { eq: { batch_id: id }, order: ['feed_date'] }), api.list('bsf.v_batch_event', { eq: { batch_id: id }, order: ['event_date'] })]);
+  const [feeds, events, trays] = await Promise.all([api.list('bsf.v_batch_feed', { eq: { batch_id: id }, order: ['feed_date'] }), api.list('bsf.v_batch_event', { eq: { batch_id: id }, order: ['event_date'] }),
+    S.has017 ? api.list('bsf.v_tray', { eq: { batch_id: id }, order: ['seq'] }) : Promise.resolve([])]);
   const showOff = isAdmin(), harvested = b.stage === 'harvested', today = todayISO();
   const tl = [...feeds.map(f => ({ ...f, _t: 'feed', _d: f.feed_date })), ...events.map(e => ({ ...e, _t: e.kind, _d: e.event_date }))]
     .filter(x => showOff || x.status === 'active').sort((a, c) => a._d.localeCompare(c._d) || String(a.created_at).localeCompare(String(c.created_at)));
-  const what = x => x._t === 'feed' ? `ให้อาหาร: ${esc(x.feed_type_name)}${x.minced ? ' (บดสับ)' : ''}` : x._t === 'split' ? 'แบ่งกระบะ' : x._t === 'harvest' ? '<b>เก็บเกี่ยว</b>' : x._t === 'sample' ? 'สุ่มชั่ง' : x._t === 'cage' ? `ย้ายดักแด้เข้า${esc(x.cage_name || 'โรงบิน ' + (x.cage_no || ''))}` : `${esc(OUT_LABEL[x.out_type] || x.out_type)}${x.hh_code ? ' ' + esc(x.hh_code) + (hhName(x.hh_code) ? ' · ' + esc(hhName(x.hh_code)) : '') : ''}${x.after_harvest ? ' <span class="pill">หลังเก็บเกี่ยว</span>' : ''}`;
-  const detail = x => x._t === 'feed' ? `${fmt(x.kg)} กก.` : x._t === 'split' ? `${x.split_trays ? `แบ่ง ${fmtInt(x.split_trays)} กระบะ ออกเป็น ${fmtInt(x.split_into)} → ` : ''}${x.trays_delta > 0 ? '+' : ''}${fmtInt(x.trays_delta)} กระบะ${x.kg != null ? ` · ชั่ง ${fmt(x.kg)} กก.` : ''}` : x._t === 'harvest' ? `หนอน 5 มม. ${fmt(x.larvae_5mm_kg)} · 3 มม. ${fmt(x.larvae_3mm_kg)} · มูล ${fmt(x.frass_kg)} กก.` : x._t === 'sample' ? `${fmtInt(x.sample_n)} ตัว ${fmt(x.sample_g)} ก. (${fmt(x.sample_g * 1000 / x.sample_n, 1)} มก./ตัว)` : x._t === 'cage' ? [x.kg != null ? fmt(x.kg) + ' กก.' : '', x.pupae_count ? fmtInt(x.pupae_count) + ' ตัว' : ''].filter(Boolean).join(' · ') : [x.trays ? fmtInt(x.trays) + ' กระบะ' : '', x.kg != null ? fmt(x.kg) + ' กก.' : ''].filter(Boolean).join(' · ');
+  const codes = s => s ? String(s).split(', ').map(c => trayShort(b, c)).join(', ') : '';
+  const what = x => x._t === 'feed' ? `ให้อาหาร: ${esc(x.feed_type_name)}` : x._t === 'split' ? `แบ่งกระบะ ${esc(trayShort(b, x.tray_code) || '')}${x.new_tray_codes ? ' → ' + esc(codes(x.new_tray_codes)) : ''}` : x._t === 'harvest' ? '<b>เก็บเกี่ยว</b>' : x._t === 'sample' ? 'สุ่มชั่ง' : x._t === 'cage' ? `ย้ายดักแด้เข้า${esc(x.cage_name || 'โรงบิน ' + (x.cage_no || ''))}` : `${esc(OUT_LABEL[x.out_type] || x.out_type)}${x.hh_code ? ' ' + esc(x.hh_code) + (hhName(x.hh_code) ? ' · ' + esc(hhName(x.hh_code)) : '') : ''}${x.after_harvest ? ' <span class="pill">หลังเก็บเกี่ยว</span>' : ''}`;
+  const detail = x => x._t === 'feed' ? (x.per_tray_kg ? `${fmt(x.per_tray_kg * 1000, 1)} ก. × ${fmtInt(x.tray_count)} กระบะ = ${fmt(x.kg, 3)} กก.` : `${fmt(x.kg, 3)} กก.`) + (x.cost != null ? ` · ${fmt(x.cost)} บาท` : '') : x._t === 'split' ? `ออกเป็น ${fmtInt(x.split_into || (x.trays_delta + 1))} ใบ (+${fmtInt(x.trays_delta)})${x.kg != null ? ` · ชั่ง ${fmt(x.kg)} กก.` : ''}` : x._t === 'harvest' ? `หนอน 5 มม. ${fmt(x.larvae_5mm_kg)} · 3 มม. ${fmt(x.larvae_3mm_kg)} · มูล ${fmt(x.frass_kg)} กก.` : x._t === 'sample' ? `${fmtInt(x.sample_n)} ตัว ${fmt(x.sample_g)} ก. (${fmt(x.sample_g * 1000 / x.sample_n, 1)} มก./ตัว)` : x._t === 'cage' ? [x.kg != null ? fmt(x.kg) + ' กก.' : '', x.pupae_count ? fmtInt(x.pupae_count) + ' ตัว' : ''].filter(Boolean).join(' · ') : [x.tray_codes ? 'กระบะ ' + esc(codes(x.tray_codes)) : x.trays ? fmtInt(x.trays) + ' กระบะ' : '', x.kg != null ? fmt(x.kg) + ' กก.' : ''].filter(Boolean).join(' · ');
   const byType = {}; feeds.filter(f => f.status === 'active').forEach(f => { byType[f.feed_type_name] = (byType[f.feed_type_name] || 0) + Number(f.kg); });
   if (events.some(e => e.out_type === 'household')) await hhLoad();
-  // ประมาณการ: จากกระบะเลี้ยง (หลังแบ่ง) และค่าสูงสุดจากไข่
-  const t = bsfPerTray(P(), PD()), reared = b.trays_reared ?? b.trays_now, growing = Math.max(b.trays_now, 0);
+  const t = bsfPerTray(P(), PD()), reared = Number(b.trays_reared ?? b.trays_now), growing = Math.max(b.trays_now, 0);
   const egg = bsfFromEggs(P(), PD(), Number(b.egg_g)), sv = reared > b.trays_start ? bsfSurvival(P(), PD(), Number(b.egg_g), reared) : null;
   const sched = bsfSchedule(P(), PD(), b, events, feeds, { nursery: b.nursery_days, hmin: b.harvest_min_days, hmax: b.harvest_max_days, todayAge: ageOn(b, today) });
   const brood = events.some(e => e.status === 'active' && e.kind === 'out' && e.out_type === 'broodstock');
+  const trayStatus = x => x.status === 'active' ? '<span class="pill">อยู่ในรุ่น</span>' : x.status === 'out' ? `${esc(OUT_LABEL[x.out_type] || 'ออก')}${x.hh_code ? ' ' + esc(x.hh_code) : ''} <span class="muted">${thDay(x.out_date)}</span>` : 'ยกเลิก';
   view.innerHTML = `${need017()}<div class="card"><div class="cardhead"><div><div class="code mono">${esc(b.code)}</div><div class="muted">${esc(b.project_code)} · ${esc(b.project_name || '')}</div></div><div>${alertPill(b.alert)}${b.status !== 'active' ? ' <span class="pill" style="background:#fee2e2">ยกเลิกแล้ว</span>' : ''}</div></div>
       <div class="kpis" style="margin-top:8px"><div class="kpi hero"><div class="l">${harvested ? 'เก็บเกี่ยวเมื่ออายุ' : 'อายุหนอน · ' + STAGE[b.stage]}</div><div class="v">${fmtInt(b.age_days)} วัน</div></div>
         <div class="kpi"><div class="l">${harvested ? 'หนอนที่เก็บเกี่ยว' : 'กระบะตอนนี้'}</div><div class="v">${harvested ? fmt(b.larvae_kg) + ' กก.' : fmtInt(b.trays_now)}</div></div>
         <div class="kpi"><div class="l">อาหารรวม (เศษอาหาร)</div><div class="v">${fmt(b.feed_kg)} <span style="font-size:15px">(${fmt(b.feed_waste_kg)})</span> กก.</div></div>
         <div class="kpi"><div class="l">หนอน ÷ เศษอาหาร</div><div class="v">${ratioText(b)}</div></div></div>
-      <div class="muted" style="margin-top:6px">ลงกระบะ ${thDay(b.lay_date)} · ไข่ ${fmt(b.egg_g)} กรัม · กระบะตั้งต้น ${fmtInt(b.trays_start)}${reared !== b.trays_start ? ` · หลังแบ่ง ${fmtInt(reared)}` : ''} · บันทึกโดย ${esc(b.created_by_name || '-')}${b.note ? ' · ' + esc(b.note) : ''}</div>
+      <div class="muted" style="margin-top:6px">ลงกระบะ ${thDay(b.lay_date)} · ไข่ ${fmt(b.egg_g)} กรัม · กระบะตั้งต้น ${fmtInt(b.trays_start)}${reared !== Number(b.trays_start) ? ` · ทั้งหมดหลังแบ่ง ${fmtInt(reared)}` : ''} · บันทึกโดย ${esc(b.created_by_name || '-')}${b.note ? ' · ' + esc(b.note) : ''}</div>
+      ${S.has017 ? `<div class="muted" style="margin-top:4px">ต้นทุนอาหาร: ${costText(b.feed_cost, b.feed_cost_missing)}${b.feed_cost_per_kg_larvae != null ? ` · <b>${fmt(b.feed_cost_per_kg_larvae)} บาท/กก. หนอน</b>` : ''}</div>` : ''}
       ${!harvested ? `<div class="banner info" style="margin-top:8px"><b>ประมาณการ</b> ${b.stage === 'nursery' ? `จากไข่ ${fmt(b.egg_g)} ก. (สูงสุดถ้ารอดทั้งหมด): ต้องแบ่งเป็น ${range(egg.lo.trays, egg.hi.trays, 1)} กระบะเลี้ยง · หนอน ${range(egg.hi.larvae_kg, egg.lo.larvae_kg, 1)} กก.` : `จาก ${fmtInt(growing)} กระบะเลี้ยง: หนอน ${range(growing * t.lo.larvae_kg, growing * t.hi.larvae_kg)} กก. · อาหารทั้งรอบ ${range(growing * t.lo.feed, growing * t.hi.feed, 1)} กก. · มูล ${range(growing * t.lo.frass_kg, growing * t.hi.frass_kg)} กก.`}${sv ? ` · อัตรารอดโดยประมาณ (จากกระบะหลังแบ่ง) ${range(sv.lo * 100, sv.hi * 100, 0)}%` : ''}${b.sample_mg != null ? ` · สุ่มชั่งล่าสุด ${fmt(b.sample_mg, 1)} มก./ตัว` : ''}</div>` : ''}
       ${harvested ? `<div class="banner info" style="margin-top:8px">เก็บเกี่ยว ${thDay(b.harvest_date)}: หนอน 5 มม. ${fmt(b.larvae_5mm_kg)} · 3 มม. ${fmt(b.larvae_3mm_kg)} · มูล ${fmt(b.frass_kg)} กก. · ออกหลังเก็บเกี่ยว ${fmt(b.out_kg_after_harvest)} กก. · <b>คงเหลือ ${fmt(b.larvae_left_kg)} กก.</b> · ประมาณการเดิม ${range(reared * t.lo.larvae_kg, reared * t.hi.larvae_kg)} กก. (${fmtInt(reared)} กระบะ)</div>` : ''}
       ${!b.ratio_complete && harvested ? `<div class="banner warn">รุ่นนี้มีการออกจากรุ่นก่อนเก็บเกี่ยว ${fmtInt(b.out_trays_before_harvest)} กระบะ${Number(b.out_kg_before_harvest) ? ' / ' + fmt(b.out_kg_before_harvest) + ' กก.' : ''} อัตราจึงต่ำกว่าความจริง (*)</div>` : ''}
       ${Number(b.hh_count) || brood ? `<div class="muted" style="margin-top:6px">${Number(b.hh_count) ? `แจกครัวเรือน ${fmtInt(b.hh_count)} ราย · ${fmtInt(b.hh_trays)} กระบะ · ${fmt(b.hh_kg)} กก.` : ''}${brood ? ` · พ่อแม่พันธุ์ ${fmtInt(b.brood_trays)} กระบะ${Number(b.brood_kg) ? ' / ' + fmt(b.brood_kg) + ' กก.' : ''} · เข้าโรงบินแล้ว ${fmt(b.caged_kg)} กก.${Number(b.caged_count) ? ' / ' + fmtInt(b.caged_count) + ' ตัว' : ''}` : ''}</div>` : ''}
       ${batchActs(b)}
       ${canWrite() && b.status === 'active' ? `<div class="row acts">${S.has017 && !harvested && b.age_days >= nurseryDays() ? `<button class="small secondary" onclick="sampleForm('${b.id}')">สุ่มชั่ง ${fmtInt(P().sample_n)} ตัว</button>` : ''}${S.has017 && brood ? `<button class="small secondary" onclick="cageForm('${b.id}')">ย้ายดักแด้เข้าโรงบิน</button>` : ''}${isAdmin() ? `<button class="small secondary" onclick="batchEditForm('${b.id}')">แก้ข้อมูลรุ่น</button>` : ''}</div>` : ''}</div>
+    ${trays.length ? `<div class="card"><div class="cardhead"><h4>กระบะ (${fmtInt(trays.filter(x => x.status === 'active').length)} อยู่ในรุ่น · ทั้งหมด ${fmtInt(trays.length)}) ${helpBtn('bsf-trays')}</h4></div>
+      <div class="tscroll"><table><thead><tr><th>รหัสกระบะ</th><th>แบ่งมาจาก</th><th>เริ่ม</th><th>สถานะ</th></tr></thead><tbody>
+      ${trays.map(x => `<tr class="${x.status === 'inactive' ? 'off' : ''}"><td class="mono nowrap">${esc(x.code)}</td><td class="mono">${x.parent_code ? esc(x.parent_code) : '<span class="muted">กระบะอนุบาล</span>'}</td><td class="nowrap">${thDay(x.created_on)}</td><td>${trayStatus(x)}</td></tr>`).join('')}
+      </tbody></table></div></div>` : ''}
     <div class="card"><div class="cardhead"><h4>ตารางการเลี้ยง ${helpBtn('bsf-schedule')}</h4></div>
-      <div class="muted" style="margin-bottom:6px">อาหารตามแผน = ${fmtInt(t.lo.larvae)}–${fmtInt(t.hi.larvae)} ตัว/กระบะ × k ÷ ${fmtInt(P().feed_unit_larvae)} × จำนวนกระบะวันนั้น (ช่วงอนุบาลไม่มีค่าตามแผน กรอกตามจริง) · กด "บันทึก" ที่แถวเพื่อกรอกอาหารจริงของวันนั้น</div>
+      <div class="muted" style="margin-bottom:6px">อาหารตามแผน = ${fmtInt(t.lo.larvae)}–${fmtInt(t.hi.larvae)} ตัว/กระบะ × k ÷ ${fmtInt(P().feed_unit_larvae)} × จำนวนกระบะวันนั้น (ช่วงอนุบาลกรอกตามจริง) · กด "ให้อาหาร" ที่แถวเพื่อไปหน้าจอให้อาหารของวันนั้น</div>
       <div class="tscroll"><table><thead><tr><th>วันที่</th><th class="num">อายุ</th><th>กิจกรรม</th><th class="num">กระบะ</th><th class="num">ตามแผน กก.</th><th class="num">จริง กก.</th>${canWrite() && !harvested && b.status === 'active' ? '<th></th>' : ''}</tr></thead><tbody>
-      ${sched.map(r => `<tr class="${r.date === today ? 'today' : r.date > today ? 'future' : ''}"><td class="nowrap">${thDay(r.date)}</td><td class="num">${r.age}</td><td>${esc(r.activity)}${r.events.length ? `<div class="muted">${r.events.map(e => e.kind === 'out' ? OUT_LABEL[e.out_type] : { split: 'แบ่งกระบะ', harvest: 'เก็บเกี่ยว', sample: 'สุ่มชั่ง', cage: 'เข้าโรงบิน' }[e.kind]).join(' · ')}</div>` : ''}</td><td class="num">${fmtInt(r.trays)}</td><td class="num">${r.plan ? range(r.plan.lo, r.plan.hi) : '-'}</td><td class="num">${r.actual != null ? `<b>${fmt(r.actual)}</b>` : '-'}</td>${canWrite() && !harvested && b.status === 'active' ? `<td>${r.date <= today ? `<button class="small secondary" onclick="feedForm('${b.id}','${r.date}',${r.plan ? (r.plan.lo + r.plan.hi) / 2 : 'null'})">บันทึก</button>` : ''}</td>` : ''}</tr>`).join('')}
+      ${sched.map(r => `<tr class="${r.date === today ? 'today' : r.date > today ? 'future' : ''}"><td class="nowrap">${thDay(r.date)}</td><td class="num">${r.age}</td><td>${esc(r.activity)}${r.events.length ? `<div class="muted">${r.events.map(e => e.kind === 'out' ? OUT_LABEL[e.out_type] : { split: 'แบ่งกระบะ', harvest: 'เก็บเกี่ยว', sample: 'สุ่มชั่ง', cage: 'เข้าโรงบิน' }[e.kind]).join(' · ')}</div>` : ''}</td><td class="num">${fmtInt(r.trays)}</td><td class="num">${r.plan ? range(r.plan.lo, r.plan.hi) : '-'}</td><td class="num">${r.actual != null ? `<b>${fmt(r.actual, 3)}</b>` : '-'}</td>${canWrite() && !harvested && b.status === 'active' ? `<td>${r.date <= today && S.has017 ? `<button class="small secondary" onclick="go('#feed/${r.date}/${b.id}')">ให้อาหาร</button>` : ''}</td>` : ''}</tr>`).join('')}
       </tbody></table></div></div>
     <div class="card"><div class="cardhead"><h4>ประวัติบันทึก (${fmtInt(tl.filter(x => x.status === 'active').length)}) ${helpBtn('bsf-timeline')}</h4></div>
       <div class="tscroll"><table><thead><tr><th>วันที่</th><th>รายการ</th><th>รายละเอียด</th><th>ผู้บันทึก</th>${isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
       ${tl.map(x => `<tr class="${x.status !== 'active' ? 'off' : ''}"><td class="nowrap">${thDay(x._d)}<div class="muted">อายุ ${fmtInt(x.day_no)} วัน</div></td><td>${what(x)}${x.note ? `<div class="muted">${esc(x.note)}</div>` : ''}</td><td>${detail(x)}</td><td class="muted">${esc(x.created_by_name || '-')}</td>${isAdmin() ? `<td>${x.status === 'active' ? `<button class="small secondary" onclick="cancelEntry('${x._t === 'feed' ? 'bsf.batch_feed' : 'bsf.batch_event'}','${x.id}')">ยกเลิก</button>` : '<span class="muted">ยกเลิกแล้ว</span>'}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5" class="muted">ยังไม่มีบันทึก</td></tr>`}
       </tbody></table></div>
-      ${Object.keys(byType).length ? `<div class="muted" style="margin-top:8px">อาหารแยกชนิด: ${Object.entries(byType).map(([k, v]) => `${esc(k)} ${fmt(v)} กก.`).join(' · ')}</div>` : ''}</div>
+      ${Object.keys(byType).length ? `<div class="muted" style="margin-top:8px">อาหารแยกสูตร: ${Object.entries(byType).map(([k, v]) => `${esc(k)} ${fmt(v, 3)} กก.`).join(' · ')}</div>` : ''}</div>
     <div class="row"><a class="btn secondary" style="text-decoration:none" href="#home">‹ รุ่นที่เลี้ยงอยู่</a></div>`;
 }
 async function cancelEntry(table, id) {
@@ -283,70 +303,120 @@ function batchForm() {
       .then(r => { if (r) openModal(`<h3 style="margin-top:0">บันทึกรุ่นแล้ว</h3><div class="muted">รหัสรุ่น (เขียนติดกระบะ)</div><div class="code mono" style="font-size:40px;margin:6px 0">${esc(r.code)}</div><div class="row"><button onclick="closeModal();go('#batch/${r.id}')">ไปหน้ารุ่นนี้</button><button class="secondary" onclick="closeModal()">ปิด</button></div>`); });
   };
 }
-function feedForm(id, date, planKg) {
-  const b = S._batchIdx[id], types = (S.feedTypes || []).filter(t => t.status === 'active'), d = date || todayISO(), age = ageOn(b, d);
-  const rank = t => (t.stage === (age < nurseryDays() ? 'nursery' : 'grow') ? 0 : t.stage === 'any' ? 1 : 2);
-  const sorted = [...types].sort((x, y) => rank(x) - rank(y) || x.sort_order - y.sort_order);
-  if (!sorted.length) return toastErr('ยังไม่มีชนิดอาหาร', 'ให้ admin เพิ่มที่ จัดการ → ชนิดอาหาร');
-  openModal(`<h3 style="margin-top:0">ให้อาหาร · <span class="mono">${esc(b.code)}</span></h3><div class="muted">อายุหนอน ${age} วันในวันที่เลือก${planKg != null ? ` · ตามแผน ≈ ${fmt(planKg)} กก.` : ''}</div>
-    ${dateIn('f_date', 'วันที่ให้อาหาร', b.lay_date, d)}
-    <label for="f_type">ชนิดอาหาร *</label><select id="f_type" onchange="mincedToggle()">${sorted.map(t => `<option value="${t.id}">${esc(t.name)}${rank(t) === 2 ? ` (ปกติใช้ช่วง${FEED_STAGE[t.stage]})` : ''}</option>`).join('')}</select>
-    <label class="chk" id="f_mwrap"><input type="checkbox" id="f_minced"> บดสับ</label>
-    ${numIn('f_kg', 'น้ำหนัก (กก.)', { req: true, min: 0, value: planKg != null ? +Number(planKg).toFixed(2) : '', hint: planKg != null ? 'เติมค่าตามแผนไว้ให้ แก้เป็นน้ำหนักที่ให้จริง' : '' })}
-    <label for="f_note">หมายเหตุ</label><textarea id="f_note" rows="2"></textarea>${btns}`);
-  mincedToggle();
-  $('#f_save').onclick = () => {
-    const kg = val('f_kg'); if (!(kg > 0)) return needField('#f_kg', 'ใส่น้ำหนักอาหารเป็น กก. (มากกว่า 0)');
-    const t = feedTypeOf($('#f_type').value);
-    saveWith(() => api.insert('bsf.batch_feed', { batch_id: id, feed_date: $('#f_date').value, feed_type_id: t.id, kg, minced: !!t.allow_minced && $('#f_minced').checked, note: $('#f_note').value.trim() || null }), `บันทึกให้อาหาร ${fmt(kg)} กก. แล้ว`);
+// =====================================================================
+// หน้าจอให้อาหาร (DEC-120): ทุกรุ่นที่เลี้ยงอยู่ในวันที่เลือก · ติ๊กกระบะ · สูตร · ต่อกระบะ (ก./กก.) → รวม · สรุปวัตถุดิบและต้นทุน
+// =====================================================================
+function recipeRank(t, age) { return t.stage === (age < nurseryDays() ? 'nursery' : 'grow') ? 0 : t.stage === 'any' ? 1 : 2; }
+function defaultRecipe(age) { const rs = (S.feedTypes || []).filter(t => t.status === 'active').sort((x, y) => recipeRank(x, age) - recipeRank(y, age) || x.sort_order - y.sort_order); return (rs[0] || {}).id || ''; }
+async function pageFeed(view) {
+  const parts = location.hash.split('/'), st = S._fd = S._fd || { date: todayISO(), rows: {} };
+  if (parts[1] && /^\d{4}-\d{2}-\d{2}$/.test(parts[1]) && parts[1] !== st.date) { st.date = parts[1]; st.rows = {}; }
+  const focus = parts[2] || '', date = st.date;
+  if (!S.has017) { view.innerHTML = need017() + '<div class="card">หน้าจอให้อาหารใช้ได้หลังรัน sql/017</div>'; return; }
+  const [rows, trays, done] = await Promise.all([listBatches({ eq: { status: 'active' } }), api.list('bsf.v_tray', { eq: scopeEq(), order: ['seq'] }), api.list('bsf.v_batch_feed', { eq: { ...scopeEq(), feed_date: date, status: 'active' } })]);
+  const live = rows.filter(b => b.lay_date <= date && (!b.harvest_date || b.harvest_date > date)).sort((a, b) => a.code.localeCompare(b.code));
+  const recipes = (S.feedTypes || []).filter(t => t.status === 'active');
+  S._fdLive = live;
+  const card = b => {
+    const age = ageOn(b, date), tr = trays.filter(x => x.batch_id === b.id && x.created_on <= date && (x.status === 'active' || (x.status === 'out' && x.out_date && x.out_date > date)));
+    const r = st.rows[b.id] = st.rows[b.id] || { recipe: defaultRecipe(age), per: '', unit: age < nurseryDays() ? 'g' : 'kg', trays: tr.map(x => x.id) };
+    const one = age >= nurseryDays() ? bsfFeedDay(P(), PD(), age, 1) : null, dn = done.filter(f => f.batch_id === b.id), act = (PD()[age] || {}).activity;
+    return `<div class="card fcard${b.id === focus ? ' focus' : ''}" id="fd_${b.id}"><div class="cardhead"><h4><span class="mono">${esc(b.code)}</span> <span class="pill">อายุ ${age} วัน · ${age < nurseryDays() ? 'อนุบาล' : 'เลี้ยงต่อ'}</span></h4><a href="#batch/${b.id}">ดูรุ่น ›</a></div>
+      ${act ? `<div class="muted">${esc(act)}</div>` : ''}
+      ${dn.length ? `<div class="banner info" style="margin:6px 0">บันทึกแล้ววันนี้: ${dn.map(f => `${esc(f.feed_type_name)} ${fmt(f.kg, 3)} กก.${f.tray_count ? ` (${fmtInt(f.tray_count)} กระบะ)` : ''}`).join(' · ')}</div>` : ''}
+      <label>กระบะที่ให้ (${fmtInt(tr.length)} ใบ)</label><div class="row tchips">${tr.map(x => `<label class="chk tchip"><input type="checkbox" ${r.trays.includes(x.id) ? 'checked' : ''} onchange="fdTray('${b.id}','${x.id}',this.checked)"> ${esc(trayShort(b, x.code))}</label>`).join('')}${tr.length > 1 ? `<button class="small secondary" type="button" onclick="fdAll('${b.id}')">ทุกใบ</button>` : ''}</div>
+      <label for="fds_${b.id}">สูตรอาหาร</label><select id="fds_${b.id}" onchange="fdSet('${b.id}','recipe',this.value)">${recipes.sort((x, y) => recipeRank(x, age) - recipeRank(y, age) || x.sort_order - y.sort_order).map(t => `<option value="${t.id}" ${t.id === r.recipe ? 'selected' : ''}>${esc(t.name)}${recipeRank(t, age) === 2 ? ` (ปกติใช้ช่วง${FEED_STAGE[t.stage]})` : ''}</option>`).join('')}</select>
+      <div class="muted" id="fdr_${b.id}">${esc(recipeText(r.recipe))}${feedTypeOf(r.recipe).steps ? ' · ' + esc(feedTypeOf(r.recipe).steps) : ''}</div>
+      <div class="row" style="margin-top:8px;align-items:flex-end"><label style="margin:0;flex:1;min-width:140px">ต่อกระบะ <input id="fdp_${b.id}" type="number" step="any" min="0" inputmode="decimal" value="${esc(r.per)}" oninput="fdSet('${b.id}','per',this.value)"></label>
+        <div class="seg"><button type="button" id="fdu_${b.id}_g" class="${r.unit === 'g' ? '' : 'secondary'}" onclick="fdUnit('${b.id}','g')">กรัม</button><button type="button" id="fdu_${b.id}_kg" class="${r.unit === 'kg' ? '' : 'secondary'}" onclick="fdUnit('${b.id}','kg')">กก.</button></div></div>
+      ${one ? `<div class="muted" style="margin-top:4px">ตามแผน ${range(one.lo, one.hi)} กก./กระบะ (${range(one.lo * 1000, one.hi * 1000, 0)} ก.)</div>` : ''}
+      <div class="today-plan" id="fdt_${b.id}"></div></div>`;
   };
+  view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>ให้อาหาร ${helpBtn('bsf-feed')}</h4></div>
+      <div class="row"><label style="margin:0">วันที่ <input type="date" value="${date}" max="${todayISO()}" style="width:auto" onchange="if(this.value){S._fd.date=this.value;S._fd.rows={};go('#feed/'+this.value)}"></label></div>
+      <div class="muted" style="margin-top:6px">ติ๊กกระบะ · เลือกสูตร · ใส่ปริมาณต่อกระบะ (กรัมหรือ กก.) ระบบคูณรวมให้ · รุ่นที่เว้นว่างจะไม่ถูกบันทึก</div></div>
+    ${live.map(card).join('') || '<div class="card muted">ไม่มีรุ่นที่เลี้ยงอยู่ในวันที่เลือก</div>'}
+    ${live.length && canWrite() ? `<div class="card" id="fd_sum"></div><div class="row" style="margin-bottom:80px"><button id="fd_save" onclick="saveFeeds()">บันทึกการให้อาหาร</button></div>` : ''}`;
+  live.forEach(b => fdTotal(b.id)); fdSummary();
+  if (focus) setTimeout(() => { const el = document.getElementById('fd_' + focus); if (el) el.scrollIntoView({ block: 'start' }); }, 60);
 }
-function mincedToggle() { const t = feedTypeOf($('#f_type').value); $('#f_mwrap').classList.toggle('hidden', !t.allow_minced); if (!t.allow_minced) $('#f_minced').checked = false; }
-function splitForm(id) {
-  const b = S._batchIdx[id]; S._splitInto = 2;
-  openModal(`<h3 style="margin-top:0">แบ่งกระบะ · <span class="mono">${esc(b.code)}</span></h3><div class="muted">ตอนนี้ ${fmtInt(b.trays_now)} กระบะ · กระบะที่แบ่งออกนับเป็นรุ่นเดียวกัน</div>
+const fdKg = r => { const v = Number(r.per); return v > 0 ? (r.unit === 'g' ? v / 1000 : v) : 0; };
+function fdTotal(id) { const r = S._fd.rows[id], el = document.getElementById('fdt_' + id); if (!el) return; const k = fdKg(r), n = r.trays.length; el.innerHTML = k > 0 && n > 0 ? `รวม <b>${fmt(k * n, 3)} กก.</b> = ${fmt(r.unit === 'g' ? k * 1000 : k, 3)} ${r.unit === 'g' ? 'ก.' : 'กก.'} × ${fmtInt(n)} กระบะ` : n === 0 ? 'ยังไม่ได้ติ๊กกระบะ' : 'ยังไม่ได้ใส่ปริมาณ (ไม่บันทึกรุ่นนี้)'; }
+function fdSet(id, k, v) { S._fd.rows[id][k] = v; if (k === 'recipe') { const el = document.getElementById('fdr_' + id); if (el) el.textContent = recipeText(v) + (feedTypeOf(v).steps ? ' · ' + feedTypeOf(v).steps : ''); } fdTotal(id); fdSummary(); }
+function fdUnit(id, u) { S._fd.rows[id].unit = u; ['g', 'kg'].forEach(x => { const b = document.getElementById(`fdu_${id}_${x}`); if (b) b.classList.toggle('secondary', x !== u); }); fdTotal(id); fdSummary(); }
+function fdTray(id, tid, on) { const r = S._fd.rows[id]; r.trays = on ? [...new Set([...r.trays, tid])] : r.trays.filter(x => x !== tid); fdTotal(id); fdSummary(); }
+function fdAll(id) { const card = document.getElementById('fd_' + id); card.querySelectorAll('.tchips input').forEach(i => { if (!i.checked) i.click(); }); }
+function fdSummary() {
+  const el = document.getElementById('fd_sum'); if (!el) return;
+  const date = S._fd.date, rec = {}, ing = {}; let total = 0, n = 0;
+  for (const b of S._fdLive || []) { const r = S._fd.rows[b.id]; if (!r) continue; const kg = fdKg(r) * r.trays.length; if (!(kg > 0)) continue; n++; total += kg; rec[r.recipe] = (rec[r.recipe] || 0) + kg; for (const x of recipeSplit(r.recipe, kg)) { const g = ing[x.ingredient_id] = ing[x.ingredient_id] || { name: x.name, kg: 0, water: x.is_water }; g.kg += x.kg; } }
+  let cost = 0, missing = 0; const ingRows = Object.entries(ing).map(([id, g]) => { const p = g.water ? 0 : priceOn(id, date); if (p == null) missing++; else cost += g.kg * p; return `<tr><td>${esc(g.name)}</td><td class="num">${fmt(g.kg, 3)}</td><td class="num">${p == null ? '<span class="muted">ยังไม่มีราคา</span>' : fmt(p) + ' บาท/กก.'}</td><td class="num">${p == null ? '-' : fmt(g.kg * p)}</td></tr>`; });
+  el.innerHTML = `<h4 style="margin-top:0">สรุปที่จะบันทึก (${fmtInt(n)} รุ่น · ${fmt(total, 3)} กก.)</h4>${n ? `<div class="muted">${Object.entries(rec).map(([id, kg]) => `${esc(feedTypeOf(id).name || '?')} ${fmt(kg, 3)} กก.`).join(' · ')}</div>
+    <div class="tscroll" style="margin-top:6px"><table><thead><tr><th>วัตถุดิบ</th><th class="num">กก.</th><th class="num">ราคา</th><th class="num">บาท</th></tr></thead><tbody>${ingRows.join('')}</tbody><tfoot><tr><th>ต้นทุนอาหาร</th><td></td><td></td><th class="num">${fmt(cost)}${missing ? ' *' : ''}</th></tr></tfoot></table></div>${missing ? '<div class="muted">* ยังไม่รวมวัตถุดิบที่ไม่มีราคา (admin ใส่ราคาที่ จัดการ → ราคาวัตถุดิบ)</div>' : ''}` : '<div class="muted">ยังไม่มีรุ่นที่ใส่ปริมาณ</div>'}`;
+}
+async function saveFeeds() {
+  const date = S._fd.date, rows = [];
+  for (const b of S._fdLive || []) { const r = S._fd.rows[b.id]; if (!r) continue; const k = fdKg(r); if (!(k > 0)) continue;
+    if (!r.trays.length) return toastErr('ยังบันทึกไม่ได้', `รุ่น ${b.code}: ติ๊กกระบะที่ให้อาหารอย่างน้อย 1 ใบ`);
+    if (!r.recipe) return toastErr('ยังบันทึกไม่ได้', `รุ่น ${b.code}: เลือกสูตรอาหาร`);
+    rows.push({ batch_id: b.id, feed_date: date, feed_type_id: r.recipe, per_tray_kg: +k.toFixed(4), tray_ids: r.trays, kg: +(k * r.trays.length).toFixed(3) }); }
+  if (!rows.length) return toastErr('ยังไม่มีรายการ', 'ใส่ปริมาณต่อกระบะอย่างน้อย 1 รุ่น');
+  const btn = $('#fd_save'); btn.disabled = true;
+  try { await api.insertMany('bsf.batch_feed', rows); toast(`บันทึกการให้อาหาร ${rows.length} รุ่นแล้ว`); S._fd.rows = {}; S.cache = {}; render(); }
+  catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); btn.disabled = false; }
+}
+async function splitForm(id) {
+  const b = S._batchIdx[id];
+  const all = await api.list('bsf.v_tray', { eq: { batch_id: id }, order: ['seq'] }), act = all.filter(x => x.status === 'active');
+  if (!act.length) return toastErr('ไม่มีกระบะให้แบ่ง', 'ทุกกระบะของรุ่นนี้ออกจากรุ่นไปแล้ว');
+  S._split = { m: 2, sel: act.length === 1 ? [act[0].id] : [], all };
+  openModal(`<h3 style="margin-top:0">แบ่งกระบะ · <span class="mono">${esc(b.code)}</span></h3><div class="muted">กระบะที่แบ่งออกนับเป็นรุ่นเดียวกัน · ใบเดิมคงรหัส ใบใหม่ได้รหัสต่อท้าย</div>
     ${dateIn('s_date', 'วันที่', b.lay_date)}
-    ${numIn('s_n', 'แบ่งกี่กระบะ', { req: true, int: true, min: 1, value: Math.min(1, b.trays_now) || 1 })}
-    <label>ออกเป็นกระบะละ *</label><div class="seg">${[2, 3, 4].map(m => `<button type="button" class="${m === 2 ? '' : 'secondary'}" id="s_m${m}" onclick="splitPick(${m})">${m} กระบะ</button>`).join('')}</div>
+    <label>เลือกกระบะที่จะแบ่ง *</label><div class="row tchips">${act.map(x => `<label class="chk tchip"><input type="checkbox" ${S._split.sel.includes(x.id) ? 'checked' : ''} onchange="splitSel('${x.id}',this.checked)"> ${esc(trayShort(b, x.code))}</label>`).join('')}</div>
+    <label for="s_m">แบ่งแต่ละใบออกเป็นกี่กระบะ (รวมใบเดิม) *</label><div class="row"><div class="seg">${[2, 3, 4].map(m => `<button type="button" id="s_b${m}" class="${m === 2 ? '' : 'secondary'}" onclick="splitM(${m})">${m}</button>`).join('')}</div><input id="s_m" type="number" min="2" step="1" inputmode="numeric" value="2" style="width:90px" oninput="splitM(parseInt(this.value)||0,true)"></div>
     <div id="s_res" class="banner info" style="margin-top:10px"></div>
     ${numIn('s_kg', 'น้ำหนักที่ชั่ง (กก.) ถ้ามี', { min: 0 })}
     <label for="s_note">หมายเหตุ</label><textarea id="s_note" rows="2"></textarea>${btns}`);
-  const show = () => { const n = val('s_n') || 0, m = S._splitInto; $('#s_res').textContent = `แบ่ง ${n} กระบะ ออกเป็น ${m} → เพิ่ม ${n * (m - 1)} กระบะ · รวมเป็น ${b.trays_now + n * (m - 1)} กระบะ`; };
-  window.splitPick = m => { S._splitInto = m; [2, 3, 4].forEach(x => $('#s_m' + x).classList.toggle('secondary', x !== m)); show(); };
-  $('#s_n').oninput = show; show();
-  $('#f_save').onclick = () => {
-    const n = val('s_n'), m = S._splitInto;
-    if (!n || !Number.isInteger(n) || n < 1) return needField('#s_n', 'ใส่จำนวนกระบะที่แบ่งเป็นจำนวนเต็มตั้งแต่ 1');
-    if (n > b.trays_now) return needField('#s_n', `แบ่งได้ไม่เกินกระบะที่มี (${b.trays_now} กระบะ)`);
-    const row = { batch_id: id, event_date: $('#s_date').value, kind: 'split', trays_delta: n * (m - 1), kg: val('s_kg'), note: $('#s_note').value.trim() || null };
-    if (S.has017) { row.split_trays = n; row.split_into = m; }
-    saveWith(() => api.insert('bsf.batch_event', row), `บันทึกแล้ว กระบะตอนนี้ ${fmtInt(b.trays_now + n * (m - 1))}`);
+  window.splitSel = (tid, on) => { S._split.sel = on ? [...new Set([...S._split.sel, tid])] : S._split.sel.filter(x => x !== tid); splitShow(); };
+  window.splitM = (m, typed) => { S._split.m = m; if (!typed) $('#s_m').value = m; [2, 3, 4].forEach(x => $('#s_b' + x).classList.toggle('secondary', x !== m)); splitShow(); };
+  window.splitShow = () => { const m = S._split.m, lines = S._split.sel.map(tid => { const p = S._split.all.find(x => x.id === tid), kids = S._split.all.filter(x => x.parent_id === tid).map(x => +x.seq.split('.').pop()), nx = Math.max(0, ...kids); return `${esc(trayShort(b, p.code))} → ${esc(trayShort(b, p.code))} + ${Array.from({ length: Math.max(m - 1, 0) }, (_, i) => esc(p.seq + '.' + (nx + i + 1))).join(', ')}`; });
+    $('#s_res').innerHTML = m >= 2 && lines.length ? `${lines.join('<br>')}<br>กระบะเพิ่ม ${fmtInt(lines.length * (m - 1))} ใบ · รวมเป็น ${fmtInt(b.trays_now + lines.length * (m - 1))} ใบ` : 'เลือกกระบะ และจำนวนตั้งแต่ 2'; };
+  splitShow();
+  $('#f_save').onclick = async () => {
+    const m = S._split.m, sel = S._split.sel;
+    if (!sel.length) return toastErr('ยังบันทึกไม่ได้', 'ติ๊กกระบะที่จะแบ่งอย่างน้อย 1 ใบ');
+    if (!(m >= 2) || !Number.isInteger(m)) return needField('#s_m', 'แบ่งออกเป็นอย่างน้อย 2 กระบะ');
+    const btn = $('#f_save'); btn.disabled = true;
+    try { for (const tid of sel) await api.insert('bsf.batch_event', { batch_id: id, event_date: $('#s_date').value, kind: 'split', tray_id: tid, split_into: m, trays_delta: m - 1, kg: val('s_kg'), note: $('#s_note').value.trim() || null });
+      closeModal(); toast(`แบ่งแล้ว เพิ่ม ${sel.length * (m - 1)} กระบะ`); refresh(); }
+    catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); btn.disabled = false; refresh(); }
   };
 }
 async function outForm(id, preset) {
   const b = S._batchIdx[id], harvested = b.stage === 'harvested'; await hhLoad(); S._outProject = b.project_id;
-  const types = Object.entries(OUT_TYPES).filter(([k]) => S.has017 || k !== 'broodstock'), type0 = preset || (b.age_days >= nurseryDays() ? 'household' : 'dead');
+  const act = harvested ? [] : (await api.list('bsf.v_tray', { eq: { batch_id: id, status: 'active' }, order: ['seq'] })); S._outSel = [];
+  const types = Object.entries(OUT_TYPES), type0 = preset || (b.age_days >= nurseryDays() ? 'household' : 'dead');
   openModal(`<h3 style="margin-top:0">${preset === 'household' ? 'แจกครัวเรือน' : 'ออกจากรุ่น'} · <span class="mono">${esc(b.code)}</span></h3>
-    <div class="muted">${harvested ? `หลังเก็บเกี่ยว: หนอนคงเหลือ ${fmt(b.larvae_left_kg)} กก. · ใส่เป็น กก.` : `ตอนนี้ ${fmtInt(b.trays_now)} กระบะ · ใส่จำนวนกระบะ (ทั้งกระบะ) และ/หรือ กก.`}</div>
+    <div class="muted">${harvested ? `หลังเก็บเกี่ยว: หนอนคงเหลือ ${fmt(b.larvae_left_kg)} กก. · ใส่เป็น กก.` : `ติ๊กกระบะที่ออก (ทั้งกระบะ) และใส่ กก. ถ้าชั่ง`}</div>
     ${dateIn('o_date', 'วันที่ (มารับ/ออก)', b.lay_date)}
     <div id="o_age" class="muted"></div>
     <label for="o_type">ประเภท *</label><select id="o_type" onchange="outTypeChange()">${types.map(([k, l]) => `<option value="${k}" ${k === type0 ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div id="o_hhwrap"><label for="o_hhq">ค้นหาครัวเรือน (ชื่อ · รหัส · หมู่ · ตำบล) *</label><input id="o_hhq" type="search" placeholder="พิมพ์บางส่วนของชื่อหรือรหัส" autocomplete="off" oninput="$('#o_hhlist').innerHTML=hhPickList(this.value,$('#o_hh').value,S._outProject)">
       <input type="hidden" id="o_hh"><div id="o_hhsel" class="muted" style="margin-top:6px">ยังไม่ได้เลือก</div><div id="o_hhlist" class="hhpick">${hhPickList('', '', b.project_id)}</div></div>
-    ${harvested ? '' : numIn('o_trays', 'จำนวนกระบะ', { int: true, min: 0 })}
+    ${harvested ? '' : `<label>กระบะที่ออก *</label><div class="row tchips">${act.map(x => `<label class="chk tchip"><input type="checkbox" onchange="outSel('${x.id}',this.checked)"> ${esc(trayShort(b, x.code))}</label>`).join('') || '<span class="muted">ไม่มีกระบะในรุ่นแล้ว</span>'}</div><div id="o_cnt" class="muted"></div>`}
     ${numIn('o_kg', 'น้ำหนักหนอน (กก.)' + (harvested ? '' : ' ถ้าชั่ง'), { min: 0, req: harvested })}
     <label for="o_note">หมายเหตุ</label><textarea id="o_note" rows="2"></textarea>${btns}`);
+  window.outSel = (tid, on) => { S._outSel = on ? [...new Set([...S._outSel, tid])] : S._outSel.filter(x => x !== tid); $('#o_cnt').textContent = S._outSel.length ? `เลือก ${S._outSel.length} กระบะ` : ''; };
   window.outTypeChange = () => { const t = $('#o_type').value; $('#o_hhwrap').classList.toggle('hidden', t !== 'household'); outAge(); };
   window.outAge = () => { const a = ageOn(b, $('#o_date').value || todayISO()), t = $('#o_type').value; $('#o_age').innerHTML = `อายุหนอนในวันที่เลือก <b>${a} วัน</b>${t === 'household' && a < nurseryDays() ? ` <span style="color:var(--danger)">· แจกครัวเรือนได้ตั้งแต่อายุ ${nurseryDays()} วัน</span>` : ''}`; };
   $('#o_date').onchange = outAge; outTypeChange();
   $('#f_save').onclick = () => {
-    const type = $('#o_type').value, trays = harvested ? null : val('o_trays'), kg = val('o_kg'), hh = ($('#o_hh').value || $('#o_hhq').value).trim(), age = ageOn(b, $('#o_date').value);
+    const type = $('#o_type').value, kg = val('o_kg'), hh = ($('#o_hh').value || $('#o_hhq').value).trim(), age = ageOn(b, $('#o_date').value);
     if (type === 'household' && !hh) return needField('#o_hhq', 'ค้นหาแล้วแตะเลือกครัวเรือนที่มารับ');
     if (type === 'household' && age < nurseryDays()) return needField('#o_date', `แจกครัวเรือนได้เมื่อหนอนอายุตั้งแต่ ${nurseryDays()} วัน (วันที่เลือกอายุ ${age} วัน)`);
-    if (trays != null && (!Number.isInteger(trays) || trays < 0)) return needField('#o_trays', 'จำนวนกระบะต้องเป็นจำนวนเต็ม');
-    if (!(trays > 0) && !(kg > 0)) return needField(harvested ? '#o_kg' : '#o_trays', harvested ? 'ใส่น้ำหนักที่ออกเป็น กก.' : 'ใส่จำนวนกระบะหรือ กก. อย่างน้อย 1 ช่อง');
-    if (!harvested && trays > b.trays_now) return needField('#o_trays', `ออกได้ไม่เกิน ${b.trays_now} กระบะ`);
-    saveWith(() => api.insert('bsf.batch_event', { batch_id: id, event_date: $('#o_date').value, kind: 'out', out_type: type, trays: trays || null, kg, hh_code: type === 'household' ? hh : null, note: $('#o_note').value.trim() || null }), type === 'household' ? `บันทึกแจก ${hh} แล้ว` : 'บันทึกแล้ว');
+    if (!harvested && !S._outSel.length) return toastErr('ยังบันทึกไม่ได้', 'ติ๊กกระบะที่ออกจากรุ่นอย่างน้อย 1 ใบ');
+    if (harvested && !(kg > 0)) return needField('#o_kg', 'ใส่น้ำหนักที่ออกเป็น กก.');
+    saveWith(() => api.insert('bsf.batch_event', { batch_id: id, event_date: $('#o_date').value, kind: 'out', out_type: type, tray_ids: harvested ? null : S._outSel, trays: harvested ? null : S._outSel.length, kg, hh_code: type === 'household' ? hh : null, note: $('#o_note').value.trim() || null }), type === 'household' ? `บันทึกแจก ${hh} แล้ว` : 'บันทึกแล้ว');
   };
 }
 function harvestForm(id) {
@@ -460,15 +530,16 @@ async function pageSummary(view) {
   const rows = (await listBatches({ eq })).filter(b => b.stage === 'harvested').sort((a, b) => a.harvest_date.localeCompare(b.harvest_date));
   const comp = rows.filter(b => b.ratio_complete && Number(b.feed_waste_kg) > 0);
   const wasteC = sum(comp, 'feed_waste_kg'), larvC = sum(comp, 'larvae_kg'), t = bsfPerTray(P(), PD());
+  const costed = rows.filter(b => b.feed_cost_per_kg_larvae != null), costAvg = costed.length ? sum(costed, 'feed_cost') / sum(costed, 'larvae_kg') : null;
   view.innerHTML = `${scopeSelector()}<div class="row" style="margin-bottom:8px"><select style="width:auto;max-width:300px" aria-label="กรองโครงการวิจัย" onchange="S._sm.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projectsOfScope().map(x => `<option value="${x.id}" ${x.id === st.project ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select> ${helpBtn('bsf-summary')}</div>
     <div class="kpis"><div class="kpi hero"><div class="l">หนอน ÷ เศษอาหาร (รุ่นสมบูรณ์ ${fmtInt(comp.length)} รุ่น)</div><div class="v">${wasteC > 0 ? fmt(larvC / wasteC, 3) : '-'}</div></div>
-      <div class="kpi"><div class="l">ตามชีต (หนอน ÷ อาหาร)</div><div class="v">${range(P().larvae_per_feed_high, P().larvae_per_feed_low, 3)}</div></div>
+      <div class="kpi"><div class="l">ต้นทุนอาหารต่อ กก. หนอน (${fmtInt(costed.length)} รุ่นที่มีราคาครบ)</div><div class="v">${costAvg != null ? fmt(costAvg) + ' บาท' : '-'}</div></div>
       <div class="kpi"><div class="l">หนอนรวม (5 มม. + 3 มม.)</div><div class="v">${fmt(sum(rows, 'larvae_kg'))} กก.</div></div>
       <div class="kpi"><div class="l">มูลรวม</div><div class="v">${fmt(sum(rows, 'frass_kg'))} กก.</div></div></div>
-    <div class="muted" style="margin:6px 0 10px">อัตรา = หนอนที่เก็บเกี่ยว (กก.) ÷ เศษอาหารที่ให้ทั้งรุ่น (สด + หมัก กก.) · ไม่นับรำ/อาหารไก่ · รุ่นที่มีการออกก่อนเก็บเกี่ยว (*) ไม่นำมาคิดอัตรารวม · ค่าตามชีตคิดจากอาหารทุกชนิด จึงเทียบได้แบบคร่าว ๆ</div>
+    <div class="muted" style="margin:6px 0 10px">อัตรา = หนอนที่เก็บเกี่ยว ÷ เศษอาหาร (วัตถุดิบเศษอาหารสด/หมักในสูตร) · ตามชีต หนอน ÷ อาหาร ${range(P().larvae_per_feed_high, P().larvae_per_feed_low, 3)} (คิดจากอาหารทุกชนิด เทียบได้คร่าว ๆ) · รุ่นที่มีการออกก่อนเก็บเกี่ยว (*) ไม่นำมาคิดอัตรารวม · ต้นทุน = วัตถุดิบ × ราคา ณ วันให้อาหาร</div>
     ${comp.length ? `<div class="card"><h4 style="margin-top:0">หนอน ÷ เศษอาหาร รายรุ่น (รุ่นสมบูรณ์)</h4><div style="position:relative;height:260px"><canvas id="chRatio" aria-label="กราฟอัตราแปลงรายรุ่น"></canvas></div></div>` : ''}
-    <div class="card"><div class="cardhead"><h4>รุ่นที่เก็บเกี่ยวแล้ว (${fmtInt(rows.length)})</h4></div><div class="tscroll"><table data-sort="data"><thead><tr><th>รุ่น</th><th>เก็บเกี่ยว</th><th class="num">อายุ</th><th class="num">ไข่ ก.</th><th class="num">กระบะเลี้ยง</th><th class="num">เศษอาหาร กก.</th><th class="num">อาหารอื่น กก.</th><th class="num">หนอน กก.</th><th class="num">ประมาณการ กก.</th><th class="num">มูล กก.</th><th class="num">หนอน/เศษอาหาร</th></tr></thead><tbody>
-    ${rows.map(b => { const r = Number(b.trays_reared ?? b.trays_start); return `<tr><td><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a></td><td class="nowrap">${thDay(b.harvest_date)}</td><td class="num">${fmtInt(b.age_days)}</td><td class="num">${fmt(b.egg_g)}</td><td class="num">${fmtInt(r)}</td><td class="num">${fmt(b.feed_waste_kg)}</td><td class="num">${fmt(b.feed_other_kg)}</td><td class="num">${fmt(b.larvae_kg)}</td><td class="num">${range(r * t.lo.larvae_kg, r * t.hi.larvae_kg)}</td><td class="num">${fmt(b.frass_kg)}</td><td class="num">${ratioText(b)}</td></tr>`; }).join('') || '<tr><td colspan="11" class="muted">ยังไม่มีรุ่นที่เก็บเกี่ยว</td></tr>'}
+    <div class="card"><div class="cardhead"><h4>รุ่นที่เก็บเกี่ยวแล้ว (${fmtInt(rows.length)})</h4></div><div class="tscroll"><table data-sort="data"><thead><tr><th>รุ่น</th><th>เก็บเกี่ยว</th><th class="num">อายุ</th><th class="num">กระบะ</th><th class="num">เศษอาหาร กก.</th><th class="num">อาหารอื่น กก.</th><th class="num">หนอน กก.</th><th class="num">ประมาณการ กก.</th><th class="num">มูล กก.</th><th class="num">หนอน/เศษอาหาร</th><th class="num">ต้นทุน บาท/กก.</th></tr></thead><tbody>
+    ${rows.map(b => { const r = Number(b.trays_reared ?? b.trays_start); return `<tr><td><a href="#batch/${b.id}" class="mono">${esc(b.code)}</a></td><td class="nowrap">${thDay(b.harvest_date)}</td><td class="num">${fmtInt(b.age_days)}</td><td class="num">${fmtInt(r)}</td><td class="num">${fmt(b.feed_waste_kg)}</td><td class="num">${fmt(b.feed_other_kg)}</td><td class="num">${fmt(b.larvae_kg)}</td><td class="num">${range(r * t.lo.larvae_kg, r * t.hi.larvae_kg)}</td><td class="num">${fmt(b.frass_kg)}</td><td class="num">${ratioText(b)}</td><td class="num">${b.feed_cost_per_kg_larvae != null ? fmt(b.feed_cost_per_kg_larvae) : '-'}</td></tr>`; }).join('') || '<tr><td colspan="11" class="muted">ยังไม่มีรุ่นที่เก็บเกี่ยว</td></tr>'}
     </tbody></table></div></div>`;
   if (comp.length && window.Chart) mkChart($('#chRatio'), { type: 'bar', data: { labels: comp.map(b => b.code), datasets: [{ label: 'หนอน ÷ เศษอาหาร', data: comp.map(b => +Number(b.larvae_per_waste).toFixed(3)), backgroundColor: PALETTE[1] }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
 }
@@ -476,12 +547,34 @@ async function pageSummary(view) {
 // =====================================================================
 // จัดการ (admin): ชนิดอาหาร · ค่าคำนวณ · ตารางอาหารตามอายุ · โรงบิน · ค่าตั้งต้น
 // =====================================================================
-SPECS['bsf.feed_type'] = { table: 'bsf.feed_type', title: 'ชนิดอาหารหนอน', order: ['sort_order'], help: 'bsf-admin',
-  intro: '"นับเป็นเศษอาหาร" = ใช้คิดอัตราแปลงหนอน ÷ เศษอาหาร · "บดสับได้" = แสดงช่องติ๊กบดสับตอนให้อาหาร · เลิกใช้ = สถานะปิดใช้งาน (ประวัติเดิมไม่หาย)',
-  cols: [{ key: 'name', label: 'ชื่อชนิดอาหาร', required: true }, { key: 'stage', label: 'ใช้ช่วง', type: 'select', options: () => Object.entries(FEED_STAGE).map(([value, label]) => ({ value, label })) },
-    { key: 'is_food_waste', label: 'นับเป็นเศษอาหาร', type: 'bool' }, { key: 'allow_minced', label: 'บดสับได้', type: 'bool' }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }],
-  prefill: () => ({ stage: 'grow', is_food_waste: false, allow_minced: false, sort_order: (S.feedTypes || []).length + 1 }),
+SPECS['bsf.feed_type'] = { table: 'bsf.feed_type', title: 'สูตรอาหาร', order: ['sort_order'], help: 'bsf-recipe',
+  intro: 'สูตร = ชื่อที่เลือกตอนให้อาหาร · ส่วนผสมและอัตราส่วนตั้งที่แท็บ "ส่วนผสมสูตร" · เลิกใช้ = สถานะปิดใช้งาน (ประวัติเดิมไม่หาย)',
+  cols: [{ key: 'name', label: 'ชื่อสูตร', required: true }, { key: 'stage', label: 'ใช้ช่วง', type: 'select', options: () => Object.entries(FEED_STAGE).map(([value, label]) => ({ value, label })) },
+    { key: 'steps', label: 'ขั้นตอนเตรียม', type: 'textarea' }, { key: 'is_food_waste', label: 'นับเป็นเศษอาหาร (ใช้เมื่อสูตรยังไม่มีส่วนผสม)', type: 'bool', hide: true }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }],
+  prefill: () => ({ stage: 'grow', is_food_waste: false, sort_order: (S.feedTypes || []).length + 1 }),
   defaults: () => ({ org_id: S.scopeOrg }) };
+SPECS['bsf.ingredient'] = { table: 'bsf.ingredient', title: 'วัตถุดิบ', order: ['sort_order'], help: 'bsf-recipe', intro: '"เศษอาหาร" = นับในอัตราแปลงหนอน ÷ เศษอาหาร · "น้ำ" = ไม่คิดราคา',
+  cols: [{ key: 'name', label: 'ชื่อวัตถุดิบ', required: true }, { key: 'is_food_waste', label: 'เป็นเศษอาหาร', type: 'bool' }, { key: 'is_water', label: 'เป็นน้ำ', type: 'bool' }, { key: 'sort_order', label: 'ลำดับ', type: 'number' }, { key: 'status', label: 'สถานะ', type: 'status' }, { key: 'note', label: 'หมายเหตุ', type: 'textarea' }],
+  prefill: () => ({ is_food_waste: false, is_water: false, sort_order: (S.ingredients || []).length + 1 }), defaults: () => ({ org_id: S.scopeOrg }) };
+SPECS['bsf.ingredient_price'] = { table: 'bsf.ingredient_price', title: 'ราคาวัตถุดิบ', order: ['effective_from', false], help: 'bsf-recipe',
+  intro: 'ราคาต่อ กก. ใช้ตั้งแต่วันที่ระบุ · ราคาเปลี่ยน = เพิ่มแถวใหม่ (ต้นทุนวันก่อนหน้าคงเดิม) · ต้นทุนวันใดใช้ราคาล่าสุดที่ไม่เกินวันนั้น',
+  cols: [{ key: 'ingredient_id', label: 'วัตถุดิบ', type: 'select', required: true, options: () => (S.ingredients || []).map(i => ({ value: i.id, label: i.name })) }, { key: 'price_per_kg', label: 'ราคา (บาท/กก.)', type: 'number', required: true }, { key: 'effective_from', label: 'ใช้ตั้งแต่ (ปปปป-ดด-วว)', required: true }, { key: 'status', label: 'สถานะ', type: 'status' }, { key: 'note', label: 'หมายเหตุ/ที่มา', type: 'textarea' }],
+  prefill: () => ({ effective_from: todayISO() }), defaults: () => ({ org_id: S.scopeOrg }),
+  beforeSave: p => (!/^\d{4}-\d{2}-\d{2}$/.test(p.effective_from || '') ? 'ใส่วันที่เป็น ปปปป-ดด-วว เช่น ' + todayISO() : p.price_per_kg < 0 ? 'ราคาต้องไม่ติดลบ' : null) };
+async function recipeItemsSection() {
+  const recs = S.feedTypes || []; if (!S._ri || !recs.some(r => r.id === S._ri)) S._ri = (recs.find(r => r.status === 'active') || recs[0] || {}).id;
+  const items = S._ri ? await api.list('bsf.recipe_item', { eq: { recipe_id: S._ri }, order: ['sort_order'] }) : [], tot = items.reduce((s, i) => s + Number(i.parts), 0);
+  return `<div class="card"><div class="cardhead"><h4>ส่วนผสมสูตร ${helpBtn('bsf-recipe')}</h4></div>
+    <label>สูตร</label><select onchange="S._ri=this.value;render()">${recs.map(r => `<option value="${r.id}" ${r.id === S._ri ? 'selected' : ''}>${esc(r.name)}${r.status !== 'active' ? ' (ปิดใช้งาน)' : ''}</option>`).join('')}</select>
+    <div class="muted" style="margin:6px 0">อัตราส่วนเป็นน้ำหนัก เช่น อาหารลูกไก่ 1 : รำละเอียด 2 = อาหารลูกไก่ 33% รำละเอียด 67% ของน้ำหนักที่ให้ · แก้แล้วมีผลกับการให้อาหารครั้งถัดไป (ประวัติเดิมไม่เปลี่ยน)</div>
+    <div class="tscroll"><table><thead><tr><th>วัตถุดิบ</th><th class="num">ส่วน</th><th class="num">สัดส่วน</th><th></th></tr></thead><tbody>
+    ${items.map(i => `<tr><td>${esc(ingOf(i.ingredient_id).name || '?')}</td><td class="num"><input type="number" step="any" min="0" value="${i.parts}" style="width:90px" onchange="riSave('${i.id}',this.value)"></td><td class="num">${tot > 0 ? fmt(100 * i.parts / tot, 1) + '%' : '-'}</td><td><button class="small secondary" onclick="riDel('${i.id}')">ลบ</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีส่วนผสม</td></tr>'}
+    </tbody></table></div>
+    <div class="row" style="margin-top:8px"><select id="ri_ing" style="width:auto">${(S.ingredients || []).filter(i => i.status === 'active' && !items.some(x => x.ingredient_id === i.id)).map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('')}</select><input id="ri_parts" type="number" step="any" min="0" value="1" style="width:90px" aria-label="ส่วน"><button class="small" onclick="riAdd()">＋ เพิ่มส่วนผสม</button></div></div>`;
+}
+async function riAdd() { const ing = $('#ri_ing').value, p = Number($('#ri_parts').value); if (!ing) return toastErr('ไม่มีวัตถุดิบให้เพิ่ม', 'เพิ่มวัตถุดิบที่แท็บ "วัตถุดิบ" ก่อน'); if (!(p > 0)) return needField('#ri_parts', 'ส่วนต้องมากกว่า 0'); try { await api.insert('bsf.recipe_item', { org_id: S.scopeOrg, recipe_id: S._ri, ingredient_id: ing, parts: p }); toast('เพิ่มแล้ว'); refresh(); } catch (e) { fail(e); } }
+async function riSave(id, v) { const p = Number(v); if (!(p > 0)) return toastErr('ส่วนต้องมากกว่า 0', ''); try { await api.update('bsf.recipe_item', id, { parts: p }); toast('บันทึกแล้ว'); refresh(); } catch (e) { fail(e); } }
+async function riDel(id) { if (!confirm('ลบส่วนผสมนี้ออกจากสูตร?')) return; try { await api.remove('bsf.recipe_item', id); toast('ลบแล้ว'); refresh(); } catch (e) { fail(e); } }
 SPECS['bsf.param'] = { table: 'bsf.param', title: 'ค่าคำนวณแผนการผลิต', order: ['sort_order'], help: 'bsf-admin', noAdd: true, searchKeys: ['label', 'key', 'source'],
   intro: 'ค่าจากชีต "คำนวณอาหารและผลผลิต BSF.xlsx" และค่าตั้งต้นของศูนย์ · แก้แล้วแผน/ตารางการเลี้ยง/ประมาณการเปลี่ยนทันที · ใส่ที่มาทุกครั้งที่แก้',
   cols: [{ key: 'label', label: 'รายการ', required: true }, { key: 'value', label: 'ค่า', type: 'number', required: true }, { key: 'unit', label: 'หน่วย' }, { key: 'source', label: 'ที่มา' }, { key: 'note', label: 'หมายเหตุ', type: 'textarea' }, { key: 'key', label: 'รหัส', readonly: true, hide: true }] };
@@ -494,9 +587,12 @@ SPECS['bsf.cage'] = { table: 'bsf.cage', title: 'โรงบิน', order: ['n
   prefill: () => { const n = Math.max(0, ...(S.cages || []).map(c => c.no)) + 1; return { no: n, name: 'โรงบิน ' + n }; }, defaults: () => ({ org_id: S.scopeOrg }) };
 async function pageAdmin(view) {
   const tab = location.hash.split('/')[1] || 'feed';
-  const tabs = [['feed', 'ชนิดอาหาร'], ...(S.has017 ? [['param', 'ค่าคำนวณ'], ['plan', 'ตารางอาหาร k'], ['cage', 'โรงบิน']] : []), ['settings', 'ค่าตั้งต้น']];
+  const tabs = [['feed', 'สูตรอาหาร'], ...(S.has017 ? [['items', 'ส่วนผสมสูตร'], ['ing', 'วัตถุดิบ'], ['price', 'ราคาวัตถุดิบ'], ['param', 'ค่าคำนวณ'], ['plan', 'ตารางอาหาร k'], ['cage', 'โรงบิน']] : []), ['settings', 'ค่าตั้งต้น']];
   let body = '';
   if (tab === 'feed') body = await crudSection({ ...SPECS['bsf.feed_type'], eq: scopeEq() });
+  else if (tab === 'items' && S.has017) body = await recipeItemsSection();
+  else if (tab === 'ing' && S.has017) body = await crudSection({ ...SPECS['bsf.ingredient'], eq: scopeEq() });
+  else if (tab === 'price' && S.has017) { body = await crudSection({ ...SPECS['bsf.ingredient_price'], eq: scopeEq() }); const cur = (S.ingredients || []).map(i => ({ n: i.name, p: i.is_water ? 0 : priceOn(i.id, todayISO()) })); body = `<div class="card"><h4 style="margin-top:0">ราคาที่ใช้วันนี้</h4><div class="muted">${cur.map(x => `${esc(x.n)} ${x.p == null ? '<b style="color:var(--warn)">ยังไม่มีราคา</b>' : fmt(x.p) + ' บาท/กก.'}`).join(' · ')}</div></div>` + body; }
   else if (tab === 'param' && S.has017) body = await crudSection({ ...SPECS['bsf.param'], eq: scopeEq() });
   else if (tab === 'plan' && S.has017) body = await crudSection({ ...SPECS['bsf.plan_day'], eq: scopeEq() });
   else if (tab === 'cage' && S.has017) body = await crudSection({ ...SPECS['bsf.cage'], eq: scopeEq() });
@@ -514,9 +610,12 @@ async function saveBsfSetting(key) {
 // ช่วยเหลือ
 // =====================================================================
 window.HELP = {
-  'bsf-home': { title: 'รุ่นที่เลี้ยงอยู่', why: '1 รุ่น = หนอนแรกฟักที่ลงกระบะอนุบาลวันเดียวกัน · ระบบนับอายุหนอนจากวันลงกระบะ (วัน 0) ให้เอง', steps: ['รุ่นที่ต้องทำก่อนอยู่บนสุด: เลยกำหนดเก็บเกี่ยว → ถึงเวลาเก็บเกี่ยว → ครบอนุบาล', 'แถบสีเขียว "วันนี้" บอกอาหารตามแผนและกิจกรรมของวันนี้', 'กดปุ่มใต้รุ่นเพื่อบันทึก: ให้อาหาร · แบ่งกระบะ · แจกครัวเรือน · ออกจากรุ่นอื่น ๆ · เก็บเกี่ยว'], done: 'ตัวเลขกระบะ/อาหารของรุ่นเปลี่ยนทันทีหลังบันทึก', note: 'ต้องมีสัญญาณอินเทอร์เน็ตตอนบันทึก (โมดูลนี้ยังไม่มีปุ่ม "รอส่ง")' },
+  'bsf-feed': { title: 'ให้อาหาร', why: 'เก็บว่าแต่ละรุ่นได้อาหารสูตรไหน กี่ กก. ใช้คิดอัตราแปลงและต้นทุนการเลี้ยง', steps: ['เลือกวันที่ (ค่าเริ่มต้นวันนี้)', 'ทุกรุ่นที่เลี้ยงอยู่แสดงเป็นการ์ด · ติ๊กกระบะที่ให้ (ค่าเริ่มต้นทุกใบ)', 'เลือกสูตร (ระบบเลือกให้ตามอายุ: อนุบาล/เลี้ยงต่อ) · ใส่ปริมาณต่อกระบะ เลือกหน่วยกรัมหรือ กก.', 'ดูยอดรวมต่อรุ่น และสรุปวัตถุดิบ/ต้นทุนด้านล่าง แล้วกด "บันทึกการให้อาหาร" ครั้งเดียว'], done: 'การ์ดแต่ละรุ่นขึ้น "บันทึกแล้ววันนี้"', note: 'รุ่นที่เว้นว่างไม่ถูกบันทึก · บันทึกผิดให้ admin ยกเลิกที่หน้ารุ่น แล้วบันทึกใหม่' },
+  'bsf-trays': { title: 'กระบะ', steps: ['รหัสกระบะ = รหัสรุ่น-ลำดับ เช่น 69-1101-01-1', 'แบ่งกระบะ: ใบเดิมคงรหัส ใบใหม่ต่อท้าย เช่น แบ่ง -1 เป็น 3 ใบ ได้ -1.1 และ -1.2 · แบ่ง -1.1 ต่อ ได้ -1.1.1', 'ออกจากรุ่น (แจก/พ่อแม่พันธุ์/ทิ้ง) ติ๊กรหัสกระบะ ระบบจำว่าใบไหนไปที่ไหน'] },
+  'bsf-recipe': { title: 'สูตรอาหาร วัตถุดิบ ราคา', steps: ['วัตถุดิบ: อาหารลูกไก่ อาหารไก่โต รำหยาบ รำละเอียด เศษอาหารสด/หมัก น้ำ (เพิ่มได้)', 'สูตร: ชื่อที่เลือกตอนให้อาหาร · ส่วนผสมสูตร: อัตราส่วนเป็นน้ำหนัก เช่น อาหารลูกไก่ 1 : รำละเอียด 2', 'ราคาวัตถุดิบ: บาท/กก. + ใช้ตั้งแต่วันที่ · ราคาเปลี่ยนให้เพิ่มแถวใหม่ ต้นทุนวันก่อนหน้าไม่เปลี่ยน'], note: 'เศษอาหารและน้ำตั้งราคา 0 ไว้ก่อน (DEC-120) · ต้นทุนขนส่งเศษอาหารจะผูกจากโมดูลเศษอาหารภายหลัง' },
+  'bsf-home': { title: 'รุ่นที่เลี้ยงอยู่', why: '1 รุ่น = หนอนแรกฟักที่ลงกระบะอนุบาลวันเดียวกัน · ระบบนับอายุหนอนจากวันลงกระบะ (วัน 0) ให้เอง', steps: ['รุ่นที่ต้องทำก่อนอยู่บนสุด: เลยกำหนดเก็บเกี่ยว → ถึงเวลาเก็บเกี่ยว → ครบอนุบาล', 'แถบสีเขียว "วันนี้" บอกอาหารตามแผนและกิจกรรมของวันนี้', 'กดปุ่มใต้รุ่นเพื่อบันทึก: ให้อาหาร (ไปหน้าจอให้อาหาร) · แบ่งกระบะ · แจกครัวเรือน · ออกจากรุ่นอื่น ๆ · เก็บเกี่ยว'], done: 'ตัวเลขกระบะ/อาหารของรุ่นเปลี่ยนทันทีหลังบันทึก', note: 'ต้องมีสัญญาณอินเทอร์เน็ตตอนบันทึก (โมดูลนี้ยังไม่มีปุ่ม "รอส่ง")' },
   'bsf-new': { title: 'ลงไข่รุ่นใหม่', steps: ['เลือกโครงการวิจัย (ผู้บันทึกที่สังกัดโครงการ ระบบเลือกให้)', 'วันลงกระบะ = วัน 0 (หนอนแรกฟัก)', 'ใส่จำนวนกระบะอนุบาล ระบบเติมน้ำหนักไข่ให้ (2 ก./กระบะ) แก้ได้', 'ดูประมาณการ แล้วกดบันทึก และเขียนรหัสรุ่นติดกระบะ'], done: 'เห็นรหัสรุ่นตัวใหญ่ เช่น 69-1101-01 (ปี พ.ศ. 2 หลัก-เดือนวัน-ลำดับของวันนั้น)' },
-  'bsf-schedule': { title: 'ตารางการเลี้ยง', why: 'บอกว่าวันไหนให้อาหารเท่าไร ทำอะไร ตามชีตคำนวณอาหารของศูนย์', steps: ['แถวสีเขียว = วันนี้ · แถวสีจาง = วันข้างหน้า', 'อาหารตามแผนเป็นช่วง (แบบน้อย–แบบมาก) คิดจากจำนวนกระบะของวันนั้น', 'กด "บันทึก" ที่แถว → ระบบเติมวันที่และค่ากลางของแผนให้ → แก้เป็นน้ำหนักที่ให้จริง → บันทึก', 'ช่วงอนุบาล (อายุ 0–4) ไม่มีค่าตามแผน กรอกตามจริง'] },
+  'bsf-schedule': { title: 'ตารางการเลี้ยง', why: 'บอกว่าวันไหนให้อาหารเท่าไร ทำอะไร ตามชีตคำนวณอาหารของศูนย์', steps: ['แถวสีเขียว = วันนี้ · แถวสีจาง = วันข้างหน้า', 'อาหารตามแผนเป็นช่วง (แบบน้อย–แบบมาก) คิดจากจำนวนกระบะของวันนั้น', 'กด "ให้อาหาร" ที่แถว → ไปหน้าจอให้อาหารของวันนั้น', 'ช่วงอนุบาล (อายุ 0–4) ไม่มีค่าตามแผน กรอกตามจริง'] },
   'bsf-batches': { title: 'ทุกรุ่น', steps: ['กรองตามโครงการ ระยะ หรือช่วงวันลงกระบะ', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์เปิดใน Excel/Google Sheets'], note: '* ท้ายอัตรา = รุ่นที่มีการออกจากรุ่นก่อนเก็บเกี่ยว อัตราต่ำกว่าความจริง' },
   'bsf-timeline': { title: 'ประวัติบันทึก', steps: ['เรียงตามวันที่ "อายุ N วัน" = นับจากวันลงกระบะ', 'บันทึกผิด: ผู้บันทึกแจ้ง admin · admin กด "ยกเลิก" แล้วบันทึกใหม่ (รายการที่ยกเลิกยังเห็นแบบขีดฆ่า)'] },
   'bsf-plan': { title: 'แผนการผลิต', why: 'คำนวณล่วงหน้าว่าต้องใช้ไข่ กระบะ อาหาร เท่าไร และได้หนอน/มูลเท่าไร', steps: ['เลือก "จากกระบะอนุบาล" (ใส่จำนวนกระบะและไข่ต่อกระบะ) หรือ "จากเป้าหนอน" (ใส่ กก. ที่ต้องการ)', 'ใส่วันลงกระบะ ระบบกางปฏิทินอาหารรายวันให้', 'อัตรารอด: เว้นว่าง = ค่าสูงสุดตามชีต · มีรุ่นที่แบ่งกระบะแล้ว ระบบเสนอค่าจากข้อมูลจริงให้กดใช้'], note: 'ตัวเลขเป็นช่วง แบบน้อย (6.5 ตัว/ตร.ซม.) – แบบมาก (8.5 ตัว/ตร.ซม.) ตามชีต' },
@@ -524,7 +623,7 @@ window.HELP = {
   'bsf-admin': { title: 'จัดการ (admin)', steps: ['ชนิดอาหาร: เพิ่ม/แก้ชื่อ ช่วงที่ใช้ นับเป็นเศษอาหารหรือไม่ บดสับได้หรือไม่', 'ค่าคำนวณ: ขนาดกระบะ ไข่ต่อกระบะ ความหนาแน่น อัตราส่วนผลผลิต (ใส่ที่มาทุกครั้ง)', 'ตารางอาหาร k: k ต่ออายุหนอน และกิจกรรมของแต่ละวัน', 'โรงบิน: หมายเลข/ชื่อโรงบิน', 'ค่าตั้งต้น: วันอนุบาลและช่วงอายุเก็บเกี่ยว (super admin)'] }
 };
 function pageHelp(view) {
-  const keys = ['bsf-home', 'bsf-new', 'bsf-schedule', 'bsf-batches', 'bsf-timeline', 'bsf-plan', 'bsf-summary', ...(isAdmin() ? ['bsf-admin'] : [])];
+  const keys = ['bsf-home', 'bsf-feed', 'bsf-trays', 'bsf-new', 'bsf-schedule', 'bsf-batches', 'bsf-timeline', 'bsf-plan', 'bsf-summary', ...(isAdmin() ? ['bsf-recipe', 'bsf-admin'] : [])];
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ: กระบะเลี้ยง</h3><div class="muted">บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ผู้บันทึกเพิ่มรายการได้ · แก้/ยกเลิกต้องให้ admin</div>
     ${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>
     <div class="card"><h3 style="margin-top:0">วงจรของรุ่น</h3><ol style="padding-left:22px"><li>วัน 0: ลงหนอนแรกฟักในกระบะอนุบาล (ไข่ ${esc(fmt(P().eggs_per_tray_g))} ก./กระบะ) ให้รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)</li><li>อายุ ${esc(String(nurseryDays()))} วัน: แบ่งลงกระบะเลี้ยง (แบ่ง n กระบะ ออกเป็น 2–4) และ/หรือแจกครัวเรือน (แจกได้ตั้งแต่อายุ ${esc(String(nurseryDays()))} วัน)</li><li>เลี้ยงต่อตามตารางอาหาร: เศษอาหารสด/หมัก (บดสับได้) หรือรำหยาบ+อาหารไก่ (17%) · กลับหนอนอายุ 12–14 · สุ่มชั่ง 100 ตัวอายุ 15–17</li><li>อายุ ${esc(setting('bsf_harvest_min_days') || '15')}–${esc(setting('bsf_harvest_max_days') || '20')} วัน: เก็บเกี่ยว ชั่งหนอนตะแกรง 5 มม. / 3 มม. และมูล</li><li>พ่อแม่พันธุ์: ออกจากรุ่น → เก็บเป็นพ่อแม่พันธุ์ → อยู่กับศูนย์จนเป็นดักแด้ → ย้ายดักแด้เข้าโรงบิน 1–10</li></ol></div>
@@ -536,88 +635,113 @@ function pageHelp(view) {
 // =====================================================================
 function installBsfDemo(d) {
   const { D, add, byId, views, ext } = d;
-  for (const t of ['bsf.feed_type', 'bsf.batch', 'bsf.batch_feed', 'bsf.batch_event', 'bsf.param', 'bsf.plan_day', 'bsf.cage']) D[t] = D[t] || [];
+  for (const t of ['bsf.feed_type', 'bsf.batch', 'bsf.batch_feed', 'bsf.batch_event', 'bsf.param', 'bsf.plan_day', 'bsf.cage', 'bsf.ingredient', 'bsf.ingredient_price', 'bsf.recipe_item', 'bsf.tray', 'bsf.feed_use']) D[t] = D[t] || [];
   if (D['bsf.feed_type'].length) return;
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'x' + Math.random().toString(36).slice(2));
   const iso = n => { const x = new Date(); x.setDate(x.getDate() - n); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
   const days = (a, b) => Math.round((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000);
   const setv = (k, d0) => parseInt((D['core.app_setting'].find(s => s.key === k) || {}).value) || d0;
   [['bsf_nursery_days', '5'], ['bsf_harvest_min_days', '15'], ['bsf_harvest_max_days', '20']].forEach(([key, value]) => { if (!D['core.app_setting'].some(s => s.key === key)) add('core.app_setting', { key, value, description: BSF_SETTINGS[key] }); });
   const PARAM_META = { tray_w_cm: ['ซม.', 'ความกว้างกระบะ'], tray_l_cm: ['ซม.', 'ความยาวกระบะ'], eggs_per_tray_g: ['กรัม', 'ไข่ต่อกระบะอนุบาล'], larvae_per_g_egg: ['ตัว/กรัม', 'หนอนจากไข่ 1 กรัม'], density_high: ['ตัว/ตร.ซม.', 'ความหนาแน่นแบบมาก'], density_low: ['ตัว/ตร.ซม.', 'ความหนาแน่นแบบน้อย'], feed_unit_larvae: ['ตัว', 'หน่วยหนอนของสูตรอาหาร'], larvae_per_feed_high: ['กก./กก.', 'หนอนต่ออาหาร แบบมาก'], larvae_per_feed_low: ['กก./กก.', 'หนอนต่ออาหาร แบบน้อย'], frass_per_feed_high: ['กก./กก.', 'มูลต่ออาหาร แบบมาก'], frass_per_feed_low: ['กก./กก.', 'มูลต่ออาหาร แบบน้อย'], larva_g_day5: ['กรัม/ตัว', 'น้ำหนักหนอนอายุ 5 วัน'], feed_moisture_pct: ['%', 'ความชื้นอาหาร'], sample_n: ['ตัว', 'จำนวนหนอนที่สุ่มชั่ง'] };
-  const ACT = { 0: 'ลงหนอนแรกฟักในกระบะอนุบาล · อาหาร รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)', 5: 'ครบอนุบาล: แบ่งลงกระบะเลี้ยง / แจกครัวเรือน · ให้อาหารชื้น 70% เวลา 11 น.', 6: 'ให้อาหารชื้น 70% เวลา 11 น.', 7: 'ให้อาหารชื้น 70% เวลา 11 น.', 8: 'ให้อาหารชื้น 70% เวลา 11 น.', 9: 'ให้อาหารชื้น 70% เวลา 11 น.', 10: 'ให้อาหารชื้น 70% เวลา 11 น.', 11: 'ให้อาหารชื้น 70% เวลา 11 น.', 12: 'ใช้มือกลับหนอน', 13: 'ใช้มือกลับหนอน', 14: 'ใช้มือกลับหนอน · ระยะหนอนดำ (สีเทาดำ)', 15: 'สุ่ม 100 ตัว บันทึกน้ำหนัก · ระยะหนอนดำ', 16: 'สุ่ม 100 ตัว บันทึกน้ำหนัก · ระยะหนอนดำ', 17: 'สุ่ม 100 ตัว บันทึกน้ำหนัก', 18: 'หนอนดำ 50% · แยกดักแด้มาบ่ม ห้องมืด 30–32°C ความชื้น 40–60%', 25: 'พ่อแม่พันธุ์: ย้ายดักแด้เข้าโรงบิน (กรงผสมพันธุ์)' };
+  const ACT = { 0: 'ลงหนอนแรกฟักในกระบะอนุบาล · สูตรอนุบาล', 5: 'ครบอนุบาล: แบ่งลงกระบะเลี้ยง / แจกครัวเรือน · ให้อาหารชื้น 70% เวลา 11 น.', 6: 'ให้อาหารชื้น 70% เวลา 11 น.', 7: 'ให้อาหารชื้น 70% เวลา 11 น.', 8: 'ให้อาหารชื้น 70% เวลา 11 น.', 9: 'ให้อาหารชื้น 70% เวลา 11 น.', 10: 'ให้อาหารชื้น 70% เวลา 11 น.', 11: 'ให้อาหารชื้น 70% เวลา 11 น.', 12: 'ใช้มือกลับหนอน', 13: 'ใช้มือกลับหนอน', 14: 'ใช้มือกลับหนอน · ระยะหนอนดำ (สีเทาดำ)', 15: 'สุ่ม 100 ตัว บันทึกน้ำหนัก · ระยะหนอนดำ', 16: 'สุ่ม 100 ตัว บันทึกน้ำหนัก · ระยะหนอนดำ', 17: 'สุ่ม 100 ตัว บันทึกน้ำหนัก', 18: 'หนอนดำ 50% · แยกดักแด้มาบ่ม ห้องมืด 30–32°C ความชื้น 40–60%', 25: 'พ่อแม่พันธุ์: ย้ายดักแด้เข้าโรงบิน (กรงผสมพันธุ์)' };
+  const RECIPES = [['อาหารลูกไก่ผสมรำหยาบ', 'nursery', [['อาหารลูกไก่', 1], ['รำหยาบ', 1]]], ['อาหารลูกไก่ผสมรำละเอียด', 'nursery', [['อาหารลูกไก่', 1], ['รำละเอียด', 2]]], ['อาหารไก่โตผสมรำหยาบ', 'grow', [['อาหารไก่โต', 1], ['รำหยาบ', 2]]], ['เศษอาหารสด', 'grow', [['เศษอาหารสด', 1]]], ['บดสับเศษอาหารสด', 'grow', [['เศษอาหารสด', 1]], 'บดสับเศษอาหารสดก่อนให้'], ['เศษอาหารหมัก', 'grow', [['เศษอาหารหมัก', 1]]], ['บดสับเศษอาหารหมัก', 'grow', [['เศษอาหารหมัก', 1]], 'บดสับเศษอาหารหมักก่อนให้']];
   for (const o of D['core.org']) {
-    [['รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)', 'nursery', false, false, 1], ['เศษอาหารสด', 'grow', true, true, 2], ['เศษอาหารหมัก', 'grow', true, true, 3], ['รำหยาบ+อาหารไก่ (โปรตีน 17%)', 'grow', false, false, 4]]
-      .forEach(([name, stage, w, m, s]) => add('bsf.feed_type', { org_id: o.id, name, stage, is_food_waste: w, allow_minced: m, sort_order: s }));
+    [['อาหารลูกไก่', false, false], ['อาหารไก่โต', false, false], ['รำหยาบ', false, false], ['รำละเอียด', false, false], ['เศษอาหารสด', true, false], ['เศษอาหารหมัก', true, false], ['น้ำ', false, true]].forEach(([name, w, h], i) => add('bsf.ingredient', { org_id: o.id, name, is_food_waste: w, is_water: h, sort_order: i + 1 }));
+    const ingId = n => D['bsf.ingredient'].find(i => i.org_id === o.id && i.name === n).id;
+    [['เศษอาหารสด', 0], ['เศษอาหารหมัก', 0], ['น้ำ', 0], ['อาหารลูกไก่', 22], ['อาหารไก่โต', 18], ['รำหยาบ', 9], ['รำละเอียด', 12]].forEach(([n, p]) => add('bsf.ingredient_price', { org_id: o.id, ingredient_id: ingId(n), price_per_kg: p, effective_from: '2026-01-01', note: p ? 'ราคาสมมติ (สาธิต)' : 'ค่าตั้งต้น' }));
+    RECIPES.forEach(([name, stage, items, steps], i) => { const r = add('bsf.feed_type', { org_id: o.id, name, stage, is_food_waste: items.some(([n]) => n.startsWith('เศษอาหาร')), allow_minced: false, sort_order: i + 1, steps: steps || null }); items.forEach(([n, parts], j) => add('bsf.recipe_item', { org_id: o.id, recipe_id: r.id, ingredient_id: ingId(n), parts, sort_order: j + 1 })); });
     Object.entries(BSF_PARAM_DEFAULT).forEach(([key, value], i) => add('bsf.param', { org_id: o.id, key, value, unit: PARAM_META[key][0], label: PARAM_META[key][1], source: 'ชีตคำนวณอาหาร (สาธิต)', sort_order: i + 1 }));
     [0, ...Object.keys(BSF_K_DEFAULT).map(Number), 25].forEach(age => add('bsf.plan_day', { org_id: o.id, age, k: BSF_K_DEFAULT[age] ?? null, activity: ACT[age] || null }));
     for (let n = 1; n <= 10; n++) add('bsf.cage', { org_id: o.id, no: n, name: 'โรงบิน ' + n });
   }
   const nextCode = (org, dt) => { const p = String((Number(dt.slice(0, 4)) + 543) % 100).padStart(2, '0') + '-' + dt.slice(5, 7) + dt.slice(8, 10); const n = Math.max(0, ...D['bsf.batch'].filter(b => b.org_id === org && b.code.startsWith(p + '-')).map(b => +b.code.split('-')[2])) + 1; return p + '-' + String(n).padStart(2, '0'); };
   const harvestOf = bid => D['bsf.batch_event'].find(e => e.batch_id === bid && e.kind === 'harvest' && e.status === 'active');
-  const traysOf = bid => { const b = byId('bsf.batch', bid); return b.trays + D['bsf.batch_event'].filter(e => e.batch_id === bid && e.status === 'active').reduce((s, e) => s + (e.kind === 'split' ? e.trays_delta : e.kind === 'out' && !e.after_harvest ? -(e.trays || 0) : 0), 0); };
   const deny = me => { if (me.role === 'recorder') throw new Error('permission denied: row-level security (ผู้บันทึกแก้/ยกเลิกไม่ได้ ต้องให้ admin ทำ)'); };
   const childCheck = (bid, dt) => { const b = byId('bsf.batch', bid); if (!b.id) throw new Error('ไม่พบรุ่นที่เลือก'); if (b.status !== 'active') throw new Error('รุ่นนี้ถูกยกเลิกแล้ว บันทึกเพิ่มไม่ได้'); if (dt < b.lay_date) throw new Error('วันที่บันทึกอยู่ก่อนวันลงไข่ของรุ่น'); if (dt > todayISO()) throw new Error('วันที่เป็นวันในอนาคต ตรวจวันที่อีกครั้ง'); return b; };
-  for (const t of ['bsf.feed_type', 'bsf.param', 'bsf.plan_day', 'bsf.cage']) ext.beforeInsert[t] = (r, me) => { deny(me); r.org_id = r.org_id || me.org_id; };
+  // = ทริกเกอร์ของ 017: กระบะอนุบาล · แบ่ง (ต่อท้ายรหัส) · ออก (ปิดกระบะ) · แตกวัตถุดิบ
+  const mkTray = (b, seq, parent, on, ev) => add('bsf.tray', { org_id: b.org_id, batch_id: b.id, seq, code: b.code + '-' + seq, parent_id: parent ? parent.id : null, created_on: on, split_event_id: ev || null, status: 'active', out_event_id: null });
+  const splitTrays = (r, b) => { const p = byId('bsf.tray', r.tray_id), kids = D['bsf.tray'].filter(t => t.parent_id === p.id).map(t => +t.seq.split('.').pop()), nx = Math.max(0, ...kids); for (let i = 1; i < r.split_into; i++) mkTray(b, p.seq + '.' + (nx + i), p, r.event_date, r.id); };
+  const feedUse = r => { D['bsf.feed_use'] = D['bsf.feed_use'].filter(u => u.feed_id !== r.id); const items = D['bsf.recipe_item'].filter(i => i.recipe_id === r.feed_type_id), tot = items.reduce((s, i) => s + +i.parts, 0); items.forEach(i => add('bsf.feed_use', { org_id: r.org_id, feed_id: r.id, batch_id: r.batch_id, ingredient_id: i.ingredient_id, kg: r.kg * i.parts / tot })); };
+  for (const t of ['bsf.feed_type', 'bsf.param', 'bsf.plan_day', 'bsf.cage', 'bsf.ingredient', 'bsf.ingredient_price', 'bsf.recipe_item']) ext.beforeInsert[t] = (r, me) => { deny(me); r.org_id = r.org_id || me.org_id; };
   ext.beforeInsert['bsf.batch'] = (r, me) => {
     r.project_id = r.project_id || me.project_id; if (!r.project_id) throw new Error('ต้องเลือกโครงการของรุ่น');
     const pj = byId('core.project', r.project_id); r.org_id = pj.org_id;
     if (me.role === 'recorder' && me.project_id && me.project_id !== r.project_id) throw new Error('โครงการนี้อยู่นอกโครงการที่บัญชีของคุณสังกัด ให้ admin ตรวจสอบ');
     if (r.lay_date > todayISO()) throw new Error('วันลงไข่เป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
-    r.code = nextCode(r.org_id, r.lay_date);
+    r.code = nextCode(r.org_id, r.lay_date); r.id = r.id || uid(); for (let n = 1; n <= r.trays; n++) mkTray(r, String(n), null, r.lay_date);
   };
-  ext.beforeInsert['bsf.batch_feed'] = r => { const b = childCheck(r.batch_id, r.feed_date); r.org_id = b.org_id; const t = byId('bsf.feed_type', r.feed_type_id); if (t.org_id !== b.org_id) throw new Error('ไม่พบชนิดอาหารที่เลือก'); if (r.minced && !t.allow_minced) throw new Error('ชนิดอาหารนี้ไม่มีตัวเลือกบดสับ'); };
+  ext.beforeInsert['bsf.batch_feed'] = r => {
+    const b = childCheck(r.batch_id, r.feed_date); r.org_id = b.org_id; const t = byId('bsf.feed_type', r.feed_type_id); if (t.org_id !== b.org_id) throw new Error('ไม่พบสูตรอาหารที่เลือก');
+    if (r.tray_ids) { if (!r.tray_ids.length) throw new Error('ติ๊กกระบะที่ให้อาหารอย่างน้อย 1 ใบ'); if (r.tray_ids.some(id => byId('bsf.tray', id).batch_id !== b.id)) throw new Error('มีกระบะที่ไม่ใช่ของรุ่นนี้'); r.tray_count = r.tray_ids.length; if (r.per_tray_kg) r.kg = Math.round(r.per_tray_kg * r.tray_count * 1000) / 1000; }
+    r.minced = false; r.id = r.id || uid(); feedUse(r);
+  };
   ext.beforeInsert['bsf.batch_event'] = r => {
-    const b = childCheck(r.batch_id, r.event_date); r.org_id = b.org_id; const h = harvestOf(b.id), nur = setv('bsf_nursery_days', 5);
+    const b = childCheck(r.batch_id, r.event_date); r.org_id = b.org_id; const h = harvestOf(b.id), nur = setv('bsf_nursery_days', 5); r.id = r.id || uid();
     if (r.kind === 'harvest' && h) throw new Error('รุ่นนี้บันทึกการเก็บเกี่ยวแล้ว (1 รุ่น เก็บเกี่ยวได้ครั้งเดียว)');
-    if (r.kind === 'split' && h) throw new Error('รุ่นนี้เก็บเกี่ยวแล้ว แบ่งกระบะไม่ได้');
-    if (r.kind === 'split' && r.split_trays && r.split_into) { if (r.split_trays > traysOf(b.id)) throw new Error('แบ่งได้ไม่เกินกระบะที่มี'); r.trays_delta = r.split_trays * (r.split_into - 1); }
-    if (r.kind === 'split' && traysOf(b.id) + r.trays_delta < 0) throw new Error('จำนวนกระบะคงเหลือติดลบ ตรวจจำนวนกระบะอีกครั้ง');
-    if (r.kind === 'out') { r.after_harvest = !!h; if (!h && r.trays && traysOf(b.id) - r.trays < 0) throw new Error('จำนวนกระบะคงเหลือติดลบ ตรวจจำนวนกระบะอีกครั้ง');
-      if (r.out_type === 'household') { const links = D['hh.link'].filter(l => l.project_id === b.project_id && l.status === 'active'); if (links.length && !D['hh.row'].some(x => x.project_id === b.project_id && x.hh_code === String(r.hh_code).trim() && x.status === 'active')) throw new Error('ไม่พบรหัสครัวเรือน ' + r.hh_code + ' ในทะเบียนครัวเรือนของโครงการนี้'); if (days(r.event_date, b.lay_date) < nur) throw new Error(`แจกครัวเรือนได้เมื่อหนอนอายุตั้งแต่ ${nur} วัน (ครบอนุบาล)`); r.hh_code = String(r.hh_code).trim(); } else r.hh_code = null; }
+    if (r.kind === 'split') { if (h) throw new Error('รุ่นนี้เก็บเกี่ยวแล้ว แบ่งกระบะไม่ได้'); const p = byId('bsf.tray', r.tray_id); if (!p.id || p.batch_id !== b.id) throw new Error('เลือกรหัสกระบะที่จะแบ่ง'); if (p.status !== 'active') throw new Error('กระบะ ' + p.code + ' ออกจากรุ่นไปแล้ว แบ่งไม่ได้'); if (!(r.split_into >= 2)) throw new Error('แบ่งออกเป็นอย่างน้อย 2 กระบะ'); r.split_trays = 1; r.trays_delta = r.split_into - 1; splitTrays(r, b); }
+    if (r.kind === 'out') { r.after_harvest = !!h;
+      if (r.tray_ids && r.tray_ids.length) { if (r.tray_ids.some(id => { const t = byId('bsf.tray', id); return t.batch_id !== b.id || t.status !== 'active'; })) throw new Error('มีกระบะที่เลือกไม่ได้ (ไม่ใช่ของรุ่นนี้ หรือออกไปแล้ว)'); r.trays = r.tray_ids.length; }
+      else if (r.trays > 0 && !h) throw new Error('เลือกรหัสกระบะที่ออกจากรุ่น'); else r.tray_ids = null;
+      if (r.out_type === 'household') { const links = D['hh.link'].filter(l => l.project_id === b.project_id && l.status === 'active'); if (links.length && !D['hh.row'].some(x => x.project_id === b.project_id && x.hh_code === String(r.hh_code).trim() && x.status === 'active')) throw new Error('ไม่พบรหัสครัวเรือน ' + r.hh_code + ' ในทะเบียนครัวเรือนของโครงการนี้'); if (days(r.event_date, b.lay_date) < nur) throw new Error(`แจกครัวเรือนได้เมื่อหนอนอายุตั้งแต่ ${nur} วัน (ครบอนุบาล)`); r.hh_code = String(r.hh_code).trim(); } else r.hh_code = null;
+      (r.tray_ids || []).forEach(id => Object.assign(byId('bsf.tray', id), { status: 'out', out_event_id: r.id })); }
     if (r.kind === 'cage') { const c = byId('bsf.cage', r.cage_id); if (c.org_id !== b.org_id) throw new Error('ไม่พบโรงบินที่เลือก'); if (!D['bsf.batch_event'].some(e => e.batch_id === b.id && e.kind === 'out' && e.out_type === 'broodstock' && e.status === 'active' && e.event_date <= r.event_date)) throw new Error('ต้องบันทึก "เก็บเป็นพ่อแม่พันธุ์" ของรุ่นนี้ก่อน จึงย้ายดักแด้เข้าโรงบินได้'); }
     if (r.kind === 'sample') r.sample_n = r.sample_n || 100;
   };
-  for (const t of ['bsf.feed_type', 'bsf.batch_feed', 'bsf.batch_event', 'bsf.param', 'bsf.plan_day', 'bsf.cage']) ext.beforeUpdate[t] = (r, p, me) => deny(me);
-  ext.beforeUpdate['bsf.batch'] = (r, p, me) => { deny(me); if (p.code && p.code !== r.code) throw new Error('เปลี่ยนรหัสรุ่นไม่ได้'); };
+  for (const t of ['bsf.feed_type', 'bsf.param', 'bsf.plan_day', 'bsf.cage', 'bsf.ingredient', 'bsf.ingredient_price', 'bsf.recipe_item']) ext.beforeUpdate[t] = (r, p, me) => deny(me);
+  ext.beforeUpdate['bsf.batch_feed'] = (r, p, me) => deny(me);
+  ext.beforeUpdate['bsf.batch_event'] = (r, p, me) => { deny(me);
+    if (p.status === 'inactive' && r.status === 'active') {
+      if (r.kind === 'split') { const kids = D['bsf.tray'].filter(t => t.split_event_id === r.id); if (kids.some(t => t.status !== 'active' || D['bsf.tray'].some(c => c.parent_id === t.id))) throw new Error('ยกเลิกการแบ่งนี้ไม่ได้ เพราะกระบะที่แบ่งออกมาถูกแบ่งต่อหรือออกจากรุ่นแล้ว'); if (D['bsf.batch_feed'].some(f => f.status === 'active' && (f.tray_ids || []).some(id => kids.some(k => k.id === id)))) throw new Error('ยกเลิกการแบ่งนี้ไม่ได้ เพราะมีการให้อาหารที่อ้างกระบะที่แบ่งออกมา'); D['bsf.tray'] = D['bsf.tray'].filter(t => t.split_event_id !== r.id); }
+      if (r.kind === 'out') D['bsf.tray'].filter(t => t.out_event_id === r.id).forEach(t => Object.assign(t, { status: 'active', out_event_id: null }));
+    } };
+  ext.beforeUpdate['bsf.batch'] = (r, p, me) => { deny(me); if (p.code && p.code !== r.code) throw new Error('เปลี่ยนรหัสรุ่นไม่ได้'); if (p.trays != null && p.trays > r.trays) for (let n = r.trays + 1; n <= p.trays; n++) mkTray(r, String(n), null, r.lay_date); };
   ext.scope.bsf = (name, rows, me) => {
     if (me.role === 'super_admin') return rows;
-    if (['bsf.feed_type', 'bsf.param', 'bsf.plan_day', 'bsf.cage'].includes(name)) return rows.filter(r => r.org_id === me.org_id);
+    if (['bsf.feed_type', 'bsf.param', 'bsf.plan_day', 'bsf.cage', 'bsf.ingredient', 'bsf.ingredient_price', 'bsf.recipe_item'].includes(name)) return rows.filter(r => r.org_id === me.org_id);
     const okB = b => b.org_id === me.org_id && (me.role !== 'recorder' || !me.project_id || b.project_id === me.project_id);
     if (name === 'bsf.batch' || name === 'bsf.v_batch') return rows.filter(okB);
     const vis = new Set(D['bsf.batch'].filter(okB).map(b => b.id)); return rows.filter(r => vis.has(r.batch_id));
   };
-  views['bsf.v_batch'] = () => { const today = todayISO(), nur = setv('bsf_nursery_days', 5), hmin = setv('bsf_harvest_min_days', 15), hmax = setv('bsf_harvest_max_days', 20);
+  const priceD = (ingId, date) => { const p = D['bsf.ingredient_price'].filter(x => x.ingredient_id === ingId && x.status === 'active' && x.effective_from <= date).sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0]; return p ? +p.price_per_kg : null; };
+  views['bsf.v_feed_use'] = () => D['bsf.feed_use'].map(u => { const f = byId('bsf.batch_feed', u.feed_id), i = byId('bsf.ingredient', u.ingredient_id), pr = priceD(u.ingredient_id, f.feed_date); return f.status !== 'active' ? null : { ...u, feed_date: f.feed_date, recipe_id: f.feed_type_id, recipe_name: byId('bsf.feed_type', f.feed_type_id).name, ingredient_name: i.name, is_food_waste: i.is_food_waste, is_water: i.is_water, price_per_kg: pr, cost: pr == null ? null : u.kg * pr }; }).filter(Boolean);
+  views['bsf.v_tray'] = () => D['bsf.tray'].map(t => { const b = byId('bsf.batch', t.batch_id), p = t.parent_id ? byId('bsf.tray', t.parent_id) : {}, e = t.out_event_id ? byId('bsf.batch_event', t.out_event_id) : {}; return { ...t, batch_code: b.code, parent_code: p.code || null, out_date: e.event_date || null, out_type: e.out_type || null, hh_code: e.hh_code || null }; });
+  views['bsf.v_batch'] = () => { const today = todayISO(), nur = setv('bsf_nursery_days', 5), hmin = setv('bsf_harvest_min_days', 15), hmax = setv('bsf_harvest_max_days', 20), uses = views['bsf.v_feed_use']();
     return D['bsf.batch'].map(b => {
-      const pj = byId('core.project', b.project_id), fs = D['bsf.batch_feed'].filter(f => f.batch_id === b.id && f.status === 'active'), es = D['bsf.batch_event'].filter(e => e.batch_id === b.id && e.status === 'active');
+      const pj = byId('core.project', b.project_id), fs = D['bsf.batch_feed'].filter(f => f.batch_id === b.id && f.status === 'active'), es = D['bsf.batch_event'].filter(e => e.batch_id === b.id && e.status === 'active'), us = uses.filter(u => u.batch_id === b.id), tr = D['bsf.tray'].filter(t => t.batch_id === b.id);
       const h = es.find(e => e.kind === 'harvest'), age = days(h ? h.event_date : today, b.lay_date), outsB = es.filter(e => e.kind === 'out' && !e.after_harvest), sumk = (arr, k) => arr.reduce((s, e) => s + (+e[k] || 0), 0);
-      const waste = fs.filter(f => byId('bsf.feed_type', f.feed_type_id).is_food_waste).reduce((s, f) => s + +f.kg, 0), feedKg = fs.reduce((s, f) => s + +f.kg, 0);
-      const split = es.filter(e => e.kind === 'split').reduce((s, e) => s + e.trays_delta, 0), larv = h ? (+h.larvae_5mm_kg || 0) + (+h.larvae_3mm_kg || 0) : 0, outA = sumk(es.filter(e => e.kind === 'out' && e.after_harvest), 'kg');
+      const waste = sumk(us.filter(u => u.is_food_waste), 'kg'), feedKg = sumk(fs, 'kg'), costRows = us.filter(u => !u.is_water), cost = sumk(costRows.filter(u => u.cost != null), 'cost'), missing = costRows.filter(u => u.cost == null).length;
+      const split = sumk(es.filter(e => e.kind === 'split'), 'trays_delta'), larv = h ? (+h.larvae_5mm_kg || 0) + (+h.larvae_3mm_kg || 0) : 0, outA = sumk(es.filter(e => e.kind === 'out' && e.after_harvest), 'kg');
       const stage = h ? 'harvested' : age < nur ? 'nursery' : 'grow';
       const alert = h ? null : age > hmax ? 'overdue' : age >= hmin ? 'due' : (age >= nur && age <= nur + 1 && !outsB.length && !split) ? 'decide' : null;
       const brood = es.filter(e => e.kind === 'out' && e.out_type === 'broodstock'), cage = es.filter(e => e.kind === 'cage'), hh = es.filter(e => e.kind === 'out' && e.out_type === 'household');
       const smp = es.filter(e => e.kind === 'sample').sort((x, y) => y.event_date.localeCompare(x.event_date))[0];
-      return { ...b, project_code: pj.code, project_name: pj.name, trays_start: b.trays, created_by_name: byId('core.app_user', b.created_by).display_name, age_days: age, stage, alert, nursery_days: nur, harvest_min_days: hmin, harvest_max_days: hmax, trays_now: b.trays + split - sumk(outsB, 'trays'),
-        feeds: fs.length, feed_kg: feedKg, feed_waste_kg: waste, feed_other_kg: feedKg - waste, last_feed_date: fs.map(f => f.feed_date).sort().pop() || null, outs_before_harvest: outsB.length, out_trays_before_harvest: sumk(outsB, 'trays'), out_kg_before_harvest: sumk(outsB, 'kg'),
+      return { ...b, project_code: pj.code, project_name: pj.name, trays_start: b.trays, created_by_name: byId('core.app_user', b.created_by).display_name, age_days: age, stage, alert, nursery_days: nur, harvest_min_days: hmin, harvest_max_days: hmax,
+        trays_now: tr.filter(t => t.status === 'active').length, trays_reared: tr.filter(t => t.status !== 'inactive').length,
+        feeds: fs.length, feed_kg: feedKg, feed_waste_kg: waste, feed_other_kg: feedKg - waste, feed_water_kg: sumk(us.filter(u => u.is_water), 'kg'), last_feed_date: fs.map(f => f.feed_date).sort().pop() || null, feed_cost: us.length ? cost : null, feed_cost_missing: missing,
+        outs_before_harvest: outsB.length, out_trays_before_harvest: sumk(outsB, 'trays'), out_kg_before_harvest: sumk(outsB, 'kg'),
         harvest_date: h ? h.event_date : null, larvae_5mm_kg: h ? h.larvae_5mm_kg : null, larvae_3mm_kg: h ? h.larvae_3mm_kg : null, larvae_kg: larv, frass_kg: h ? h.frass_kg : null, out_kg_after_harvest: outA, larvae_left_kg: h ? larv - outA : null,
-        larvae_per_waste: h && waste > 0 ? larv / waste : null, ratio_complete: !!h && !outsB.length,
-        trays_reared: b.trays + split, brood_trays: sumk(brood, 'trays'), brood_kg: sumk(brood, 'kg'), caged_kg: sumk(cage, 'kg'), caged_count: sumk(cage, 'pupae_count'), cage_moves: cage.length, hh_trays: sumk(hh, 'trays'), hh_kg: sumk(hh, 'kg'), hh_count: new Set(hh.map(e => e.hh_code)).size,
+        larvae_per_waste: h && waste > 0 ? larv / waste : null, ratio_complete: !!h && !outsB.length, feed_cost_per_kg_larvae: h && larv > 0 && us.length && !missing ? cost / larv : null,
+        brood_trays: sumk(brood, 'trays'), brood_kg: sumk(brood, 'kg'), caged_kg: sumk(cage, 'kg'), caged_count: sumk(cage, 'pupae_count'), cage_moves: cage.length, hh_trays: sumk(hh, 'trays'), hh_kg: sumk(hh, 'kg'), hh_count: new Set(hh.map(e => e.hh_code)).size,
         sample_date: smp ? smp.event_date : null, sample_mg: smp ? smp.sample_g * 1000 / smp.sample_n : null };
     }); };
-  const child = (t, dk) => () => D[t].map(x => { const b = byId('bsf.batch', x.batch_id), c = x.cage_id ? byId('bsf.cage', x.cage_id) : {}; return { ...x, batch_code: b.code, project_id: b.project_id, day_no: days(x[dk], b.lay_date), created_by_name: byId('core.app_user', x.created_by).display_name, cage_no: c.no ?? null, cage_name: c.name ?? null, ...(t === 'bsf.batch_feed' ? { feed_type_name: byId('bsf.feed_type', x.feed_type_id).name, is_food_waste: byId('bsf.feed_type', x.feed_type_id).is_food_waste } : {}) }; });
-  views['bsf.v_batch_feed'] = child('bsf.batch_feed', 'feed_date'); views['bsf.v_batch_event'] = child('bsf.batch_event', 'event_date');
-  // ข้อมูลตัวอย่าง (สมมติ): 7 รุ่นในโครงการ BSF ขององค์กรสาธิต
+  views['bsf.v_batch_feed'] = () => D['bsf.batch_feed'].map(x => { const b = byId('bsf.batch', x.batch_id), us = views['bsf.v_feed_use']().filter(u => u.feed_id === x.id); return { ...x, batch_code: b.code, project_id: b.project_id, day_no: days(x.feed_date, b.lay_date), feed_type_name: byId('bsf.feed_type', x.feed_type_id).name, created_by_name: byId('core.app_user', x.created_by).display_name, cost: us.some(u => u.cost != null) ? us.reduce((s, u) => s + (u.cost || 0), 0) : null }; });
+  views['bsf.v_batch_event'] = () => D['bsf.batch_event'].map(x => { const b = byId('bsf.batch', x.batch_id), c = x.cage_id ? byId('bsf.cage', x.cage_id) : {}, st = x.tray_id ? byId('bsf.tray', x.tray_id) : {}; return { ...x, batch_code: b.code, project_id: b.project_id, day_no: days(x.event_date, b.lay_date), created_by_name: byId('core.app_user', x.created_by).display_name, cage_no: c.no ?? null, cage_name: c.name ?? null, tray_code: st.code || null, tray_codes: (x.tray_ids || []).map(id => byId('bsf.tray', id).code).filter(Boolean).join(', ') || null, new_tray_codes: D['bsf.tray'].filter(t => t.split_event_id === x.id).map(t => t.code).join(', ') || null }; });
+  // ข้อมูลตัวอย่าง (สมมติ): 7 รุ่นในโครงการ BSF ขององค์กรสาธิต · บันทึกผ่านกฎเดียวกับหน้าเว็บ
   const o1 = D['core.org'][0], pj = D['core.project'].find(p => p.code === 'BSF' && p.org_id === o1.id) || D['core.project'][0];
-  const rec = D['core.app_user'].find(u => u.role === 'recorder' && u.org_id === o1.id) || {}, ft = n => D['bsf.feed_type'].find(t => t.org_id === o1.id && t.name === n).id;
-  const NUR = ft('รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)'), FR = ft('เศษอาหารสด'), FE = ft('เศษอาหารหมัก'), RC = ft('รำหยาบ+อาหารไก่ (โปรตีน 17%)'), cage = no => D['bsf.cage'].find(c => c.org_id === o1.id && c.no === no).id;
-  const mk = (ago, trays) => { const lay = iso(ago); return add('bsf.batch', { org_id: o1.id, project_id: pj.id, code: nextCode(o1.id, lay), lay_date: lay, egg_g: trays * 2, trays, created_by: rec.id }); };
-  const feed = (b, from, to, type, kg, minced) => { for (let i = from; i <= to; i++) { const dt = iso(days(todayISO(), b.lay_date) - i); if (dt <= todayISO()) add('bsf.batch_feed', { org_id: o1.id, batch_id: b.id, feed_date: dt, feed_type_id: type, kg, minced: !!minced, created_by: rec.id }); } };
-  const ev = (b, day, e) => add('bsf.batch_event', { org_id: o1.id, batch_id: b.id, event_date: iso(days(todayISO(), b.lay_date) - day), after_harvest: false, created_by: rec.id, ...e });
-  const A = mk(30, 2); feed(A, 0, 4, NUR, 0.4); ev(A, 5, { kind: 'split', split_trays: 2, split_into: 3, trays_delta: 4 }); feed(A, 5, 16, FR, 3.5, true); feed(A, 8, 14, FE, 1.5); ev(A, 15, { kind: 'sample', sample_n: 100, sample_g: 14.8 }); ev(A, 17, { kind: 'harvest', larvae_5mm_kg: 8.4, larvae_3mm_kg: 1.9, frass_kg: 7.6 }); ev(A, 18, { kind: 'out', out_type: 'process', kg: 4, after_harvest: true });
-  const B = mk(26, 2); feed(B, 0, 4, NUR, 0.4); ev(B, 5, { kind: 'split', split_trays: 2, split_into: 2, trays_delta: 2 }); ev(B, 6, { kind: 'out', out_type: 'household', trays: 1, kg: 0.6, hh_code: 'BSF-001' }); ev(B, 7, { kind: 'out', out_type: 'household', trays: 1, kg: 0.6, hh_code: 'BSF-003' }); feed(B, 5, 18, FE, 2, true); ev(B, 19, { kind: 'harvest', larvae_5mm_kg: 3.4, larvae_3mm_kg: 0.9, frass_kg: 5.1 });
-  const C = mk(24, 2); feed(C, 0, 4, NUR, 0.3); ev(C, 5, { kind: 'split', split_trays: 2, split_into: 2, trays_delta: 2 }); ev(C, 6, { kind: 'out', out_type: 'broodstock', trays: 2 }); feed(C, 5, 18, FR, 2.2, true); ev(C, 23, { kind: 'cage', cage_id: cage(1), kg: 0.9, pupae_count: 5200 });
-  const E = mk(16, 2); feed(E, 0, 4, NUR, 0.3); ev(E, 5, { kind: 'split', split_trays: 2, split_into: 3, trays_delta: 4 }); feed(E, 5, 15, RC, 1.2); feed(E, 9, 15, FR, 3);
-  const F = mk(9, 1); feed(F, 0, 4, NUR, 0.3); ev(F, 5, { kind: 'split', split_trays: 1, split_into: 3, trays_delta: 2 }); feed(F, 5, 8, FR, 1.5, true);
-  const G = mk(5, 2); feed(G, 0, 4, NUR, 0.4);
-  const H = mk(2, 1); feed(H, 0, 2, NUR, 0.25);
+  const rec = D['core.app_user'].find(u => u.role === 'recorder' && u.org_id === o1.id) || {}, R = n => D['bsf.feed_type'].find(t => t.org_id === o1.id && t.name === n).id, cage = no => D['bsf.cage'].find(c => c.org_id === o1.id && c.no === no).id;
+  const put = (t, r) => { ext.beforeInsert[t](r, { role: 'super_admin', org_id: o1.id }); return add(t, { created_by: rec.id, ...r }); };
+  const trayIds = (b, seqs) => seqs.map(s => D['bsf.tray'].find(t => t.batch_id === b.id && t.seq === s).id), activeIds = b => D['bsf.tray'].filter(t => t.batch_id === b.id && t.status === 'active').map(t => t.id);
+  const dayOf = (b, i) => iso(days(todayISO(), b.lay_date) - i);
+  const mk = (ago, trays) => put('bsf.batch', { project_id: pj.id, lay_date: iso(ago), egg_g: trays * 2, trays });
+  const feed = (b, from, to, recipe, perKg) => { for (let i = from; i <= to; i++) { const dt = dayOf(b, i); if (dt > todayISO()) continue; const ids = D['bsf.tray'].filter(t => t.batch_id === b.id && t.created_on <= dt && (t.status === 'active' || (t.out_event_id && byId('bsf.batch_event', t.out_event_id).event_date > dt))).map(t => t.id); if (ids.length) put('bsf.batch_feed', { batch_id: b.id, feed_date: dt, feed_type_id: R(recipe), per_tray_kg: perKg, tray_ids: ids, kg: 0 }); } };
+  const ev = (b, i, e) => put('bsf.batch_event', { batch_id: b.id, event_date: dayOf(b, i), after_harvest: false, ...e });
+  const A = mk(30, 2); feed(A, 0, 4, 'อาหารลูกไก่ผสมรำหยาบ', 0.2); ev(A, 5, { kind: 'split', tray_id: trayIds(A, ['1'])[0], split_into: 3 }); ev(A, 5, { kind: 'split', tray_id: trayIds(A, ['2'])[0], split_into: 3 }); feed(A, 5, 16, 'บดสับเศษอาหารสด', 0.6); ev(A, 15, { kind: 'sample', sample_n: 100, sample_g: 14.8 }); ev(A, 17, { kind: 'harvest', larvae_5mm_kg: 8.4, larvae_3mm_kg: 1.9, frass_kg: 7.6 }); ev(A, 18, { kind: 'out', out_type: 'process', kg: 4 });
+  const B = mk(26, 2); feed(B, 0, 4, 'อาหารลูกไก่ผสมรำละเอียด', 0.2); ev(B, 5, { kind: 'split', tray_id: trayIds(B, ['1'])[0], split_into: 2 }); ev(B, 5, { kind: 'split', tray_id: trayIds(B, ['2'])[0], split_into: 2 }); ev(B, 6, { kind: 'out', out_type: 'household', tray_ids: trayIds(B, ['1.1']), kg: 0.6, hh_code: 'BSF-001' }); ev(B, 7, { kind: 'out', out_type: 'household', tray_ids: trayIds(B, ['2.1']), kg: 0.6, hh_code: 'BSF-003' }); feed(B, 5, 18, 'บดสับเศษอาหารหมัก', 0.5); ev(B, 19, { kind: 'harvest', larvae_5mm_kg: 3.4, larvae_3mm_kg: 0.9, frass_kg: 5.1 });
+  const C = mk(24, 2); feed(C, 0, 4, 'อาหารลูกไก่ผสมรำหยาบ', 0.15); ev(C, 5, { kind: 'split', tray_id: trayIds(C, ['1'])[0], split_into: 2 }); ev(C, 5, { kind: 'split', tray_id: trayIds(C, ['2'])[0], split_into: 2 }); ev(C, 6, { kind: 'out', out_type: 'broodstock', tray_ids: trayIds(C, ['1.1', '2.1']) }); feed(C, 5, 18, 'เศษอาหารสด', 0.55); ev(C, 23, { kind: 'cage', cage_id: cage(1), kg: 0.9, pupae_count: 5200 });
+  const E = mk(16, 2); feed(E, 0, 4, 'อาหารลูกไก่ผสมรำหยาบ', 0.15); ev(E, 5, { kind: 'split', tray_id: trayIds(E, ['1'])[0], split_into: 3 }); ev(E, 5, { kind: 'split', tray_id: trayIds(E, ['2'])[0], split_into: 3 }); feed(E, 5, 15, 'อาหารไก่โตผสมรำหยาบ', 0.2); feed(E, 9, 15, 'บดสับเศษอาหารสด', 0.5);
+  const F = mk(9, 1); feed(F, 0, 4, 'อาหารลูกไก่ผสมรำหยาบ', 0.3); ev(F, 5, { kind: 'split', tray_id: trayIds(F, ['1'])[0], split_into: 4 }); feed(F, 5, 8, 'บดสับเศษอาหารสด', 0.4);
+  const G = mk(5, 2); feed(G, 0, 4, 'อาหารลูกไก่ผสมรำหยาบ', 0.2);
+  const H = mk(2, 1); feed(H, 0, 1, 'อาหารลูกไก่ผสมรำหยาบ', 0.25);
 }
 if (api._demo) installBsfDemo(api._demo);
 
