@@ -1,7 +1,7 @@
 /* =====================================================================
    UBRU AppTech System — food-src.js  รายงานแหล่งกำเนิดเศษอาหาร (DEC-122)
    ใช้คืนข้อมูลให้แหล่งกำเนิด: สรุปทุกแหล่ง (#src) · หน้ารายงานต่อแหล่ง (#src/<id>) แดชบอร์ด + ตารางรอบ + พิมพ์/PDF + CSV
-   คาร์บอนรายแหล่ง (DEC-113): หลีกเลี่ยงการฝังกลบ = กก. × EF ฝังกลบ (ค่าหลัก) · หักการเลี้ยงหนอนโปรตีน BSF = กก. × EF กระบวนการ (ค่าหลัก)
+   คาร์บอนรายแหล่ง (DEC-113): หลีกเลี่ยงการฝังกลบ = กก. × EF ฝังกลบ (ค่าหลัก) · หักการเลี้ยงหนอน = กก. × EF กระบวนการ (ค่าหลัก)
      ค่าขนส่งไม่แบ่งลงรายแหล่ง (DEC-113 ข้อ ข) → ตัวเลขรายแหล่งยังไม่หักขนส่ง (ภาพรวมที่หักแล้วอยู่หน้า "คาร์บอน")
    โหลดโดย food/index.html หลัง common.js
    ===================================================================== */
@@ -25,24 +25,24 @@ async function srcData(sourceId) {
   return { st, items, factors, lf: srcPrim(factors, 'landfill'), pr: srcPrim(factors, 'process') };
 }
 const srcFilters = st => `<div class="row">${projectFilter('S._sr.project', st.project)}<label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._sr.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._sr.to=this.value;render()" style="width:auto"></label></div>`;
-const srcMethod = (lf, pr) => `<div class="banner" style="margin-top:8px"><b>วิธีคิด</b> · หลีกเลี่ยงการฝังกลบ = เศษอาหาร (กก.) × ${lf ? `${fmt(lf.value, 4)} ${esc(lf.unit)} (${esc(lf.code)} · ${esc(lf.source || '')})` : '<span style="color:var(--danger)">ยังไม่ได้เลือกค่าหลัก</span>'} · หักการเลี้ยงหนอนโปรตีน BSF = กก. × ${pr ? `${fmt(pr.value, 4)} ${esc(pr.unit)} (${esc(pr.code)})` : '-'} · <b>ยังไม่หักการขนส่ง</b> เพราะรถหนึ่งเที่ยวรับหลายแหล่ง (ภาพรวมที่หักขนส่งแล้วดูหน้า <a href="#carbon">คาร์บอน</a>)</div>`;
+const srcMethod = (lf, pr) => `<div class="banner" style="margin-top:8px"><b>วิธีคิด</b> · หลีกเลี่ยงการฝังกลบ = เศษอาหาร (กก.) × ${lf ? `${fmt(lf.value, 4)} ${esc(lf.unit)} (${esc(lf.code)} · ${esc(lf.source || '')})` : '<span style="color:var(--danger)">ยังไม่ได้เลือกค่าหลัก</span>'} · หักการเลี้ยงหนอน = กก. × ${pr ? `${fmt(pr.value, 4)} ${esc(pr.unit)} (${esc(pr.code)})` : '-'} · <b>ยังไม่หักการขนส่ง</b> เพราะรถหนึ่งเที่ยวรับหลายแหล่ง (ภาพรวมที่หักขนส่งแล้วดูหน้า <a href="#carbon">คาร์บอน</a>)</div>`;
 
 async function pageSources(view) {
   const id = location.hash.split('/')[1];
   if (id) return pageSource(view, id);
   const { st, items, lf, pr } = await srcData();
   const gs = srcGroup(items, lf, pr), tk = sum(gs, 'kg');
-  S._srRows = gs.map(g => ({ แหล่งกำเนิด: g.name, ประเภท: g.type, รอบ: g.pickups, เศษอาหาร_กก: +g.kg.toFixed(2), คะแนนคัดแยกเฉลี่ย: g.avgQ == null ? '' : +g.avgQ.toFixed(2), หลีกเลี่ยงฝังกลบ_kgCO2e: g.av == null ? '' : +g.av.toFixed(2), 'หักการเลี้ยงหนอนโปรตีน_BSF_kgCO2e': g.pc == null ? '' : +g.pc.toFixed(2), สุทธิไม่รวมขนส่ง_kgCO2e: g.net == null ? '' : +g.net.toFixed(2), ครั้งแรก: g.first, ครั้งล่าสุด: g.last }));
+  S._srRows = gs.map(g => ({ แหล่งกำเนิด: g.name, ประเภท: g.type, รอบ: g.pickups, เศษอาหาร_กก: +g.kg.toFixed(2), คะแนนคัดแยกเฉลี่ย: g.avgQ == null ? '' : +g.avgQ.toFixed(2), หลีกเลี่ยงฝังกลบ_kgCO2e: g.av == null ? '' : +g.av.toFixed(2), หักการเลี้ยงหนอน_kgCO2e: g.pc == null ? '' : +g.pc.toFixed(2), สุทธิไม่รวมขนส่ง_kgCO2e: g.net == null ? '' : +g.net.toFixed(2), ครั้งแรก: g.first, ครั้งล่าสุด: g.last }));
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>รายงานแหล่งกำเนิดเศษอาหาร (${fmtInt(gs.length)}) ${helpBtn('src')}</h4><button class="small secondary" onclick="exportCsv(S._srRows,'แหล่งกำเนิด')">ส่งออก CSV</button></div>${srcFilters(st)}
       <div class="kpis" style="margin-top:8px"><div class="kpi hero"><div class="l">เศษอาหารจากแหล่งกำเนิด</div><div class="v">${fmt(tk)} กก.</div></div>
         <div class="kpi"><div class="l">แหล่งกำเนิดที่ส่งมอบ</div><div class="v">${fmtInt(gs.length)}</div></div>
         <div class="kpi"><div class="l">หลีกเลี่ยงการฝังกลบ (kgCO2e)</div><div class="v">${lf ? fmt2(tk * lf.value) : '-'}</div></div>
-        <div class="kpi"><div class="l">สุทธิหลังหักการเลี้ยงหนอนโปรตีน BSF (ไม่รวมขนส่ง)</div><div class="v">${lf ? fmt2(tk * lf.value - (pr ? tk * pr.value : 0)) : '-'}</div></div></div>
+        <div class="kpi"><div class="l">สุทธิหลังหักการเลี้ยงหนอน (ไม่รวมขนส่ง)</div><div class="v">${lf ? fmt2(tk * lf.value - (pr ? tk * pr.value : 0)) : '-'}</div></div></div>
       ${srcMethod(lf, pr)}</div>
     ${gs.length ? `<div class="card"><div class="cardhead"><h4>เศษอาหารและก๊าซที่หลีกเลี่ยงได้ รายแหล่ง</h4></div><div style="position:relative;height:${Math.max(160, 46 * Math.min(gs.length, 15) + 60)}px"><canvas id="srcChart" aria-label="กราฟรายแหล่งกำเนิด"></canvas></div></div>` : ''}
-    <div class="card"><div class="cardhead"><h4>ทุกแหล่งกำเนิด</h4><span class="muted">กดชื่อเพื่อเปิดรายงานของแหล่งนั้น</span></div><div class="tscroll"><table data-sort="data"><thead><tr><th>แหล่งกำเนิด</th><th>ประเภท</th><th class="num">รอบ</th><th class="num">เศษอาหาร กก.</th><th class="num">คะแนนคัดแยก</th><th class="num">หลีกเลี่ยงฝังกลบ kgCO2e</th><th class="num">หักเลี้ยงหนอนโปรตีน BSF</th><th class="num">สุทธิ*</th><th>ครั้งล่าสุด</th></tr></thead><tbody>
+    <div class="card"><div class="cardhead"><h4>ทุกแหล่งกำเนิด</h4><span class="muted">กดชื่อเพื่อเปิดรายงานของแหล่งนั้น</span></div><div class="tscroll"><table data-sort="data"><thead><tr><th>แหล่งกำเนิด</th><th>ประเภท</th><th class="num">รอบ</th><th class="num">เศษอาหาร กก.</th><th class="num">คะแนนคัดแยก</th><th class="num">หลีกเลี่ยงฝังกลบ kgCO2e</th><th class="num">หักเลี้ยงหนอน</th><th class="num">สุทธิ*</th><th>ครั้งล่าสุด</th></tr></thead><tbody>
       ${gs.map(g => `<tr><td><a href="#src/${g.id}">${esc(g.name)}</a></td><td>${esc(g.type)}</td><td class="num">${fmtInt(g.pickups)}</td><td class="num">${fmt2(g.kg)}</td><td class="num">${g.avgQ == null ? '-' : fmt(g.avgQ, 2)}</td><td class="num">${g.av == null ? '-' : fmt2(g.av)}</td><td class="num">${g.pc == null ? '-' : fmt2(g.pc)}</td><td class="num">${g.net == null ? '-' : fmt2(g.net)}</td><td class="nowrap">${thDay(g.last)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">ไม่มีข้อมูลในช่วงที่เลือก</td></tr>'}
-      </tbody></table></div><div class="muted" style="margin-top:6px">* สุทธิ = หลีกเลี่ยงการฝังกลบ − การเลี้ยงหนอนโปรตีน BSF · ยังไม่หักการขนส่ง</div></div>`;
+      </tbody></table></div><div class="muted" style="margin-top:6px">* สุทธิ = หลีกเลี่ยงการฝังกลบ − การเลี้ยงหนอน · ยังไม่หักการขนส่ง</div></div>`;
   const top = gs.slice(0, 15);
   if (top.length && window.Chart) mkChart($('#srcChart'), { type: 'bar', data: { labels: top.map(g => g.name), datasets: [{ label: 'เศษอาหาร (กก.)', data: top.map(g => +g.kg.toFixed(2)), backgroundColor: PALETTE[0], xAxisID: 'x' }, ...(lf ? [{ label: 'หลีกเลี่ยงการฝังกลบ (kgCO2e)', data: top.map(g => +g.av.toFixed(2)), backgroundColor: '#2E7D32', xAxisID: 'x' }] : [])] },
     options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt2(c.parsed.x)}` } } }, scales: { x: { beginAtZero: true } } } });
@@ -69,7 +69,7 @@ async function pageSource(view, id) {
         <div class="kpi"><div class="l">เฉลี่ยต่อครั้ง</div><div class="v">${g.pickups ? fmt(g.kg / g.pickups) + ' กก.' : '-'}</div></div>
         <div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (เต็ม 5)</div><div class="v">${g.avgQ == null ? '-' : fmt(g.avgQ, 2)}</div></div>
         <div class="kpi"><div class="l">ก๊าซที่หลีกเลี่ยงได้ (kgCO2e)</div><div class="v" style="color:#2E7D32">${g.av == null ? '-' : fmt2(g.av)}</div></div>
-        <div class="kpi"><div class="l">สุทธิหลังหักการเลี้ยงหนอนโปรตีน BSF</div><div class="v">${g.net == null ? '-' : fmt2(g.net)}</div></div></div>
+        <div class="kpi"><div class="l">สุทธิหลังหักการเลี้ยงหนอน</div><div class="v">${g.net == null ? '-' : fmt2(g.net)}</div></div></div>
       <div class="muted" style="margin-top:6px">ช่วงข้อมูล ${g.first ? `${thDay(g.first)} – ${thDay(g.last)}` : '-'}${st.project || st.from || st.to ? ' (ตามตัวกรอง)' : ''}</div>
       ${srcMethod(lf, pr)}
       <div class="muted" style="margin-top:6px">ท้ายรายงาน: ${pjc.name ? `โครงการวิจัย ${esc(pjc.name)}` : '<b>ยังไม่มีโครงการ</b>'} · หัวหน้าโครงการ ${pjc.leader_name ? esc(pjc.leader_name) : '<b style="color:var(--warn)">ยังไม่ได้ใส่</b>'} · อีเมล ${pjc.contact_email ? esc(pjc.contact_email) : '<b style="color:var(--warn)">ยังไม่ได้ใส่</b>'}${isAdmin() ? ' · แก้ที่ <a href="#admin/project">จัดการ → โครงการวิจัย</a>' : ''}</div></div>
