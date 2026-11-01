@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>กระบะเลี้ยงหนอน BSF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../common.css?v=20261101d">
+<link rel="stylesheet" href="../common.css?v=20261101e">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101d"></script>
-<script src="../bsf-plan.js?v=20261101d"></script>
+<script src="../common.js?v=20261101e"></script>
+<script src="../bsf-plan.js?v=20261101e"></script>
 <style>
 .bcard h4 a { text-decoration:none; font-size:20px; }
 .bcard .acts, .acts { margin-top:8px; gap:6px; }
@@ -325,7 +325,7 @@ async function pageFeed(view) {
   const [rows, trays, done] = await Promise.all([listBatches({ eq: { status: 'active' } }), listTrays({ eq: scopeEq(), order: ['seq'] }), api.list('bsf.v_batch_feed', { eq: { ...scopeEq(), status: 'active' }, gte: { feed_date: bsfAddDays(date, -21) } })]);
   const live = rows.filter(b => b.lay_date <= date && (!b.harvest_date || b.harvest_date > date)).sort((a, b) => a.code.localeCompare(b.code));
   const recipes = (S.feedTypes || []).filter(t => t.status === 'active'), W = feedWeekdays();
-  S._fdLive = live;
+  S._fdLive = live; S._fdDone = done;
   const card = b => {
     const r = st.rows[b.id] = st.rows[b.id] || { date: null, recipe: null, per: '', unit: null, trays: null };
     const minD = [b.lay_date, b.last_feed_date].filter(Boolean).sort().pop(), cdate = r.date || (date < minD ? minD : date), age = ageOn(b, cdate);
@@ -335,7 +335,7 @@ async function pageFeed(view) {
     const fp = bsfFeedPlan(P(), PD(), b.lay_date, cdate, W, nurseryDays()), dn = done.filter(f => f.batch_id === b.id && f.feed_date === cdate), act = (PD()[age] || {}).activity;
     const given = !fp.isMain ? done.filter(f => f.batch_id === b.id && f.feed_date >= fp.roundStart && f.feed_date <= cdate).reduce((s, f) => s + Number(f.kg), 0) : 0;
     return `<div class="card fcard${b.id === focus ? ' focus' : ''}" id="fd_${b.id}"><div class="cardhead"><h4><span class="mono">${esc(b.code)}</span> <span class="pill">อายุ ${age} วัน · ${age < nurseryDays() ? 'อนุบาล' : 'เลี้ยงต่อ'}</span></h4><a href="#batch/${b.id}">ดูรุ่น ›</a></div>
-      <div class="row" style="align-items:center"><label style="margin:0">วันที่ให้ <input type="date" value="${cdate}" min="${minD}" max="${todayISO()}" style="width:auto" onchange="fdDate('${b.id}',this.value)"></label><span class="muted">${fp.isMain ? '<b>วันให้หลัก</b>' : 'วันให้เพิ่ม'} · ${DOW[bsfIsoDow(cdate)]}${b.last_feed_date ? ` · ให้ล่าสุด ${thDay(b.last_feed_date)}` : ' · ยังไม่เคยให้'}</span></div>
+      <div class="row" style="align-items:center"><label style="margin:0">วันที่ให้ <input type="date" value="${cdate}" min="${minD}" max="${todayISO()}" style="width:auto" onchange="fdDate('${b.id}',this.value)"></label><span class="muted">เลือกได้ ${thDay(minD)} – วันนี้${b.last_feed_date ? ' (ไม่ก่อนวันให้ล่าสุด)' : ' (ตั้งแต่วันลงกระบะ)'}</span><span class="muted">${fp.isMain ? '<b>วันให้หลัก</b>' : 'วันให้เพิ่ม'} · ${DOW[bsfIsoDow(cdate)]}${b.last_feed_date ? ` · ให้ล่าสุด ${thDay(b.last_feed_date)}` : ' · ยังไม่เคยให้'}</span></div>
       ${act ? `<div class="muted">${esc(act)}</div>` : ''}
       ${dn.length ? `<div class="banner info" style="margin:6px 0">บันทึกแล้ววันที่นี้: ${dn.map(f => `${esc(f.feed_type_name)} ${fmt(f.kg, 3)} กก.${f.tray_count ? ` (${fmtInt(f.tray_count)} กระบะ)` : ''}`).join(' · ')}</div>` : ''}
       <label>กระบะที่ให้ (${fmtInt(tr.length)} ใบ)</label><div class="row tchips">${tr.map(x => `<label class="chk tchip"><input type="checkbox" ${r.trays.includes(x.id) ? 'checked' : ''} onchange="fdTray('${b.id}','${x.id}',this.checked)"> ${esc(trayShort(b, x.code))}</label>`).join('')}${tr.length > 1 ? `<button class="small secondary" type="button" onclick="fdAll('${b.id}')">ทุกใบ</button>` : ''}</div>
@@ -350,9 +350,15 @@ async function pageFeed(view) {
       <div class="row"><label style="margin:0">วันที่ (ทุกรุ่น) <input type="date" value="${date}" max="${todayISO()}" style="width:auto" onchange="if(this.value){S._fd.date=this.value;S._fd.rows={};go('#feed/'+this.value)}"></label></div>
       <div class="muted" style="margin-top:6px">วันให้หลัก: ${W.map(w => DOW[w]).join(' ')} (ไม่บังคับ ให้เพิ่มวันอื่นได้) · แต่ละรุ่นเปลี่ยนวันที่ของตัวเองได้ (ย้อนหลังได้ แต่ไม่ก่อนวันให้ล่าสุดของรุ่นนั้น) · ติ๊กกระบะ · เลือกสูตร · ใส่ปริมาณต่อกระบะ · รุ่นที่เว้นว่างจะไม่ถูกบันทึก</div></div>
     ${live.map(card).join('') || '<div class="card muted">ไม่มีรุ่นที่เลี้ยงอยู่ในวันที่เลือก</div>'}
-    ${live.length && canWrite() ? `<div class="card" id="fd_sum"></div><div class="row" style="margin-bottom:80px"><button id="fd_save" onclick="saveFeeds()">บันทึกการให้อาหาร</button></div>` : ''}`;
+    ${live.length && canWrite() ? `<div class="card" id="fd_sum"></div><div class="row" style="margin-bottom:80px"><button id="fd_save" onclick="saveFeeds()">บันทึกการให้อาหาร</button></div>` : ''}
+    ${fdDoneTable(done.filter(f => f.feed_date === date), date)}`;
   live.forEach(b => fdTotal(b.id)); fdSummary();
   if (focus) setTimeout(() => { const el = document.getElementById('fd_' + focus); if (el) el.scrollIntoView({ block: 'start' }); }, 60);
+}
+function fdDoneTable(list, date) {
+  return `<div class="card"><div class="cardhead"><h4>บันทึกแล้ววันที่ ${thDay(date)} (${fmtInt(list.length)} รายการ · ${fmt(sum(list, 'kg'), 3)} กก.)</h4></div>${list.length ? `<div class="tscroll"><table><thead><tr><th>รุ่น</th><th>สูตร</th><th class="num">ต่อกระบะ × กระบะ</th><th class="num">รวม กก.</th><th class="num">บาท</th><th>ผู้บันทึก</th>${isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
+    ${list.map(f => `<tr><td class="mono nowrap"><a href="#batch/${f.batch_id}">${esc(f.batch_code)}</a></td><td>${esc(f.feed_type_name)}</td><td class="num">${f.per_tray_kg ? `${fmt(f.per_tray_kg * 1000, 1)} ก. × ${fmtInt(f.tray_count)}` : '-'}</td><td class="num">${fmt(f.kg, 3)}</td><td class="num">${f.cost != null ? fmt(f.cost) : '-'}</td><td class="muted">${esc(f.created_by_name || '-')}<div>${thDate(f.created_at)}</div></td>${isAdmin() ? `<td><button class="small secondary" onclick="cancelEntry('bsf.batch_feed','${f.id}')">ยกเลิก</button></td>` : ''}</tr>`).join('')}
+  </tbody></table></div>` : '<div class="muted">ยังไม่มีรายการในวันที่นี้</div>'}${isAdmin() ? '' : '<div class="muted" style="margin-top:6px">บันทึกผิด/ซ้ำ: แจ้ง admin ยกเลิก</div>'}</div>`;
 }
 function fdDate(id, v) { if (!v) return; const r = S._fd.rows[id]; r.date = v; if (r.per === '') r.unit = null; render(); }   // ยังไม่ได้ใส่ปริมาณ → หน่วยตั้งตามอายุใหม่
 const fdKg = r => { const v = Number(r.per); return v > 0 ? (r.unit === 'g' ? v / 1000 : v) : 0; };
@@ -381,8 +387,12 @@ async function saveFeeds() {
   const odd = rows.filter(x => { const b = S._fdLive.find(y => y.id === x.batch_id), fp = bsfFeedPlan(P(), PD(), b.lay_date, x.feed_date, feedWeekdays(), nurseryDays()); return x.per_tray_kg > 5 || (fp.plan && x.per_tray_kg > 3 * fp.plan.hi); });
   if (odd.length && !confirm(`ปริมาณต่อกระบะสูงผิดปกติ: ${odd.map(x => `${S._fdLive.find(y => y.id === x.batch_id).code} ${fmt(x.per_tray_kg, 3)} กก./กระบะ`).join(', ')}
 ตรวจหน่วย กรัม/กก. อีกครั้ง · ยืนยันบันทึก?`)) return;
+  // ให้ซ้ำวันเดียวกัน (เช่น รอบเช้า/เย็น) ได้ แต่ต้องยืนยัน กันกดบันทึกซ้ำโดยไม่ตั้งใจ
+  const dup = rows.map(x => ({ x, prev: (S._fdDone || []).filter(f => f.batch_id === x.batch_id && f.feed_date === x.feed_date) })).filter(d => d.prev.length);
+  if (dup.length && !confirm(`รุ่นต่อไปนี้มีการให้อาหารในวันเดียวกันแล้ว:\n${dup.map(d => `• ${S._fdLive.find(y => y.id === d.x.batch_id).code} ${thDay(d.x.feed_date)}: ${d.prev.map(f => `${f.feed_type_name} ${fmt(f.kg, 3)} กก.`).join(', ')}`).join('\n')}\n\nบันทึกเพิ่มอีกครั้ง (เช่น รอบเย็น) ใช่ไหม?`)) return;
   const btn = $('#fd_save'); btn.disabled = true;
-  try { await api.insertMany('bsf.batch_feed', rows); toast(`บันทึกการให้อาหาร ${rows.length} รุ่นแล้ว`); S._fd.rows = {}; S.cache = {}; render(); }
+  try { await api.insertMany('bsf.batch_feed', rows); S._fd.rows = {}; S.cache = {}; await render();
+    openModal(`<h3 style="margin-top:0">บันทึกการให้อาหารแล้ว ${rows.length} รุ่น</h3><div class="tscroll"><table><thead><tr><th>รุ่น</th><th>วันที่</th><th>สูตร</th><th class="num">รวม กก.</th></tr></thead><tbody>${rows.map(x => `<tr><td class="mono">${esc(S._fdLive.find(y => y.id === x.batch_id).code)}</td><td class="nowrap">${thDay(x.feed_date)}</td><td>${esc(feedTypeOf(x.feed_type_id).name)}</td><td class="num">${fmt(x.kg, 3)}<div class="muted">${fmt(x.per_tray_kg * 1000, 1)} ก. × ${x.tray_ids.length}</div></td></tr>`).join('')}</tbody></table></div><div class="muted" style="margin-top:6px">ดูรายการได้ที่ตาราง "บันทึกแล้ว" ท้ายหน้านี้ หรือหน้ารุ่น → ประวัติบันทึก</div><div class="row" style="margin-top:10px"><button onclick="closeModal()">ตกลง</button></div>`); }
   catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); btn.disabled = false; S.cache = {}; }
 }
 // admin แก้วันที่ของรายการให้อาหาร: ระหว่างครั้งก่อนหน้าและครั้งถัดไป (ตามลำดับที่บันทึก) · DEC-121
