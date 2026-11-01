@@ -6,13 +6,14 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261101a">
+<link rel="stylesheet" href="../common.css?v=20261101f">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101a"></script>
-<script src="../hh-check.js?v=20261101a"></script>
-<script src="../hh.js?v=20261101a"></script>
+<script src="../common.js?v=20261101f"></script>
+<script src="../hh-check.js?v=20261101f"></script>
+<script src="../food-src.js?v=20261101f"></script>
+<script src="../hh.js?v=20261101f"></script>
 </head>
 <body>
 <header>
@@ -34,7 +35,7 @@
 //   super admin: + ส่วนกลาง (องค์กร ประเภทแหล่งกำเนิดเศษอาหาร ตั้งค่าระบบ)
 // =====================================================================
 const TABS = () => [
-  ['#home', 'แดชบอร์ด'], ['#pickups', 'รายการรอบ'], ['#map', 'แผนที่'], ['#routes', 'เส้นทางรถ'], ['#carbon', 'คาร์บอน'], ...((S.hhLinks || []).length ? [['#hh', 'ครัวเรือน AppTech']] : []),
+  ['#home', 'แดชบอร์ด'], ['#pickups', 'รายการรอบ'], ['#map', 'แผนที่'], ['#routes', 'เส้นทางรถ'], ['#carbon', 'คาร์บอน'], ['#src', 'แหล่งกำเนิด'], ...((S.hhLinks || []).length ? [['#hh', 'ครัวเรือน AppTech']] : []),
   ...(isAdmin() ? [['#admin', 'จัดการ']] : []), ...(isSuper() ? [['#super', 'ส่วนกลาง']] : []), ['#help', 'ช่วยเหลือ'], ['../bsf/', 'กระบะเลี้ยง ›']
 ];
 function renderTabs() { $('#tabs').innerHTML = S.me ? TABS().map(([h, l]) => `<a href="${h}" class="${location.hash.startsWith(h) ? 'active' : ''}">${l}</a>`).join('') : ''; }
@@ -58,6 +59,7 @@ async function render() {
     if (h.startsWith('#dashboard')) return pageDashboard(view);
     if (h.startsWith('#routes')) return pageRoutes(view);
     if (h.startsWith('#carbon')) return pageCarbon(view);
+    if (h.startsWith('#src')) return pageSources(view);
     if (h.startsWith('#hh')) return pageHH(view);
     if (h.startsWith('#map')) return pageMap(view);
     if (h.startsWith('#admin')) return isAdmin() ? pageAdmin(view) : pageDashboard(view);
@@ -293,7 +295,7 @@ async function pageDashboard(view) {
     <div class="grid-dash">
       <div class="card"><div class="cardhead"><h4>รายเดือน (กก.)</h4></div><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>สัดส่วนตามฟาร์ม</h4></div><div class="chartbox"><canvas id="cFarm"></canvas></div></div>
-      <div class="card"><div class="cardhead"><h4>ตามแหล่งกำเนิดเศษอาหาร (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}<div class="cardhead" style="margin-top:14px"><h4>ตามประเภทแหล่งกำเนิดเศษอาหาร</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
+      <div class="card"><div class="cardhead"><h4>ตามแหล่งกำเนิดเศษอาหาร (กก.)</h4></div>${bySrc.map((s, i) => hbar(esc(s.label), s.kg, bySrc[0].kg, PALETTE[i % PALETTE.length], `${fmt(s.kg)} กก. · ${fmtInt(s.n.size)} รอบ`, '#src/' + s.key)).join('') || '<div class="muted">ไม่มีข้อมูล</div>'}<div class="cardhead" style="margin-top:14px"><h4>ตามประเภทแหล่งกำเนิดเศษอาหาร</h4></div>${byType.map((s, i) => hbar(esc(s.label), s.kg, byType[0].kg, PALETTE[(i + 3) % PALETTE.length], `${fmt(s.kg)} กก.`)).join('')}</div>
       <div class="card"><div class="cardhead"><h4>คะแนนคัดแยกเฉลี่ยตามแหล่งกำเนิดเศษอาหาร</h4></div>${bySrc.filter(s => s.q.length).map((s, i) => { const a = sum(s.q.map(q => ({ q })), 'q') / s.q.length; return hbar(esc(s.label), a, 5, a >= 4 ? '#2E7D32' : a >= 3 ? '#F9A825' : '#C62828', `${fmt(a)} / 5 (${fmtInt(s.q.length)})`); }).join('') || '<div class="muted">ยังไม่มีคะแนน</div>'}</div>
     </div>`;
   try {   // DEC-116 กราฟคาร์บอนบนแดชบอร์ด (ตัวกรองเดียวกัน) · ถ้าฐานข้อมูลยังไม่มี view คาร์บอน ข้ามไป
@@ -552,6 +554,7 @@ async function superStatus() {
 // ช่วยเหลือ
 // =====================================================================
 window.HELP = {
+  src: { title: 'รายงานแหล่งกำเนิดเศษอาหาร', why: 'คืนข้อมูลให้แหล่งกำเนิด: ส่งมอบเศษอาหารไปเท่าไร กี่ครั้ง คัดแยกดีแค่ไหน และช่วยลดก๊าซเรือนกระจกได้เท่าไร', steps: ['เมนู "แหล่งกำเนิด" แสดงทุกแหล่ง เลือกโครงการ/ช่วงวันที่ได้', 'กดชื่อแหล่ง (หรือแท่งในแดชบอร์ด) เพื่อเปิดรายงานของแหล่งนั้น', 'ปุ่ม "พิมพ์ / PDF" เปิดรายงานพร้อมพิมพ์ → เลือกเครื่องพิมพ์ "บันทึกเป็น PDF" แล้วส่งให้แหล่งกำเนิด', 'ปุ่ม CSV ได้ไฟล์รายครั้งเปิดใน Excel'], note: 'ก๊าซรายแหล่ง = หลีกเลี่ยงการฝังกลบ (และหักการเลี้ยงหนอน) ยังไม่หักการขนส่ง เพราะรถหนึ่งเที่ยวรับหลายแหล่ง' },
   home: { title: 'หน้าแรก (แดชบอร์ด)', why: 'เห็นภาพรวมทันทีที่เปิด และมีปุ่มบันทึกเร็ว', steps: ['กดปุ่มเขียว "＋ บันทึกรอบเข้ารับ" เมื่อกลับจากไปรับเศษอาหาร', 'ใช้ตัวกรองโครงการ/ฟาร์ม/ช่วงวันที่ด้านบน', 'ถ้ามีปุ่ม "รอส่ง" มุมบน แปลว่ามีรายการที่ยังส่งไม่ได้ กดเพื่อส่งเมื่อมีสัญญาณ'] },
   'pickup-new': { title: 'บันทึกรอบเข้ารับ', why: '1 รอบ = ไปรับ 1 ครั้งสำหรับ 1 ฟาร์ม อาจรับจากหลายแหล่งกำเนิดเศษอาหาร', steps: ['เลือกฟาร์มที่นำเศษอาหารไป และวันที่ (ระบบจำฟาร์มล่าสุดให้) · โครงการวิจัยล็อกตามฟาร์ม เปลี่ยนไม่ได้ · แหล่งกำเนิดและรถที่แสดง = ของโครงการนั้น + ส่วนกลาง', 'กรอกน้ำหนัก (กก.) เฉพาะแหล่งกำเนิดเศษอาหารที่ไปรับ แหล่งกำเนิดเศษอาหารที่ไม่ได้รับเว้นว่าง', 'ให้คะแนนคัดแยก 1–5 ของแต่ละแหล่งกำเนิดเศษอาหาร (ไม่บังคับ): 1 ปนขยะอื่นมาก … 5 สะอาดดีเยี่ยม', 'ถ่ายรูปใบชั่ง/ถัง (ไม่เกิน 3 รูป) แล้วกดบันทึก'], done: 'ขึ้นข้อความ "บันทึกรอบเข้ารับแล้ว" และเปิดหน้ารายละเอียดรอบ', note: 'ไม่มีสัญญาณ: กดบันทึกได้ตามปกติ ระบบเก็บไว้ในเครื่องและส่งเองเมื่อมีสัญญาณ (ดูปุ่ม "รอส่ง") · อย่าล้างข้อมูลเบราว์เซอร์ระหว่างมีรายการค้าง' },
   pickups: { title: 'รายการรอบเข้ารับ', steps: ['กรองตามช่วงวันที่/ฟาร์ม หรือพิมพ์ค้นหา', 'กดหัวตารางเพื่อเรียง', '"ส่งออก CSV" ได้ไฟล์รายการต่อแหล่งกำเนิดเศษอาหาร เปิดใน Excel ได้'] },
@@ -570,7 +573,7 @@ window.HELP = {
   queue: { title: 'รายการรอส่ง', steps: ['รายการที่บันทึกตอนไม่มีสัญญาณ', 'เมื่อมีสัญญาณกด "ส่งตอนนี้" หรือรอระบบส่งเอง', 'รายการสีแดงคือส่งไม่ผ่าน อ่านเหตุผลแล้วแก้ หรือลบถ้าซ้ำ'] }
 };
 function pageHelp(view) {
-  const rec = ['home', 'pickup-new', 'pickups', 'map', 'routes', 'carbon', 'hh', 'hh-check', 'hh-sync', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-carbon', 'admin-users'];
+  const rec = ['home', 'pickup-new', 'pickups', 'map', 'routes', 'carbon', 'src', 'hh', 'hh-check', 'hh-sync', 'queue'], adm = ['dashboard', 'admin-farm', 'admin-source', 'admin-project', 'admin-carbon', 'admin-users'];
   const sec = (title, keys) => `<div class="card"><h3 style="margin-top:0">${title}</h3>${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>`;
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ</h3><div class="muted">ทุกหน้ามีไอคอน (?) · บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ติดปัญหา: ผู้บันทึกติดต่อ admin · admin ติดต่อเจ้าของโครงการ</div></div>
     ${sec('สำหรับผู้บันทึก', rec)}${isAdmin() ? sec('สำหรับ admin', adm) : ''}

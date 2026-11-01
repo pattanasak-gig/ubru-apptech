@@ -593,7 +593,7 @@ function drawCarbonCharts(p, rows, items, factors) {
   const ms = Object.values(mm).sort((a, b) => a.k.localeCompare(b.k)); const labels = ms.map(m => thMonth(m.k + '-01'));
   let cum = 0; const cumNet = ms.map(m => r2(cum += m.net));
   const base = { responsive: true, maintainAspectRatio: false };
-  const tip = { callbacks: { label: c => `${c.dataset.label}: ${fmt2(c.parsed.y ?? c.parsed.x)} kgCO2e` } };
+  const tip = { callbacks: { label: c => `${c.dataset.label}: ${fmt2(c.chart.options.indexAxis === 'y' ? c.parsed.x : c.parsed.y)} kgCO2e` } };   // กราฟแนวนอน ค่าอยู่ที่ x (เดิมอ่าน y = ลำดับแท่ง ได้ 0.00/1.00)
   if ($('#' + p + 'Trans') && ms.length) mkChart($('#' + p + 'Trans'), { type: 'bar', data: { labels, datasets: [{ label: 'ปล่อยจากการขนส่ง', data: ms.map(m => r2(m.tr)), backgroundColor: '#C62828' }] }, options: { ...base, plugins: { legend: { display: false }, tooltip: tip }, scales: { y: { beginAtZero: true, title: { display: true, text: 'kgCO2e' } } } } });
   if ($('#' + p + 'Bal') && ms.length) mkChart($('#' + p + 'Bal'), { data: { labels, datasets: [
     { type: 'bar', label: 'หลีกเลี่ยงการฝังกลบ', data: ms.map(m => r2(m.av)), backgroundColor: '#2E7D32', yAxisID: 'y' },
