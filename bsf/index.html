@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>กระบะเลี้ยงหนอน BSF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../common.css?v=20261101c">
+<link rel="stylesheet" href="../common.css?v=20261101d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101c"></script>
-<script src="../bsf-plan.js?v=20261101c"></script>
+<script src="../common.js?v=20261101d"></script>
+<script src="../bsf-plan.js?v=20261101d"></script>
 <style>
 .bcard h4 a { text-decoration:none; font-size:20px; }
 .bcard .acts, .acts { margin-top:8px; gap:6px; }
@@ -112,6 +112,10 @@ const priceOn = (ingId, date) => { const p = (S.prices || []).filter(x => x.ingr
 function recipeSplit(recipeId, kg) { const items = (S.recipeItems || []).filter(i => i.recipe_id === recipeId), tot = items.reduce((s, i) => s + Number(i.parts), 0); return tot > 0 ? items.map(i => ({ ingredient_id: i.ingredient_id, name: ingOf(i.ingredient_id).name || '?', is_water: !!ingOf(i.ingredient_id).is_water, kg: kg * Number(i.parts) / tot })) : []; }
 const recipeText = id => { const items = (S.recipeItems || []).filter(i => i.recipe_id === id); return items.length ? items.map(i => `${ingOf(i.ingredient_id).name || '?'} ${fmt(i.parts)}`).join(' : ') : 'ยังไม่มีส่วนผสม (admin ตั้งที่ จัดการ → ส่วนผสมสูตร)'; };
 const costText = (cost, missing) => (cost == null && !Number(missing)) ? '-' : `${fmt(cost || 0)} บาท${Number(missing) ? ` <span class="muted">(ยังไม่มีราคา ${fmtInt(missing)} รายการ)</span>` : ''}`;
+// เรียงรหัสกระบะตามตัวเลขทีละช่วง (1, 1.1, 1.2, 2 … 10) ไม่ใช่ตามตัวอักษร (1, 10, 2)
+const seqCmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] ?? -1) - (y[i] ?? -1); if (d) return d; } return 0; };
+const listTrays = async o => (await api.list('bsf.v_tray', o)).sort((p, q) => String(p.batch_id).localeCompare(String(q.batch_id)) || seqCmp(p.seq, q.seq));
+const sortCodes = list => String(list || '').split(', ').filter(Boolean).sort((a, b) => seqCmp(a.split('-').pop(), b.split('-').pop())).join(', ');
 const trayShort = (b, code) => String(code || '').startsWith(b.code + '-') ? String(code).slice(b.code.length + 1) : code;
 async function listBatches(extra = {}) {
   const rows = await api.list('bsf.v_batch', { eq: { ...scopeEq(), ...(extra.eq || {}) }, order: ['lay_date', false], order2: ['code', false] });
@@ -198,11 +202,11 @@ function exportBatches() {
 async function pageBatch(view, id) {
   const b = await batchById(id);
   const [feeds, events, trays] = await Promise.all([api.list('bsf.v_batch_feed', { eq: { batch_id: id }, order: ['feed_date'] }), api.list('bsf.v_batch_event', { eq: { batch_id: id }, order: ['event_date'] }),
-    S.has017 ? api.list('bsf.v_tray', { eq: { batch_id: id }, order: ['seq'] }) : Promise.resolve([])]);
+    S.has017 ? listTrays({ eq: { batch_id: id }, order: ['seq'] }) : Promise.resolve([])]);
   const showOff = isAdmin(), harvested = b.stage === 'harvested', today = todayISO(), W = feedWeekdays(), minFeed = b.last_feed_date || b.lay_date; S._bfFeeds = feeds;
   const tl = [...feeds.map(f => ({ ...f, _t: 'feed', _d: f.feed_date })), ...events.map(e => ({ ...e, _t: e.kind, _d: e.event_date }))]
     .filter(x => showOff || x.status === 'active').sort((a, c) => a._d.localeCompare(c._d) || String(a.created_at).localeCompare(String(c.created_at)));
-  const codes = s => s ? String(s).split(', ').map(c => trayShort(b, c)).join(', ') : '';
+  const codes = s => s ? sortCodes(s).split(', ').map(c => trayShort(b, c)).join(', ') : '';
   const what = x => x._t === 'feed' ? `ให้อาหาร: ${esc(x.feed_type_name)}` : x._t === 'split' ? `แบ่งกระบะ ${esc(trayShort(b, x.tray_code) || '')}${x.new_tray_codes ? ' → ' + esc(codes(x.new_tray_codes)) : ''}` : x._t === 'harvest' ? '<b>เก็บเกี่ยว</b>' : x._t === 'sample' ? 'สุ่มชั่ง' : x._t === 'cage' ? `ย้ายดักแด้เข้า${esc(x.cage_name || 'โรงบิน ' + (x.cage_no || ''))}` : `${esc(OUT_LABEL[x.out_type] || x.out_type)}${x.hh_code ? ' ' + esc(x.hh_code) + (hhName(x.hh_code) ? ' · ' + esc(hhName(x.hh_code)) : '') : ''}${x.after_harvest ? ' <span class="pill">หลังเก็บเกี่ยว</span>' : ''}`;
   const detail = x => x._t === 'feed' ? (x.per_tray_kg ? `${fmt(x.per_tray_kg * 1000, 1)} ก. × ${fmtInt(x.tray_count)} กระบะ = ${fmt(x.kg, 3)} กก.` : `${fmt(x.kg, 3)} กก.`) + (x.cost != null ? ` · ${fmt(x.cost)} บาท` : '') : x._t === 'split' ? `ออกเป็น ${fmtInt(x.split_into || (x.trays_delta + 1))} ใบ (+${fmtInt(x.trays_delta)})${x.kg != null ? ` · ชั่ง ${fmt(x.kg)} กก.` : ''}` : x._t === 'harvest' ? `หนอน 5 มม. ${fmt(x.larvae_5mm_kg)} · 3 มม. ${fmt(x.larvae_3mm_kg)} · มูล ${fmt(x.frass_kg)} กก.` : x._t === 'sample' ? `${fmtInt(x.sample_n)} ตัว ${fmt(x.sample_g)} ก. (${fmt(x.sample_g * 1000 / x.sample_n, 1)} มก./ตัว)` : x._t === 'cage' ? [x.kg != null ? fmt(x.kg) + ' กก.' : '', x.pupae_count ? fmtInt(x.pupae_count) + ' ตัว' : ''].filter(Boolean).join(' · ') : [x.tray_codes ? 'กระบะ ' + esc(codes(x.tray_codes)) : x.trays ? fmtInt(x.trays) + ' กระบะ' : '', x.kg != null ? fmt(x.kg) + ' กก.' : ''].filter(Boolean).join(' · ');
   const byType = {}; feeds.filter(f => f.status === 'active').forEach(f => { byType[f.feed_type_name] = (byType[f.feed_type_name] || 0) + Number(f.kg); });
@@ -318,7 +322,7 @@ async function pageFeed(view) {
   if (parts[1] && /^\d{4}-\d{2}-\d{2}$/.test(parts[1]) && parts[1] !== st.date) { st.date = parts[1]; st.rows = {}; }
   const focus = parts[2] || '', date = st.date;
   if (!S.has017) { view.innerHTML = need017() + '<div class="card">หน้าจอให้อาหารใช้ได้หลังรัน sql/017</div>'; return; }
-  const [rows, trays, done] = await Promise.all([listBatches({ eq: { status: 'active' } }), api.list('bsf.v_tray', { eq: scopeEq(), order: ['seq'] }), api.list('bsf.v_batch_feed', { eq: { ...scopeEq(), status: 'active' }, gte: { feed_date: bsfAddDays(date, -21) } })]);
+  const [rows, trays, done] = await Promise.all([listBatches({ eq: { status: 'active' } }), listTrays({ eq: scopeEq(), order: ['seq'] }), api.list('bsf.v_batch_feed', { eq: { ...scopeEq(), status: 'active' }, gte: { feed_date: bsfAddDays(date, -21) } })]);
   const live = rows.filter(b => b.lay_date <= date && (!b.harvest_date || b.harvest_date > date)).sort((a, b) => a.code.localeCompare(b.code));
   const recipes = (S.feedTypes || []).filter(t => t.status === 'active'), W = feedWeekdays();
   S._fdLive = live;
@@ -391,7 +395,7 @@ function feedDateForm(id) {
 }
 async function splitForm(id) {
   const b = S._batchIdx[id];
-  const all = await api.list('bsf.v_tray', { eq: { batch_id: id }, order: ['seq'] }), act = all.filter(x => x.status === 'active');
+  const all = await listTrays({ eq: { batch_id: id }, order: ['seq'] }), act = all.filter(x => x.status === 'active');
   if (!act.length) return toastErr('ไม่มีกระบะให้แบ่ง', 'ทุกกระบะของรุ่นนี้ออกจากรุ่นไปแล้ว');
   S._split = { m: 2, sel: act.length === 1 ? [act[0].id] : [], all };
   openModal(`<h3 style="margin-top:0">แบ่งกระบะ · <span class="mono">${esc(b.code)}</span></h3><div class="muted">กระบะที่แบ่งออกนับเป็นรุ่นเดียวกัน · ใบเดิมคงรหัส ใบใหม่ได้รหัสต่อท้าย</div>
@@ -418,7 +422,7 @@ async function splitForm(id) {
 }
 async function outForm(id, preset) {
   const b = S._batchIdx[id], harvested = b.stage === 'harvested'; await hhLoad(); S._outProject = b.project_id;
-  const act = harvested ? [] : (await api.list('bsf.v_tray', { eq: { batch_id: id, status: 'active' }, order: ['seq'] })); S._outSel = [];
+  const act = harvested ? [] : (await listTrays({ eq: { batch_id: id, status: 'active' }, order: ['seq'] })); S._outSel = [];
   const types = Object.entries(OUT_TYPES), type0 = preset || (b.age_days >= nurseryDays() ? 'household' : 'dead');
   openModal(`<h3 style="margin-top:0">${preset === 'household' ? 'แจกครัวเรือน' : 'ออกจากรุ่น'} · <span class="mono">${esc(b.code)}</span></h3>
     <div class="muted">${harvested ? `หลังเก็บเกี่ยว: หนอนคงเหลือ ${fmt(b.larvae_left_kg)} กก. · ใส่เป็น กก.` : `ติ๊กกระบะที่ออก (ทั้งกระบะ) และใส่ กก. ถ้าชั่ง`}</div>
