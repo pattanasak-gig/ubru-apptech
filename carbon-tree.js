@@ -101,17 +101,8 @@ const CT_BASE = (typeof document !== 'undefined' && document.currentScript && do
 const CT_KB = [['method', 'วิธีคำนวณ'], ['factors', 'ค่าอ้างอิงและแหล่งที่มา'], ['sensitivity', 'เทียบวิธีคำนวณ'], ['trees', 'ต้นไม้เทียบเท่าคืออะไร'], ['scope', 'ขอบเขตและข้อจำกัด']];
 const ctKb = h => CT_BASE + 'kb/#' + h;
 const ctKbLink = (h, label) => `<a href="${ctKb(h)}" target="_blank" rel="noopener">${label || 'อ่านเพิ่ม: ' + (CT_KB.find(x => x[0] === h) || [h, h])[1]} ›</a>`;
-// ปุ่ม ? เปิดป๊อปอัป (ใช้ openModal ของ common.js · ปิดด้วยปุ่ม แตะพื้นหลัง หรือ Esc)
-const CT_Q = {};
-function ctQ(title, html) {
-  const id = 'q' + Object.keys(CT_Q).length; CT_Q[id] = { title, html };
-  return `<button type="button" class="infobtn ct-q" aria-label="ที่มาของตัวเลข: ${esc(title)}" onclick="ctShowQ('${id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button>`;
-}
-function ctShowQ(id) {
-  const q = CT_Q[id]; if (!q) return;
-  openModal(`<h3 style="margin-top:0">${esc(q.title)}</h3><div class="ct-pop">${q.html}</div><div class="row" style="margin-top:12px"><button onclick="closeModal()">ปิด</button></div>`);
-  const esc1 = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc1); } }; document.addEventListener('keydown', esc1);
-}
+// ปุ่ม ? ใช้ qBtn ของ common.js (ป๊อปอัปเดียวกันทั้งระบบ)
+const ctQ = (title, html) => (typeof qBtn === 'function' ? qBtn(title, html, 'ที่มาของตัวเลข: ' + title) : '');
 const ctCite = f => f ? `${fmtEf(f.value)} ${esc(f.unit)} — ${esc(f.code)}` : '-';
 // เนื้อป๊อปอัปของแต่ละตัวเลข (สูตร + ตัวเลขจริงของตัวนั้น)
 function ctPopTrees(s, fx) {

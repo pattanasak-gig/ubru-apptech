@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>กระบะเลี้ยงหนอน BSF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../common.css?v=20261101k">
+<link rel="stylesheet" href="../common.css?v=20261101l">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101k"></script>
-<script src="../bsf-plan.js?v=20261101k"></script>
+<script src="../common.js?v=20261101l"></script>
+<script src="../bsf-plan.js?v=20261101l"></script>
 <style>
 .bcard h4 a { text-decoration:none; font-size:20px; }
 .bcard .acts, .acts { margin-top:8px; gap:6px; }
@@ -234,7 +234,7 @@ async function pageBatch(view, id) {
       ${trays.map(x => `<tr class="${x.status === 'inactive' ? 'off' : ''}"><td class="mono nowrap">${esc(x.code)}</td><td class="mono">${x.parent_code ? esc(x.parent_code) : '<span class="muted">กระบะอนุบาล</span>'}</td><td class="nowrap">${thDay(x.created_on)}</td><td>${trayStatus(x)}</td></tr>`).join('')}
       </tbody></table></div></div>` : ''}
     <div class="card"><div class="cardhead"><h4>ตารางการเลี้ยง ${helpBtn('bsf-schedule')}</h4></div>
-      <div class="muted" style="margin-bottom:6px">วันให้หลัก ${W.map(w => DOW[w]).join(' ')} (ไม่บังคับ) · อาหารตามแผนรายวัน = ${fmtInt(t.lo.larvae)}–${fmtInt(t.hi.larvae)} ตัว/กระบะ × k ÷ ${fmtInt(P().feed_unit_larvae)} × จำนวนกระบะวันนั้น (ช่วงอนุบาลกรอกตามจริง) · กด "ให้อาหาร" ที่แถวเพื่อไปหน้าจอให้อาหารของวันนั้น</div>
+      <div class="muted" style="margin-bottom:6px">วันให้หลัก ${W.map(w => DOW[w]).join(' ')} ${qBtn('อาหารตามแผนรายวัน', `<p>อาหารตามแผนรายวัน = ${fmtInt(t.lo.larvae)}–${fmtInt(t.hi.larvae)} ตัว/กระบะ × k ÷ ${fmtInt(P().feed_unit_larvae)} × จำนวนกระบะวันนั้น (ช่วงอนุบาลกรอกตามจริง) · กด "ให้อาหาร" ที่แถวเพื่อไปหน้าจอให้อาหารของวันนั้น</p>`)}</div>
       <div class="tscroll"><table><thead><tr><th>วันที่</th><th class="num">อายุ</th><th>กิจกรรม</th><th class="num">กระบะ</th><th class="num">ตามแผน กก.</th><th class="num">จริง กก.</th>${canWrite() && !harvested && b.status === 'active' ? '<th></th>' : ''}</tr></thead><tbody>
       ${sched.map(r => `<tr class="${r.date === today ? 'today' : r.date > today ? 'future' : ''}"><td class="nowrap">${thDay(r.date)}</td><td class="num">${r.age}</td><td>${W.includes(bsfIsoDow(r.date)) ? '<span class="pill">วันให้หลัก</span> ' : ''}${esc(r.activity)}${r.events.length ? `<div class="muted">${r.events.map(e => e.kind === 'out' ? OUT_LABEL[e.out_type] : { split: 'แบ่งกระบะ', harvest: 'เก็บเกี่ยว', sample: 'สุ่มชั่ง', cage: 'เข้าโรงบิน' }[e.kind]).join(' · ')}</div>` : ''}</td><td class="num">${fmtInt(r.trays)}</td><td class="num">${r.plan ? range(r.plan.lo, r.plan.hi) : '-'}</td><td class="num">${r.actual != null ? `<b>${fmt(r.actual, 3)}</b>` : '-'}</td>${canWrite() && !harvested && b.status === 'active' ? `<td>${r.date <= today && r.date >= minFeed && S.has017 ? `<button class="small secondary" onclick="go('#feed/${r.date}/${b.id}')">ให้อาหาร</button>` : ''}</td>` : ''}</tr>`).join('')}
       </tbody></table></div></div>
@@ -348,7 +348,7 @@ async function pageFeed(view) {
   };
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>ให้อาหาร ${helpBtn('bsf-feed')}</h4></div>
       <div class="row"><label style="margin:0">วันที่ (ทุกรุ่น) <input type="date" value="${date}" max="${todayISO()}" style="width:auto" onchange="if(this.value){S._fd.date=this.value;S._fd.rows={};go('#feed/'+this.value)}"></label></div>
-      <div class="muted" style="margin-top:6px">วันให้หลัก: ${W.map(w => DOW[w]).join(' ')} (ไม่บังคับ ให้เพิ่มวันอื่นได้) · แต่ละรุ่นเปลี่ยนวันที่ของตัวเองได้ (ย้อนหลังได้ แต่ไม่ก่อนวันให้ล่าสุดของรุ่นนั้น) · ติ๊กกระบะ · เลือกสูตร · ใส่ปริมาณต่อกระบะ · รุ่นที่เว้นว่างจะไม่ถูกบันทึก</div></div>
+      <div class="muted" style="margin-top:6px">วันให้หลัก: ${W.map(w => DOW[w]).join(' ')} · รุ่นที่เว้นว่างจะไม่ถูกบันทึก</div></div>
     ${live.map(card).join('') || '<div class="card muted">ไม่มีรุ่นที่เลี้ยงอยู่ในวันที่เลือก</div>'}
     ${live.length && canWrite() ? `<div class="card" id="fd_sum"></div><div class="row" style="margin-bottom:80px"><button id="fd_save" onclick="saveFeeds()">บันทึกการให้อาหาร</button></div>` : ''}
     ${fdDoneTable(done.filter(f => f.feed_date === date), date)}`;
@@ -670,7 +670,7 @@ function pageHelp(view) {
   const keys = ['bsf-home', 'bsf-feed', 'bsf-trays', 'bsf-new', 'bsf-schedule', 'bsf-batches', 'bsf-timeline', 'bsf-plan', 'bsf-summary', ...(isAdmin() ? ['bsf-recipe', 'bsf-admin'] : [])];
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ: กระบะเลี้ยง</h3><div class="muted">บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ผู้บันทึกเพิ่มรายการได้ · แก้/ยกเลิกต้องให้ admin</div>
     ${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>
-    <div class="card"><h3 style="margin-top:0">วงจรของรุ่น</h3><ol style="padding-left:22px"><li>วัน 0: ลงหนอนแรกฟักในกระบะอนุบาล (ไข่ ${esc(fmt(P().eggs_per_tray_g))} ก./กระบะ) ให้รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)</li><li>อายุ ${esc(String(nurseryDays()))} วัน: แบ่งลงกระบะเลี้ยง (แบ่ง n กระบะ ออกเป็น 2–4) และ/หรือแจกครัวเรือน (แจกได้ตั้งแต่อายุ ${esc(String(nurseryDays()))} วัน)</li><li>เลี้ยงต่อตามตารางอาหาร: เศษอาหารสด/หมัก (บดสับได้) หรือรำหยาบ+อาหารไก่ (17%) · กลับหนอนอายุ 12–14 · สุ่มชั่ง 100 ตัวอายุ 15–17</li><li>อายุ ${esc(setting('bsf_harvest_min_days') || '15')}–${esc(setting('bsf_harvest_max_days') || '20')} วัน: เก็บเกี่ยว ชั่งหนอนตะแกรง 5 มม. / 3 มม. และมูล</li><li>พ่อแม่พันธุ์: ออกจากรุ่น → เก็บเป็นพ่อแม่พันธุ์ → อยู่กับศูนย์จนเป็นดักแด้ → ย้ายดักแด้เข้าโรงบิน 1–10</li></ol></div>
+    <details class="card ct-more"><summary>วงจรของรุ่น</summary><ol style="padding-left:22px"><li>วัน 0: ลงหนอนแรกฟักในกระบะอนุบาล (ไข่ ${esc(fmt(P().eggs_per_tray_g))} ก./กระบะ) ให้รำหยาบ+อาหารไก่อ่อน (โปรตีน 20%)</li><li>อายุ ${esc(String(nurseryDays()))} วัน: แบ่งลงกระบะเลี้ยง (แบ่ง n กระบะ ออกเป็น 2–4) และ/หรือแจกครัวเรือน (แจกได้ตั้งแต่อายุ ${esc(String(nurseryDays()))} วัน)</li><li>เลี้ยงต่อตามตารางอาหาร: เศษอาหารสด/หมัก (บดสับได้) หรือรำหยาบ+อาหารไก่ (17%) · กลับหนอนอายุ 12–14 · สุ่มชั่ง 100 ตัวอายุ 15–17</li><li>อายุ ${esc(setting('bsf_harvest_min_days') || '15')}–${esc(setting('bsf_harvest_max_days') || '20')} วัน: เก็บเกี่ยว ชั่งหนอนตะแกรง 5 มม. / 3 มม. และมูล</li><li>พ่อแม่พันธุ์: ออกจากรุ่น → เก็บเป็นพ่อแม่พันธุ์ → อยู่กับศูนย์จนเป็นดักแด้ → ย้ายดักแด้เข้าโรงบิน 1–10</li></ol></details>
     <div class="row"><a class="btn secondary" style="text-decoration:none" href="#about">เกี่ยวกับระบบ</a></div>`;
 }
 

@@ -6,16 +6,16 @@
 <title>บันทึกการเข้ารับเศษอาหาร</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="../common.css?v=20261101k">
+<link rel="stylesheet" href="../common.css?v=20261101l">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="../common.js?v=20261101k"></script>
-<script src="../hh-check.js?v=20261101k"></script>
-<script src="../carbon-tree.js?v=20261101k"></script>
-<script src="../src-report.js?v=20261101k"></script>
-<script src="../food-src.js?v=20261101k"></script>
-<script src="../hh.js?v=20261101k"></script>
+<script src="../common.js?v=20261101l"></script>
+<script src="../hh-check.js?v=20261101l"></script>
+<script src="../carbon-tree.js?v=20261101l"></script>
+<script src="../src-report.js?v=20261101l"></script>
+<script src="../food-src.js?v=20261101l"></script>
+<script src="../hh.js?v=20261101l"></script>
 </head>
 <body>
 <header>
@@ -127,8 +127,8 @@ async function pagePickups(view) {
   S._pkRows = f;
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>รายการรอบเข้ารับ (${fmtInt(f.length)}) ${helpBtn('pickups')}</h4><button class="small secondary" onclick="exportPickups()">ส่งออก CSV</button></div>
     <div class="row"><select style="width:auto;max-width:360px" onchange="S._pk.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projectsOfScope().map(x => `<option value="${x.id}" ${x.id === st.project ? 'selected' : ''}>${esc(x.code)}</option>`).join('')}</select><label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._pk.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._pk.to=this.value;render()" style="width:auto"></label>
-      <select style="width:auto" onchange="S._pk.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-      <input type="search" placeholder="ค้นหา…" value="${esc(st.q)}" onchange="S._pk.q=this.value;render()" style="flex:1;min-width:140px"></div>
+      <select aria-label="กรองตามฟาร์ม" style="width:auto" onchange="S._pk.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+      <input aria-label="ค้นหารอบเข้ารับ" type="search" placeholder="ค้นหา…" value="${esc(st.q)}" onchange="S._pk.q=this.value;render()" style="flex:1;min-width:140px"></div>
     <div class="muted" style="margin:6px 0">รวม <b>${fmt(sum(f, 'total_kg'))}</b> กก. · ${fmtInt(f.length)} รอบ</div>
     ${pickupTable(f, 'tblPickupsAll')}</div>
     ${canWrite() ? `<button class="fab" onclick="go('#pickup/new')">＋ บันทึกรอบเข้ารับ</button>` : ''}`;
@@ -290,8 +290,8 @@ async function pageDashboard(view) {
   const months = {}; for (const i of items) { const m = i.pickup_date.slice(0, 7); months[m] = months[m] || { m, kg: 0, n: new Set() }; months[m].kg += +i.weight_kg; months[m].n.add(i.pickup_id); }
   const mArr = Object.values(months).sort((a, b) => a.m.localeCompare(b.m));
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>แดชบอร์ด ${helpBtn('dashboard')}</h4><button class="small secondary" onclick="exportCsv(S._dashItems,'dashboard_items')">ส่งออก CSV</button></div>
-    <div class="row"><select style="width:auto" onchange="S._dash.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projects.map(p => `<option value="${p.id}" ${p.id === st.project ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
-      <select style="width:auto" onchange="S._dash.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <div class="row"><select aria-label="กรองโครงการวิจัย" style="width:auto" onchange="S._dash.project=this.value;render()"><option value="">ทุกโครงการวิจัย</option>${projects.map(p => `<option value="${p.id}" ${p.id === st.project ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
+      <select aria-label="กรองตามฟาร์ม" style="width:auto" onchange="S._dash.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._dash.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._dash.to=this.value;render()" style="width:auto"></label></div></div>
     <div class="kpis"><div class="kpi hero"><div class="l">เศษอาหารที่เข้ารับทั้งหมด</div><div class="v">${fmt(total)} กก.</div></div><div class="kpi"><div class="l">รอบเข้ารับ</div><div class="v">${fmtInt(pickups)}</div></div><div class="kpi"><div class="l">เฉลี่ยต่อรอบ</div><div class="v">${pickups ? fmt(total / pickups) : '-'} กก.</div></div><div class="kpi"><div class="l">ฟาร์ม / แหล่งกำเนิด</div><div class="v">${fmtInt(byFarm.length)} / ${fmtInt(bySrc.length)}</div></div><div class="kpi"><div class="l">คะแนนคัดแยกเฉลี่ย (${fmtInt(qs.length)} รายการ)</div><div class="v">${avgQ != null ? fmt(avgQ) : '-'}</div></div></div>
     <div class="grid-dash">
@@ -331,7 +331,7 @@ async function pageCarbon(view) {
   let srcRows = null; try { srcRows = await api.list('food.v_source_carbon', o); } catch (e) { console.warn('v_source_carbon (sql/021) missing:', e && e.message); }   // DEC-124
   const tree = { set: ctSetFromRounds(rows), srcSets: srcRows ? ctSetsFromSources(srcRows) : null, subject: st.project ? 'โครงการนี้' : 'ศูนย์', isPublic: false };
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>คาร์บอน ${helpBtn('carbon')}</h4><button class="small secondary" onclick="exportCsv(S._coRows,'carbon_pickups')">ส่งออก CSV (รายรอบ)</button></div>
-    <div class="row">${projectFilter('S._co.project', st.project)}<select style="width:auto" onchange="S._co.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.filter(f => !st.project || f.project_id === st.project).map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <div class="row">${projectFilter('S._co.project', st.project)}<select aria-label="กรองตามฟาร์ม" style="width:auto" onchange="S._co.farm=this.value;render()"><option value="">ทุกฟาร์ม</option>${S.farms.filter(f => !st.project || f.project_id === st.project).map(x => `<option value="${x.id}" ${x.id === st.farm ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <label style="margin:0">ตั้งแต่ <input type="date" value="${st.from}" onchange="S._co.from=this.value;render()" style="width:auto"></label><label style="margin:0">ถึง <input type="date" value="${st.to}" onchange="S._co.to=this.value;render()" style="width:auto"></label>${isAdmin() ? '<a href="#admin/carbon" class="small">แก้ค่าสัมประสิทธิ์</a>' : ''}</div></div>
     ${carbonReport({ groups, factors, sources: Object.values(sm), groupTitle: 'รายฟาร์มและเส้นทาง', chartsHtml: carbonChartCards('cc'), tree })}`;
   drawCarbonCharts('cc', rows, items, factors);
@@ -363,7 +363,7 @@ async function pageRoutes(view) {
   const stopsAll = vis.length ? await api.list('food.v_route_stop', { in: { route_id: vis.map(r => r.id) }, order: ['seq'] }) : [];
   const editing = st.editing ? routes.find(r => r.id === st.editing) : null;
   view.innerHTML = `${scopeSelector()}<div class="card"><div class="cardhead"><h4>เส้นทางเดินรถ (${fmtInt(shown.length)}) ${helpBtn('routes')}</h4><div class="row">${isAdmin() && canWrite() ? `<button class="small" onclick="routeForm()">＋ เพิ่มเส้นทาง</button>` : ''}</div></div>
-    <div class="row" style="margin-bottom:6px">${projectFilter('S._rt.project', st.project)}<select style="width:auto" onchange="S._rt.farm=this.value;render()"><option value="">ทุกฟาร์มปลายทาง</option>${S.farms.filter(f => !st.project || f.project_id === st.project).map(f => `<option value="${f.id}" ${f.id === st.farm ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><span class="muted">ติ๊กเพื่อเลือกแสดงบนแผนที่ · ระยะทางคำนวณจากถนนจริง (OSRM) เมื่อ admin กด "ลากเส้นตามถนน"</span></div>
+    <div class="row" style="margin-bottom:6px">${projectFilter('S._rt.project', st.project)}<select aria-label="กรองตามฟาร์ม" style="width:auto" onchange="S._rt.farm=this.value;render()"><option value="">ทุกฟาร์มปลายทาง</option>${S.farms.filter(f => !st.project || f.project_id === st.project).map(f => `<option value="${f.id}" ${f.id === st.farm ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><span class="muted">ติ๊กเพื่อเลือกแสดงบนแผนที่ · ระยะทางคำนวณจากถนนจริง (OSRM) เมื่อ admin กด "ลากเส้นตามถนน"</span></div>
     <div style="overflow:auto"><table><thead><tr><th></th><th>เส้นทาง</th><th>ปลายทาง (ฟาร์ม)</th><th class="num">จุดรับ</th><th class="num">กม.</th><th class="num">นาที</th><th>คำนวณเมื่อ</th><th></th></tr></thead><tbody>
     ${shown.map((r, i) => `<tr><td><label class="pick-opt" style="padding:0"><input type="checkbox" ${st.hidden[r.id] ? '' : 'checked'} onchange="S._rt.hidden['${r.id}']=!this.checked;render()" aria-label="แสดง ${esc(r.name)}"><span class="legend-sw" style="background:${RCOL[i % RCOL.length]}"></span></label></td><td><b>${esc(r.name)}</b>${r.round_trip ? ' <span class="pill">ไป–กลับ</span>' : ''}${r.start_name ? `<div class="muted">เริ่ม: ${esc(r.start_name)}</div>` : ''}${r.vehicle_name ? `<div class="muted">รถ ${esc(r.vehicle_name)}</div>` : ''}</td><td>${esc(r.farm_name)}</td><td class="num">${fmtInt(r.stops)}</td><td class="num">${r.path_km != null ? fmt(r.path_km, 1) : '<span class="muted">ยังไม่คำนวณ</span>'}</td><td class="num">${r.path_duration_s != null ? fmtInt(r.path_duration_s / 60) : '-'}</td><td class="muted">${r.path_at ? thDate(r.path_at) : '-'}</td>
       <td style="white-space:nowrap">${isAdmin() && canWrite() ? `<button class="small secondary" onclick="routeForm('${r.id}')">แก้</button> <button class="small" onclick="computeRoute('${r.id}')">ลากเส้นตามถนน</button> <button class="small secondary" onclick="S._rt.editing=${st.editing === r.id ? 'null' : `'${r.id}'`};S._rt.via=${st.editing === r.id ? '[]' : JSON.stringify(r.via || [])};S._rt.view=null;render()">${st.editing === r.id ? 'เลิกปรับ' : 'ปรับเส้นทาง'}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">ยังไม่มีเส้นทาง' + (isAdmin() ? ' กด "＋ เพิ่มเส้นทาง"' : '') + '</td></tr>'}</tbody></table></div>
@@ -582,7 +582,7 @@ function pageHelp(view) {
   const sec = (title, keys) => `<div class="card"><h3 style="margin-top:0">${title}</h3>${keys.map(k => `<details style="margin:6px 0"><summary><b>${esc(HELP[k].title)}</b></summary>${helpBody(HELP[k])}</details>`).join('')}</div>`;
   view.innerHTML = `<div class="card"><h3 style="margin-top:0">ช่วยเหลือ</h3><div class="muted">ทุกหน้ามีไอคอน (?) · บทบาทของท่าน: <b>${roleLabel(S.me.role)}</b> · ติดปัญหา: ผู้บันทึกติดต่อ admin · admin ติดต่อเจ้าของโครงการ</div></div>
     ${sec('สำหรับผู้บันทึก', rec)}${isAdmin() ? sec('สำหรับ admin', adm) : ''}
-    <div class="card"><h3 style="margin-top:0">เมื่อเห็นกล่องแจ้งเตือนสีแดง</h3><table><thead><tr><th>ข้อความ</th><th>ทำอย่างไร</th></tr></thead><tbody>${ERR_RULES.map(r => `<tr><td><b>${esc(r[1])}</b></td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table></div>
+    <details class="card ct-more"><summary>เมื่อเห็นกล่องแจ้งเตือนสีแดง (${fmtInt(ERR_RULES.length)} ข้อความ)</summary><div class="tscroll"><table><thead><tr><th>ข้อความ</th><th>ทำอย่างไร</th></tr></thead><tbody>${ERR_RULES.map(r => `<tr><td><b>${esc(r[1])}</b></td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table></div></details>
     <div class="row"><a class="btn secondary" style="text-decoration:none" href="#about">เกี่ยวกับระบบ</a></div>`;
 }
 

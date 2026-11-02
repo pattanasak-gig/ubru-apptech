@@ -476,7 +476,7 @@ const isAdmin = () => S.me && (S.me.role === 'admin' || isSuper());
 const roleLabel = r => ({ super_admin: 'super admin', admin: 'admin', recorder: 'ผู้บันทึก' }[r] || r);
 function scopeSelector() {
   if (!isSuper() || S.orgs.length < 2) return '';   // องค์กรเดียว = ไม่ต้องเลือก (DEC-109)
-  return `<div class="card row"><label style="margin:0">องค์กรที่กำลังดู</label><select style="max-width:360px" onchange="S.scopeOrg=this.value||null;render()">${S.orgs.map(o => `<option value="${o.id}" ${o.id === S.scopeOrg ? 'selected' : ''}>${esc(o.code)} · ${esc(o.name)}</option>`).join('')}</select></div>`;
+  return `<div class="card row"><label style="margin:0">องค์กรที่กำลังดู</label><select aria-label="องค์กรที่กำลังดู" style="max-width:360px" onchange="S.scopeOrg=this.value||null;render()">${S.orgs.map(o => `<option value="${o.id}" ${o.id === S.scopeOrg ? 'selected' : ''}>${esc(o.code)} · ${esc(o.name)}</option>`).join('')}</select></div>`;
 }
 
 // =====================================================================
@@ -676,8 +676,8 @@ async function crudSection(spec) {
   const pages = Math.max(1, Math.ceil(filtered.length / st.size)); st.page = Math.min(st.page, pages - 1);
   const slice = filtered.slice(st.page * st.size, (st.page + 1) * st.size);
   const cell = (r, c) => c.type === 'select' ? esc((c.options().find(o => o.value === r[c.key]) || {}).label || (r[c.key] == null && c.nullLabel ? c.nullLabel : '')) : c.type === 'status' ? (r[c.key] === 'active' ? '<span class="pill">ใช้งาน</span>' : '<span class="pill" style="background:#fee2e2">ปิด</span>') : c.type === 'bool' ? (r[c.key] ? 'ใช่' : 'ไม่') : c.type === 'latlng' ? (r.lat != null ? `${r.lat}, ${r.lng}` : '<span class="muted">ยังไม่มี</span>') : esc(r[c.key] ?? '');
-  return `<div class="card" id="${id}"><div class="row" style="justify-content:space-between"><h4 style="margin:0">${spec.title} (${fmtInt(rows.length)})${spec.help ? ' ' + helpBtn(spec.help) : ''}</h4><div class="row">${spec.extraBtn || ''}${spec.noAdd ? '' : `<button class="small" onclick="crudForm('${spec.table}')">＋ เพิ่ม</button>`}</div></div>
-    ${spec.intro ? `<div class="muted" style="margin:4px 0 8px">${spec.intro}</div>` : ''}
+  return `<div class="card" id="${id}"><div class="row" style="justify-content:space-between"><h4 style="margin:0">${spec.title} (${fmtInt(rows.length)})${spec.help ? ' ' + helpBtn(spec.help) : ''}${spec.intro && spec.intro.length > 90 ? ' ' + qBtn(spec.title, `<p>${splitTop(spec.intro).join('</p><p>')}</p>`, 'คำอธิบายตาราง ' + spec.title) : ''}</h4><div class="row">${spec.extraBtn || ''}${spec.noAdd ? '' : `<button class="small" onclick="crudForm('${spec.table}')">＋ เพิ่ม</button>`}</div></div>
+    ${spec.intro && spec.intro.length <= 90 ? `<div class="muted" style="margin:4px 0 8px">${spec.intro}</div>` : ''}
     ${rows.length > 10 ? `<div class="row" style="margin:6px 0"><input type="search" aria-label="ค้นหาใน${esc(spec.title)}" placeholder="ค้นหา…" value="${esc(st.q || '')}" style="flex:1;min-width:160px" onchange="crudState('${spec.table}',{q:this.value,page:0})"></div>` : ''}
     <div style="overflow:auto"><table data-sort="data"><thead><tr>${spec.cols.filter(c => !c.hide).map(c => `<th class="sortable" role="button" tabindex="0" aria-sort="${st.sort && st.sort.key === c.key ? (st.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}" onclick="crudSort('${spec.table}','${c.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();crudSort('${spec.table}','${c.key}')}">${c.label}</th>`).join('')}<th></th></tr></thead><tbody>${slice.map(r => `<tr>${spec.cols.filter(c => !c.hide).map(c => `<td>${cell(r, c)}</td>`).join('')}<td style="white-space:nowrap"><button class="small secondary" onclick="crudForm('${spec.table}','${r.id || r.key}')">แก้</button>${spec.rowBtns ? spec.rowBtns(r) : ''}</td></tr>`).join('') || `<tr><td colspan="${spec.cols.length + 1}" class="muted">${q ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีข้อมูล'}</td></tr>`}</tbody></table></div>
     ${filtered.length > st.size ? `<div class="row" style="justify-content:center;margin-top:8px"><button class="small secondary" ${st.page === 0 ? 'disabled' : ''} onclick="crudState('${spec.table}',{page:${st.page - 1}})">‹ ก่อนหน้า</button><span class="muted">หน้า ${st.page + 1}/${pages} · ${fmtInt(filtered.length)} รายการ</span><button class="small secondary" ${st.page >= pages - 1 ? 'disabled' : ''} onclick="crudState('${spec.table}',{page:${st.page + 1}})">ถัดไป ›</button></div>` : ''}</div>`;
@@ -809,6 +809,19 @@ function photoMissing(img) { const d = document.createElement('div'); d.classNam
 // =====================================================================
 function helpBtn(key) { return `<button type="button" class="infobtn" aria-label="วิธีใช้" title="วิธีใช้ส่วนนี้" onclick="showHelp('${key}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button>`; }
 const helpBody = h => `${h.why ? `<div class="muted" style="margin-bottom:6px">${esc(h.why)}</div>` : ''}<ol style="padding-left:22px;margin:6px 0">${(h.steps || []).map(s => `<li style="margin:4px 0">${esc(s)}</li>`).join('')}</ol>${h.done ? `<div class="banner info"><b>เมื่อสำเร็จจะเห็น:</b> ${esc(h.done)}</div>` : ''}${h.note ? `<div class="banner warn">${esc(h.note)}</div>` : ''}`;
+// ปุ่ม ? แสดงคำอธิบาย/ที่มาของตัวเลขเป็นป๊อปอัป (UX ตรวจ 1 พ.ย. 2569: progressive disclosure · Nielsen 2006) · ปิดด้วยปุ่ม แตะพื้นหลัง หรือ Esc
+const Q_POP = {};
+// แยกข้อความที่คั่นด้วย " · " เป็นย่อหน้า โดยไม่ตัดภายในวงเล็บ
+function splitTop(t) { const out = []; let d = 0, cur = ''; for (let i = 0; i < t.length; i++) { const c = t[i]; if (c === '(') d++; else if (c === ')') d = Math.max(0, d - 1); if (d === 0 && t.startsWith(' · ', i)) { out.push(cur); cur = ''; i += 2; continue; } cur += c; } out.push(cur); return out.filter(x => x.trim()); }
+function qBtn(title, html, label) {
+  const id = 'q' + Object.keys(Q_POP).length; Q_POP[id] = { title, html };
+  return `<button type="button" class="infobtn ct-q" aria-label="${esc(label || 'คำอธิบาย: ' + title)}" onclick="showQ('${id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></button>`;
+}
+function showQ(id) {
+  const q = Q_POP[id]; if (!q) return;
+  openModal(`<h3 style="margin-top:0">${esc(q.title)}</h3><div class="ct-pop">${q.html}</div><div class="row" style="margin-top:12px"><button onclick="closeModal()">ปิด</button></div>`);
+  const k = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', k); } }; document.addEventListener('keydown', k);
+}
 function showHelp(key) { const h = (window.HELP || {})[key]; if (!h) return toast('ยังไม่มีคำอธิบายส่วนนี้', true); openModal(`<h3 style="margin-top:0">${esc(h.title)}</h3>${helpBody(h)}<div class="row"><button onclick="closeModal()">ปิด</button></div>`); }
 
 // =====================================================================
