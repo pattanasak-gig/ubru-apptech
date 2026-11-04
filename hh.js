@@ -181,8 +181,8 @@ function hhDetail(view, code) {
   }).join('');
   const la = hhNumv(H.roleVal(reg, '01', 'lat')), lo = hhNumv(H.roleVal(reg, '01', 'lng'));
   view.innerHTML = hhShell('t/01', `<div class="card"><div class="cardhead"><h4>${esc(code)} · ${esc(name || '')}</h4><div class="row"><button class="small secondary" onclick="S._hhShow['${esc(code)}']=!S._hhShow['${esc(code)}'];render()">${show[code] ? 'ซ่อน' : 'แสดง'}ข้อมูลส่วนบุคคล</button><button class="small" onclick="hhEdit('01','${reg.id}')">แก้ทะเบียน</button></div></div>
-    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" style="height:220px;border-radius:10px;margin-bottom:8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
-  if (!isNaN(la) && !isNaN(lo)) { const m = L.map('hhMini'); addBaseLayer(m); m.setView([la, lo], 16); L.circleMarker([la, lo], { radius: 10, color: '#fff', weight: 2, fillColor: HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64', fillOpacity: .95 }).addTo(m); }
+    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" class="hh-mini"></div><div class="muted" id="hhMiniNote" style="margin:-4px 0 8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
+  if (!isNaN(la) && !isNaN(lo)) { if (typeof hhMiniMap === 'function') hhMiniMap(reg, { lat: la, lng: lo }); else { const m = L.map('hhMini'); addBaseLayer(m); m.setView([la, lo], 16); L.circleMarker([la, lo], { radius: 10, color: '#fff', weight: 2, fillColor: HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64', fillOpacity: .95 }).addTo(m); } }
 }
 
 // ---------------------------------------------------------------------

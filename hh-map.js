@@ -23,7 +23,8 @@ function hhLine(a, b) {
 const hhPos = r => { const H = S._hh, la = hhNumv(H.roleVal(r, '01', 'lat')), lo = hhNumv(H.roleVal(r, '01', 'lng')); return isNaN(la) || isNaN(lo) ? null : { lat: la, lng: lo }; };
 const hhSame = (a, b) => Math.abs(a - b) < 5e-7;
 // ต้องคำนวณใหม่เมื่อยังไม่มี หรือพิกัดบ้าน/ศูนย์เปลี่ยน
-function hhRouteStale(code, p, c) { const rt = (S._hh.routes || {})[code]; return !rt || !hhSame(+rt.from_lat, p.lat) || !hhSame(+rt.from_lng, p.lng) || !hhSame(+rt.to_lat, c.lat) || !hhSame(+rt.to_lng, c.lng); }
+const HH_ROUTE_SRC = 'osrm_full';   // เส้นทางเต็มตามถนน (รุ่นแรกเก็บแบบย่อ 'osrm' ซึ่งลากตัดมุม → คำนวณใหม่)
+function hhRouteStale(code, p, c) { const rt = (S._hh.routes || {})[code]; return !rt || rt.source !== HH_ROUTE_SRC || !hhSame(+rt.from_lat, p.lat) || !hhSame(+rt.from_lng, p.lng) || !hhSame(+rt.to_lat, c.lat) || !hhSame(+rt.to_lng, c.lng); }
 
 // ---------------------------------------------------------------------
 // เกณฑ์สีของจุด (ปรับหรือเพิ่มได้ที่นี่ที่เดียว) · ค่าอ่านผ่าน "บทบาทคอลัมน์" (ตั้งค่าคอลัมน์) จึงไม่ผูกกับชื่อหัวคอลัมน์ในชีต
@@ -126,17 +127,17 @@ function hhMap(view) {
     <div class="card" style="margin-top:12px"><div class="cardhead"><h4>ระยะทางจากครัวเรือนถึงศูนย์ (${fmtInt(rows.length)})</h4><button class="small secondary" onclick="exportCsv(S._hhDistCsv,'ระยะทางครัวเรือน')">ส่งออก CSV</button></div><div id="hhDist"></div></div>`);
   // แผนที่: ศูนย์ · จุดครัวเรือน · เส้นทาง (ชั้นแยก เปิด/ปิดได้)
   const map = L.map('map'); addBaseLayer(map); const g = L.featureGroup().addTo(map), rl = L.featureGroup(); let miss = 0; S._hhMarkers = {};
-  if (c) L.circleMarker([c.lat, c.lng], { radius: 11, color: '#fff', weight: 2, fillColor: '#C62828', fillOpacity: 1 }).bindTooltip(esc(c.name), { permanent: true, direction: 'top', offset: [0, -10] }).addTo(g);
+  if (c) L.circleMarker([c.lat, c.lng], { radius: 9, color: '#fff', weight: 2, fillColor: '#C62828', fillOpacity: 1, pane: 'markerPane' }).bindTooltip(esc(c.name), { direction: 'top', offset: [0, -8] }).bindPopup(`<b>${esc(c.name)}</b><br>จุดปลายทางของทุกเส้นทาง`).addTo(g);
   for (const r of rows) {
     const p = hhPos(r); if (!p) { miss++; continue; }
     const code = r.hh_code, clr = col.color(code), d = (H.routes || {})[code];
-    if (st.routes && d && d.path && d.path.coordinates) L.geoJSON(d.path, { style: { color: clr === HH_NONE ? '#607D8B' : clr, weight: 2.5, opacity: .75 } }).addTo(rl);
+    if (st.routes && d && d.path && d.path.coordinates && d.source === HH_ROUTE_SRC) { hhDrawRoute(rl, d.path, p, c, clr === HH_NONE ? '#607D8B' : clr, 3); }
     else if (st.routes && c) L.polyline([[p.lat, p.lng], [c.lat, c.lng]], { color: '#90A4AE', weight: 1.5, dashArray: '4 6' }).addTo(rl);   // ยังไม่คำนวณ: เส้นประ (เส้นตรง)
     S._hhMarkers[code] = L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 1.5, fillColor: clr, fillOpacity: .95 }).bindPopup(() => hhPopup(r, col, c), { maxWidth: 300 }).addTo(g);
   }
   if (st.routes) rl.addTo(map);
   fitAll(map, g);
-  $('#hhMapNote').textContent = `แสดง ${rows.length - miss} ครัวเรือน${miss ? ` · ${miss} ครัวเรือนยังไม่มีพิกัด` : ''}${st.routes ? ' · เส้นทึบ = ตามถนน · เส้นประ = ยังไม่ได้คำนวณ (แสดงเส้นตรง)' : ''} · แผนที่นี้แสดงเฉพาะในเมนูครัวเรือน AppTech`;
+  $('#hhMapNote').textContent = `แสดง ${rows.length - miss} ครัวเรือน${miss ? ` · ${miss} ครัวเรือนยังไม่มีพิกัด` : ''}${st.routes ? ' · เส้นทึบ = ตามถนน · เส้นประ = ยังไม่ได้คำนวณ (แสดงเส้นตรง) · เส้นจุดสั้น = ช่วงจากถนนถึงพิกัดบ้าน/ศูนย์' : ''} · แผนที่นี้แสดงเฉพาะในเมนูครัวเรือน AppTech`;
   // ตารางระยะทาง (เรียงตามระยะตามถนน)
   const T = rows.map(r => { const p = hhPos(r), d = info((H.routes || {})[r.hh_code]); return { r, p, ...d, line: p && c ? hhLine(p, c) / 1000 : null, stale: p && c && hasRoutes ? hhRouteStale(r.hh_code, p, c) : false, photos: ((H.photos || {})[r.hh_code] || []).length }; })
     .sort((a, b) => (a.road ?? a.line ?? 1e9) - (b.road ?? b.line ?? 1e9));
@@ -146,8 +147,26 @@ function hhMap(view) {
   S._hhDistCsv = T.map(x => ({ รหัส: x.r.hh_code, ชื่อ: H.roleVal(x.r, '01', 'name') || '', กลุ่ม: H.roleVal(x.r, '01', 'group') || '', ตำบล: H.roleVal(x.r, '01', 'tambon') || '', [cm.key === 'col' ? (String(st.col).split('|')[1] || 'ค่า') : cm.label]: col.val(x.r.hh_code), ระยะตามถนน_กม: x.road == null ? '' : +x.road.toFixed(2), เวลาขับรถ_นาที: x.min == null ? '' : Math.round(x.min), ระยะเส้นตรง_กม: x.line == null ? '' : +x.line.toFixed(2), ต้องคำนวณใหม่: x.stale ? 'ใช่' : '', จำนวนรูป: x.photos }));
   $('#hhDist').innerHTML = `<div class="muted" style="margin-bottom:6px">${withRoad.length ? `ตามถนน: เฉลี่ย ${km(withRoad.reduce((a, b) => a + b, 0) / withRoad.length)} กม. · มัธยฐาน ${km(med)} กม. · ใกล้สุด ${km(withRoad[0])} · ไกลสุด ${km(withRoad[withRoad.length - 1])} กม. (${fmtInt(withRoad.length)} ครัวเรือน)` : 'ยังไม่มีระยะตามถนน กด "คำนวณเส้นทาง"'}</div>
     <div class="tscroll"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th>กลุ่ม</th><th>ตำบล</th><th>${esc(cm.key === 'col' ? (String(st.col).split('|')[1] || 'ค่า') : cm.label.replace(/ \(แท็บ.*\)$/, ''))}</th><th class="num">ตามถนน (กม.)</th><th class="num">เวลา (นาที)</th><th class="num">เส้นตรง (กม.)</th><th class="num">รูป</th><th></th></tr></thead><tbody>
-    ${T.map(x => `<tr><td class="nowrap"><a href="#hh/h/${encodeURIComponent(x.r.hh_code)}">${esc(x.r.hh_code)}</a></td><td>${esc(H.roleVal(x.r, '01', 'name') || '')}</td><td>${esc(H.roleVal(x.r, '01', 'group') || '')}</td><td>${esc(H.roleVal(x.r, '01', 'tambon') || '')}</td><td><i class="dot" style="background:${col.color(x.r.hh_code)}"></i> ${esc(String(col.val(x.r.hh_code) || '-'))}</td><td class="num">${km(x.road)}${x.stale && x.road != null ? ' <span title="พิกัดเปลี่ยน ต้องคำนวณใหม่" style="color:var(--warn)">*</span>' : ''}</td><td class="num">${x.min == null ? '-' : fmtInt(x.min)}</td><td class="num">${km(x.line)}</td><td class="num">${fmtInt(x.photos)}</td><td>${x.p ? `<button class="small secondary" onclick="hhFocus('${esc(x.r.hh_code)}')">ดูบนแผนที่</button>` : '<span class="muted">ไม่มีพิกัด</span>'}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">ไม่มีครัวเรือนตามตัวกรอง</td></tr>'}
-    </tbody></table></div>${T.some(x => x.stale && x.road != null) ? '<div class="muted">* พิกัดบ้านหรือศูนย์เปลี่ยนหลังคำนวณ กด "คำนวณเส้นทาง" เพื่อปรับให้เป็นปัจจุบัน</div>' : ''}`;
+    ${T.map(x => `<tr><td class="nowrap"><a href="#hh/h/${encodeURIComponent(x.r.hh_code)}">${esc(x.r.hh_code)}</a></td><td>${esc(H.roleVal(x.r, '01', 'name') || '')}</td><td>${esc(H.roleVal(x.r, '01', 'group') || '')}</td><td>${esc(H.roleVal(x.r, '01', 'tambon') || '')}</td><td><i class="dot" style="background:${col.color(x.r.hh_code)}"></i> ${esc(String(col.val(x.r.hh_code) || '-'))}</td><td class="num">${km(x.road)}${x.stale && x.road != null ? ' <span title="ต้องคำนวณเส้นทางใหม่" style="color:var(--warn)">*</span>' : ''}</td><td class="num">${x.min == null ? '-' : fmtInt(x.min)}</td><td class="num">${km(x.line)}</td><td class="num">${fmtInt(x.photos)}</td><td>${x.p ? `<button class="small secondary" onclick="hhFocus('${esc(x.r.hh_code)}')">ดูบนแผนที่</button>` : '<span class="muted">ไม่มีพิกัด</span>'}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">ไม่มีครัวเรือนตามตัวกรอง</td></tr>'}
+    </tbody></table></div>${T.some(x => x.stale && x.road != null) ? '<div class="muted">* ต้องคำนวณเส้นทางใหม่ (พิกัดบ้านหรือศูนย์เปลี่ยน หรือเป็นเส้นทางรุ่นแรกที่เก็บรูปเส้นแบบย่อ) · ระยะทางที่แสดงยังถูกต้อง · กด "คำนวณเส้นทาง" เพื่อให้เส้นบนแผนที่ตรงตามถนน</div>' : ''}`;
+}
+// เส้นทางตามถนน + เส้นจุดเชื่อมจากจุดที่ OSRM จับลงถนน ไปยังพิกัดจริงของบ้านและศูนย์
+function hhDrawRoute(layer, path, p, c, color, weight) {
+  L.geoJSON(path, { style: { color, weight, opacity: .8 } }).addTo(layer);
+  const cs = path.coordinates; if (!cs || cs.length < 2) return;
+  const a = cs[0], b = cs[cs.length - 1], dot = { color: '#607D8B', weight: 1.5, dashArray: '2 4', opacity: .9 };
+  if (p) L.polyline([[p.lat, p.lng], [a[1], a[0]]], dot).addTo(layer);
+  if (c) L.polyline([[b[1], b[0]], [c.lat, c.lng]], dot).addTo(layer);
+}
+// แผนที่ในหน้าข้อมูลครัวเรือน: บ้าน + ศูนย์ + เส้นทางตามถนน (ถ้าคำนวณแล้ว) · ซูมพอดีทั้งเส้น
+function hhMiniMap(reg, p) {
+  const H = S._hh, c = hhCenter(), d = (H.routes || {})[reg.hh_code], m = L.map('hhMini'); addBaseLayer(m);
+  const g = L.featureGroup().addTo(m), clr = HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64';
+  if (c && d && d.path && d.path.coordinates && d.source === HH_ROUTE_SRC) hhDrawRoute(g, d.path, p, c, '#1F3A5F', 4);
+  if (c) L.circleMarker([c.lat, c.lng], { radius: 9, color: '#fff', weight: 2, fillColor: '#C62828', fillOpacity: 1 }).bindTooltip(esc(c.name), { direction: 'top', offset: [0, -8] }).addTo(g);
+  L.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: clr, fillOpacity: .95 }).bindTooltip(esc(reg.hh_code), { direction: 'top', offset: [0, -8] }).addTo(g);
+  if (c) m.fitBounds(g.getBounds().pad(0.12)); else m.setView([p.lat, p.lng], 16);
+  const note = $('#hhMiniNote'); if (note && c) note.textContent = `ถึง${c.name}: ${d && d.road_m != null && d.source === HH_ROUTE_SRC ? `ตามถนน ${fmt(d.road_m / 1000, 1)} กม. · ประมาณ ${fmtInt(d.road_s / 60)} นาที · ` : ''}เส้นตรง ${fmt(hhLine(p, c) / 1000, 1)} กม.${d && d.source === HH_ROUTE_SRC ? '' : ' · ยังไม่ได้คำนวณเส้นทางตามถนน (กดที่แผนที่ครัวเรือน)'}`;
 }
 function hhFocus(code) { const m = (S._hhMarkers || {})[code]; if (!m) return; $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); m._map.setView(m.getLatLng(), 15); m.openPopup(); }
 function hhPopup(r, col, c) {
@@ -168,9 +187,9 @@ async function hhRouteCalc() {
   let ok = 0, bad = 0;
   for (const [i, x] of todo.entries()) {
     toast(`กำลังคำนวณเส้นทาง ${i + 1}/${todo.length} (${x.r.hh_code})`);
-    const rec = { project_id: H.link.project_id, hh_code: x.r.hh_code, from_lat: +x.p.lat.toFixed(6), from_lng: +x.p.lng.toFixed(6), to_lat: +c.lat.toFixed(6), to_lng: +c.lng.toFixed(6), line_m: Math.round(hhLine(x.p, c) * 10) / 10, road_m: null, road_s: null, path: null, source: 'osrm', computed_at: new Date().toISOString(), note: null };
+    const rec = { project_id: H.link.project_id, hh_code: x.r.hh_code, from_lat: +x.p.lat.toFixed(6), from_lng: +x.p.lng.toFixed(6), to_lat: +c.lat.toFixed(6), to_lng: +c.lng.toFixed(6), line_m: Math.round(hhLine(x.p, c) * 10) / 10, road_m: null, road_s: null, path: null, source: HH_ROUTE_SRC, computed_at: new Date().toISOString(), note: null };
     try {
-      const res = await fetch(`${CONFIG.ROUTING_URL}/route/v1/driving/${x.p.lng},${x.p.lat};${c.lng},${c.lat}?overview=simplified&geometries=geojson&steps=false`);
+      const res = await fetch(`${CONFIG.ROUTING_URL}/route/v1/driving/${x.p.lng},${x.p.lat};${c.lng},${c.lat}?overview=full&geometries=geojson&steps=false`);
       if (!res.ok) throw new Error('บริการเส้นทาง OSRM ตอบ ' + res.status);
       const j = await res.json(); if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new Error('บริการเส้นทาง OSRM หาเส้นทางไม่ได้: ' + (j.message || j.code));
       Object.assign(rec, { road_m: Math.round(j.routes[0].distance * 10) / 10, road_s: Math.round(j.routes[0].duration), path: j.routes[0].geometry }); ok++;
