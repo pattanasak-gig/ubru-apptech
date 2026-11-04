@@ -35,7 +35,10 @@ async function hhLoad(force) {
   }
   const reg = byKey['01'] ? byKey['01'].rows : [];
   const role = (k, r) => { const c = (byKey[k] ? byKey[k].cols : []).find(x => x.role === r); return c ? c.header : null; };
-  S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
+  let routes = null, photos = null;   // DEC-126 (sql/022) · ยังไม่รัน = null
+  try { const [rt, ph] = await Promise.all([api.list('hh.route', { eq: { project_id: link.project_id } }), api.list('hh.photo', { eq: { project_id: link.project_id, status: 'active' }, order: ['seq'] })]);
+    routes = Object.fromEntries(rt.map(x => [x.hh_code, x])); photos = {}; for (const x of ph) (photos[x.hh_code] = photos[x.hh_code] || []).push(x); } catch (e) { console.warn('hh.route/hh.photo (sql/022) missing:', e && e.message); }
+  S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, routes, photos, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
   return S._hh;
 }
 function hhShell(sub, body) {
@@ -178,29 +181,14 @@ function hhDetail(view, code) {
   }).join('');
   const la = hhNumv(H.roleVal(reg, '01', 'lat')), lo = hhNumv(H.roleVal(reg, '01', 'lng'));
   view.innerHTML = hhShell('t/01', `<div class="card"><div class="cardhead"><h4>${esc(code)} · ${esc(name || '')}</h4><div class="row"><button class="small secondary" onclick="S._hhShow['${esc(code)}']=!S._hhShow['${esc(code)}'];render()">${show[code] ? 'ซ่อน' : 'แสดง'}ข้อมูลส่วนบุคคล</button><button class="small" onclick="hhEdit('01','${reg.id}')">แก้ทะเบียน</button></div></div>
-    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" style="height:220px;border-radius:10px;margin-bottom:8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div><div class="grid-dash">${others}</div>`);
+    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" style="height:220px;border-radius:10px;margin-bottom:8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
   if (!isNaN(la) && !isNaN(lo)) { const m = L.map('hhMini'); addBaseLayer(m); m.setView([la, lo], 16); L.circleMarker([la, lo], { radius: 10, color: '#fff', weight: 2, fillColor: HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64', fillOpacity: .95 }).addTo(m); }
 }
 
 // ---------------------------------------------------------------------
 // แผนที่ครัวเรือน (เฉพาะเมนูนี้)
 // ---------------------------------------------------------------------
-function hhMap(view) {
-  const H = S._hh, st = S._hhm = S._hhm || { group: '', tambon: '' };
-  const rows = H.reg.filter(r => (!st.group || String(H.roleVal(r, '01', 'group') ?? '') === st.group) && (!st.tambon || String(H.roleVal(r, '01', 'tambon') ?? '') === st.tambon));
-  const uniq = role => [...new Set(H.reg.map(r => String(H.roleVal(r, '01', role) ?? '').trim()).filter(Boolean))].sort();
-  view.innerHTML = hhShell('map', `<div class="card legend" style="padding:8px 12px;justify-content:space-between"><span class="row"><select aria-label="กรองตามกลุ่ม" style="width:auto" onchange="S._hhm.group=this.value;render()"><option value="">ทุกกลุ่ม</option>${uniq('group').map(g => `<option ${g === st.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select><select aria-label="กรองตามตำบล" style="width:auto" onchange="S._hhm.tambon=this.value;render()"><option value="">ทุกตำบล</option>${uniq('tambon').map(g => `<option ${g === st.tambon ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></span>
-    <span class="legend">${Object.entries(HH_COLORS).filter(([k]) => k).map(([k, c]) => `<span><i class="dot" style="background:${c}"></i>กลุ่ม ${k}</span>`).join('')}</span></div><div id="map"></div><div class="muted" id="hhMapNote" style="margin-top:6px"></div>`);
-  const map = L.map('map'); addBaseLayer(map); const g = L.featureGroup().addTo(map); let miss = 0;
-  for (const r of rows) {
-    const la = hhNumv(H.roleVal(r, '01', 'lat')), lo = hhNumv(H.roleVal(r, '01', 'lng')); if (isNaN(la) || isNaN(lo)) { miss++; continue; }
-    const grp = String(H.roleVal(r, '01', 'group') ?? '');
-    L.circleMarker([la, lo], { radius: 8, color: '#fff', weight: 1.5, fillColor: HH_COLORS[grp] || '#455A64', fillOpacity: .95 })
-      .bindPopup(`<b>${esc(r.hh_code)}</b> ${esc(H.roleVal(r, '01', 'name') || '')}<br>กลุ่ม ${esc(grp)} · ต.${esc(H.roleVal(r, '01', 'tambon') || '')}<br><a href="#hh/h/${encodeURIComponent(r.hh_code)}">เปิดข้อมูลครัวเรือน ›</a>`).addTo(g);
-  }
-  fitAll(map, g);
-  $('#hhMapNote').textContent = `แสดง ${rows.length - miss} ครัวเรือน${miss ? ` · ${miss} ครัวเรือนยังไม่มีพิกัด` : ''} · แผนที่นี้แสดงเฉพาะในเมนูครัวเรือน AppTech (ไม่แสดงบนหน้าสาธารณะ)`;
-}
+// hhMap ย้ายไป hh-map.js (DEC-126: เส้นทางถึงศูนย์ · ตารางระยะทาง · สีตามเกณฑ์ที่เลือก · รูป)
 
 // ---------------------------------------------------------------------
 // ตรวจความสอดคล้อง (กฎเดียวกับรายงานให้ทีม: web/hh-check.js)

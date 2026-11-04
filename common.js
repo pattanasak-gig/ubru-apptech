@@ -191,7 +191,7 @@ const SupaBackend = () => {
 const DemoBackend = () => {
   const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
   const now = () => new Date().toISOString();
-  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [], 'hh.link': [], 'hh.tab': [], 'hh.col': [], 'hh.row': [], 'hh.sync_log': [], 'food.source_share': [] };
+  const D = { 'core.org': [], 'core.project': [], 'core.app_user': [], 'core.app_setting': [], 'food.source_type': [], 'food.farm': [], 'food.source': [], 'food.vehicle': [], 'food.pickup': [], 'food.pickup_item': [], 'food.pickup_photo': [], 'food.route': [], 'food.route_stop': [], 'food.carbon_factor': [], 'hh.link': [], 'hh.tab': [], 'hh.col': [], 'hh.row': [], 'hh.sync_log': [], 'food.source_share': [], 'hh.route': [], 'hh.photo': [] };
   const add = (t, row) => { const r = { id: uid(), status: 'active', created_at: now(), updated_at: now(), ...row }; D[t].push(r); return r; };
   const o1 = add('core.org', { code: 'DEMO', name: 'ศูนย์สาธิต (ตัวอย่าง)', max_recorders: 10 });
   const o2 = add('core.org', { code: 'DEMO2', name: 'หน่วยงานสาธิต สอง', max_recorders: 10 });
@@ -339,7 +339,9 @@ const DemoBackend = () => {
       const ok = l => me.role === 'super_admin' || (l.org_id === me.org_id && (me.role === 'admin' || (me.role === 'recorder' && me.project_id === l.project_id)));
       const links = D['hh.link'].filter(ok), lids = links.map(l => l.id), tids = D['hh.tab'].filter(t => lids.includes(t.link_id)).map(t => t.id);
       if (name === 'hh.link') return rows.filter(ok); if (name === 'hh.tab') return rows.filter(t => lids.includes(t.link_id)); if (name === 'hh.col') return rows.filter(c => tids.includes(c.tab_id));
-      if (name === 'hh.sync_log') return rows.filter(l => lids.includes(l.link_id)); return rows.filter(r => tids.includes(r.tab_id));
+      if (name === 'hh.sync_log') return rows.filter(l => lids.includes(l.link_id));
+      if (name === 'hh.route' || name === 'hh.photo') return rows.filter(r => links.some(l => l.project_id === r.project_id));   // DEC-126
+      return rows.filter(r => tids.includes(r.tab_id));
     }
     if (me.role === 'super_admin' || GLOBAL.includes(name)) return rows;
     if (name === 'core.app_user') return rows.filter(r => r.id === me.id || (me.role === 'admin' && r.org_id === me.org_id));
@@ -369,6 +371,8 @@ const DemoBackend = () => {
       if (name === 'food.pickup_item' || name === 'food.pickup_photo') r.org_id = byId('food.pickup', r.pickup_id).org_id;
       if (name === 'food.route_stop') r.org_id = byId('food.route', r.route_id).org_id;
       if (name === 'hh.row') { const l = byId('hh.link', byId('hh.tab', r.tab_id).link_id); r.org_id = l.org_id; r.project_id = l.project_id; }   // = ทริกเกอร์ hh.row_before
+      if (name === 'hh.route' || name === 'hh.photo') { r.org_id = byId('core.project', r.project_id).org_id; r.hh_code = String(r.hh_code || '').trim(); }   // = ทริกเกอร์ 022
+      if (name === 'hh.photo') { if (!D['hh.row'].some(x => x.project_id === r.project_id && x.hh_code === r.hh_code && x.status === 'active')) throw new Error('ไม่พบรหัสครัวเรือน ' + r.hh_code + ' ในทะเบียนครัวเรือนของโครงการนี้'); r.status = r.status || 'active'; if (D['hh.photo'].filter(x => x.project_id === r.project_id && x.hh_code === r.hh_code && x.status === 'active').length >= 3) throw new Error('ครัวเรือน ' + r.hh_code + ' มีรูปครบ 3 รูปแล้ว (ลบหรือแทนที่รูปเดิมก่อน)'); }
       if (name === 'food.source_share') { if (me.role === 'recorder') throw new Error('permission denied: row-level security'); r.org_id = byId('food.source', r.source_id).org_id; r.token = r.token || Array.from({ length: 4 }, () => uid().replace(/-/g, '')).join('').slice(0, 64); r.view_count = 0; }   // = ทริกเกอร์ 019
       if (['food.farm', 'food.source', 'food.vehicle', 'food.route', 'food.carbon_factor'].includes(name) && me.role === 'recorder') throw new Error('permission denied: row-level security');
       if (name === 'food.pickup' && r.pickup_date > todayISO()) throw new Error('วันที่เข้ารับเป็นวันในอนาคต ตรวจวันที่อีกครั้ง');
