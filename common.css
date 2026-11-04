@@ -72,6 +72,8 @@ button, a, summary, input, select, textarea, label.pick-opt { touch-action: mani
 .subtabs { display:flex; gap:6px; margin: 0 0 12px; flex-wrap:wrap; }
 .subtabs a { text-decoration:none; padding: 0 16px; min-height:44px; display:inline-flex; align-items:center; border-radius: 999px; border:1px solid var(--line); background:#fff; color:#374151; font-size:14px; }
 .subtabs a.active { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
+/* จอโทรศัพท์: เมนูย่อยเป็นแถวเดียวเลื่อนแนวนอน ไม่ดันเนื้อหาลงล่าง (DEC-127) */
+@media (max-width: 640px) { .subtabs, .lg-recent { flex-wrap:nowrap !important; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin; } .subtabs a, .lg-recent a { flex:0 0 auto; white-space:nowrap; } }
 .chartbox { position:relative; height:320px; }
 .grid-dash { display:grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; }   /* แดชบอร์ด: 2 คอลัมน์บนจอกว้าง 1 คอลัมน์บนมือถือ */
 .grid-dash .card { margin-bottom:0; }
@@ -130,3 +132,27 @@ td.nowrap, th.nowrap { white-space:nowrap; }
 .ct-pop p { margin:6px 0; }
 /* DEC-126 แผนที่ในหน้าข้อมูลครัวเรือน */
 .hh-mini { height: clamp(300px, 50vh, 520px); border-radius:10px; margin-bottom:8px; position:relative; z-index:0; isolation:isolate; }
+/* DEC-127 บันทึกรายรับรายจ่ายครัวเรือน (เน้นการเลือก) */
+.lg-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.lg-chip { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:4px 12px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink); text-decoration:none; font-size:14px; cursor:pointer; }
+button.lg-chip { font:inherit; }
+.lg-chip.on { background:#e8eef6; border-color:var(--brand); color:var(--brand); font-weight:600; }
+.lg-hits { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.lg-hit { display:block; padding:8px 10px; border:1px solid var(--line); border-radius:10px; text-decoration:none; color:var(--ink); min-height:40px; }
+.lg-hit:hover { background:#f8fafc; }
+.lg-base { margin-top:6px; font-size:14px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.lg-grp { border-left:4px solid var(--line); }
+.lg-sep { margin:14px 2px 6px; font-weight:600; color:var(--muted); font-size:14px; }
+.lg-grp.lg-exp { border-left-color:#C62828; } .lg-grp.lg-inc { border-left-color:#2E7D32; } .lg-grp.lg-qty { border-left-color:#0097A7; }
+.lg-row { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; padding:6px 0; border-top:1px solid var(--line); }
+.lg-row:first-of-type { border-top:0; }
+.lg-name { flex:1 1 180px; min-width:0; }
+.lg-ctl { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.lg-qs { display:inline-flex; gap:4px; }
+@media (max-width: 640px) { .lg-ctl { width:100%; } .lg-qs { flex-basis:100%; } }
+.lg-q { min-height:36px; min-width:44px; padding:4px 8px; font-size:13px; background:#fff; color:var(--brand); border:1px solid #cbd5e1; border-radius:8px; }
+.lg-bar { position:sticky; bottom:0; z-index:30; margin:0 -4px; }
+.lg-bar-in { background:#fff; border:1px solid var(--line); border-radius:12px 12px 0 0; padding:10px 12px; box-shadow:0 -4px 12px rgba(0,0,0,.06); }
+.lg-bar-top { display:flex; flex-wrap:wrap; align-items:center; gap:6px; justify-content:space-between; }
+.lg-bar-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; justify-content:space-between; margin-top:6px; font-size:14px; }
+.lg-prog { height:8px; background:#eef2f7; border-radius:4px; margin-top:6px; overflow:hidden; } .lg-prog div { height:8px; border-radius:4px; }

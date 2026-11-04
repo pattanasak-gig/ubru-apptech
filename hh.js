@@ -4,7 +4,7 @@
 //   ซิงก์แบบกดปุ่ม (ระบบหลังบ้าน hh_sync): ตรวจ → อัปเดต · ไม่อัตโนมัติ
 //   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/sync · #hh/ref · #hh/cols
 // =====================================================================
-const HH_SUB = [['', 'ภาพรวม'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต']];
+const HH_SUB = [['', 'ภาพรวม'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต']];
 const HH_LONG = /หมายเหตุ|หลักฐาน|Pain|Gain|ทักษะ|คุณลักษณะ|จุดแข็ง|สิ่งที่ต้องพัฒนา|แผนพัฒนา|เรื่องที่เคยถ่ายทอด|เครือข่ายความร่วมมือ|ผลผลิตหลัก|ช่องทาง/;
 const HH_COLORS = { A: '#2E7D32', B: '#F9A825', C: '#EF6C00', '': '#455A64' };
 const hhCanAdmin = () => isSuper() || (S.me && S.me.role === 'admin');
@@ -39,12 +39,14 @@ async function hhLoad(force) {
   try { const [rt, ph] = await Promise.all([api.list('hh.route', { eq: { project_id: link.project_id } }), api.list('hh.photo', { eq: { project_id: link.project_id, status: 'active' }, order: ['seq'] })]);
     routes = Object.fromEntries(rt.map(x => [x.hh_code, x])); photos = {}; for (const x of ph) (photos[x.hh_code] = photos[x.hh_code] || []).push(x); } catch (e) { console.warn('hh.route/hh.photo (sql/022) missing:', e && e.message); }
   S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, routes, photos, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
+  S._hh.lg = typeof lgLoad === 'function' ? await lgLoad(link.project_id) : null;   // DEC-127 รายรับรายจ่าย (sql/023)
   return S._hh;
 }
 function hhShell(sub, body) {
   const H = S._hh; const last = H && H.link.last_sync_at ? `ซิงก์ล่าสุด ${thDate(H.link.last_sync_at)}` : 'ยังไม่เคยซิงก์กับชีต';
+  setTimeout(() => { const a = document.querySelector('.subtabs a.active'), bar = a && a.parentElement; if (bar && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2; }, 0);   // จอแคบ: เลื่อนเมนูย่อยให้เห็นเมนูที่เลือก
   return `<div class="card"><div class="cardhead"><h4>ครัวเรือน AppTech ${helpBtn('hh')}</h4><span class="muted">${esc(H ? H.link.name : '')} · ${last}</span></div>
-    <div class="subtabs" style="flex-wrap:wrap">${HH_SUB.filter(([k]) => k !== 'cols' || hhCanAdmin()).map(([k, l]) => `<a href="#hh${k ? '/' + k : ''}" class="${sub === k ? 'active' : ''}">${l}</a>`).join('')}${hhCanAdmin() ? `<a href="#hh/cols" class="${sub === 'cols' ? 'active' : ''}">ตั้งค่าคอลัมน์</a>` : ''}</div></div>${body}`;
+    <div class="subtabs" style="flex-wrap:wrap">${HH_SUB.filter(([k]) => k !== 'cols' || hhCanAdmin()).map(([k, l]) => `<a href="#hh${k ? '/' + k : ''}" class="${sub === k ? 'active' : ''}">${l}</a>`).join('')}${hhCanAdmin() ? `<a href="#hh/items" class="${sub === 'items' ? 'active' : ''}">รายการรายรับรายจ่าย</a><a href="#hh/cols" class="${sub === 'cols' ? 'active' : ''}">ตั้งค่าคอลัมน์</a>` : ''}</div></div>${body}`;
 }
 async function pageHH(view) {
   const parts = location.hash.replace(/^#hh\/?/, '').split('/'), sub = parts[0] || '';
@@ -54,6 +56,9 @@ async function pageHH(view) {
   if (sub === 't') return hhTabPage(view, parts[1] || '01');
   if (sub === 'h') return hhDetail(view, decodeURIComponent(parts[1] || ''));
   if (sub === 'map') return hhMap(view);
+  if (sub === 'ledger') return hhLedgerPage(view, parts[1], parts[2]);   // DEC-127
+  if (sub === 'income') return hhIncomePage(view);
+  if (sub === 'items') return hhItemsPage(view);
   if (sub === 'check') return hhCheckPage(view);
   if (sub === 'sync') return hhSyncPage(view);
   if (sub === 'ref') return hhRefPage(view);
@@ -181,7 +186,7 @@ function hhDetail(view, code) {
   }).join('');
   const la = hhNumv(H.roleVal(reg, '01', 'lat')), lo = hhNumv(H.roleVal(reg, '01', 'lng'));
   view.innerHTML = hhShell('t/01', `<div class="card"><div class="cardhead"><h4>${esc(code)} · ${esc(name || '')}</h4><div class="row"><button class="small secondary" onclick="S._hhShow['${esc(code)}']=!S._hhShow['${esc(code)}'];render()">${show[code] ? 'ซ่อน' : 'แสดง'}ข้อมูลส่วนบุคคล</button><button class="small" onclick="hhEdit('01','${reg.id}')">แก้ทะเบียน</button></div></div>
-    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" class="hh-mini"></div><div class="muted" id="hhMiniNote" style="margin:-4px 0 8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
+    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" class="hh-mini"></div><div class="muted" id="hhMiniNote" style="margin:-4px 0 8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhLedgerMini === 'function' ? hhLedgerMini(code) : ''}${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
   if (!isNaN(la) && !isNaN(lo)) { if (typeof hhMiniMap === 'function') hhMiniMap(reg, { lat: la, lng: lo }); else { const m = L.map('hhMini'); addBaseLayer(m); m.setView([la, lo], 16); L.circleMarker([la, lo], { radius: 10, color: '#fff', weight: 2, fillColor: HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64', fillOpacity: .95 }).addTo(m); } }
 }
 
