@@ -4,7 +4,7 @@
 //   ซิงก์แบบกดปุ่ม (ระบบหลังบ้าน hh_sync): ตรวจ → อัปเดต · ไม่อัตโนมัติ
 //   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/sync · #hh/ref · #hh/cols
 // =====================================================================
-const HH_SUB = [['', 'ภาพรวม'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต']];
+const HH_SUB = [['', 'ภาพรวม'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต']];
 const HH_LONG = /หมายเหตุ|หลักฐาน|Pain|Gain|ทักษะ|คุณลักษณะ|จุดแข็ง|สิ่งที่ต้องพัฒนา|แผนพัฒนา|เรื่องที่เคยถ่ายทอด|เครือข่ายความร่วมมือ|ผลผลิตหลัก|ช่องทาง/;
 const HH_COLORS = { A: '#2E7D32', B: '#F9A825', C: '#EF6C00', '': '#455A64' };
 const hhCanAdmin = () => isSuper() || (S.me && S.me.role === 'admin');
@@ -58,6 +58,7 @@ async function pageHH(view) {
   if (sub === 'map') return hhMap(view);
   if (sub === 'ledger') return hhLedgerPage(view, parts[1], parts[2]);   // DEC-127
   if (sub === 'income') return hhIncomePage(view);
+  if (sub === 'innov') return hhInnovPage(view);   // DEC-128
   if (sub === 'items') return hhItemsPage(view);
   if (sub === 'check') return hhCheckPage(view);
   if (sub === 'sync') return hhSyncPage(view);
@@ -140,13 +141,13 @@ function hhExport(key) {
   const H = S._hh, T = H.byKey[key];
   exportCsv(T.rows.map(r => Object.fromEntries([['รหัสแถว', r.row_key], ...T.cols.map(c => [c.header, (r.data || {})[c.header] ?? ''])])), 'household_' + key);
 }
-function hhEdit(key, id) {
-  const H = S._hh, T = H.byKey[key], r = id ? T.rows.find(x => x.id === id) : null, d = r ? (r.data || {}) : {};
+function hhEdit(key, id, preset) {
+  const H = S._hh, T = H.byKey[key], r = id ? T.rows.find(x => x.id === id) : null, d = r ? (r.data || {}) : { ...(preset || {}) };
   const keyHs = T.tab.key_headers || ['รหัสครัวเรือน'];
   const field = c => {
     const v = d[c.header], fid = 'hf_' + c.col_index, isKey = keyHs.includes(c.header);
     if (c.is_formula) return `<div><label>${esc(c.header)} <span class="muted">(สูตรในชีต)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
-    if (isKey && c.header === 'รหัสครัวเรือน' && key !== '01') return `<div><label>${esc(c.header)} *</label><select id="${fid}" ${r ? 'disabled' : ''}>${H.reg.map(x => `<option ${x.hh_code === (r ? r.hh_code : '') ? 'selected' : ''}>${esc(x.hh_code)}</option>`).join('')}</select></div>`;
+    if (isKey && c.header === 'รหัสครัวเรือน' && key !== '01') return `<div><label>${esc(c.header)} *</label><select id="${fid}" ${r ? 'disabled' : ''}>${H.reg.map(x => `<option ${x.hh_code === (r ? r.hh_code : d['รหัสครัวเรือน'] || '') ? 'selected' : ''}>${esc(x.hh_code)}</option>`).join('')}</select></div>`;
     if (isKey && r) return `<div><label>${esc(c.header)} <span class="muted">(กุญแจ แก้ไม่ได้)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (Array.isArray(c.options) && c.options.length) { const opts = c.options.map(String); const extra = !hhBlank(v) && !opts.includes(String(v)) ? [String(v)] : []; return `<div><label>${esc(c.header)}${isKey ? ' *' : ''}</label><select id="${fid}"><option value="">—</option>${opts.concat(extra).map(o => `<option ${String(v ?? '') === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`; }
     if (HH_LONG.test(c.header)) return `<div style="grid-column:1/-1"><label>${esc(c.header)}</label><textarea id="${fid}" rows="2">${esc(v ?? '')}</textarea></div>`;
@@ -186,7 +187,7 @@ function hhDetail(view, code) {
   }).join('');
   const la = hhNumv(H.roleVal(reg, '01', 'lat')), lo = hhNumv(H.roleVal(reg, '01', 'lng'));
   view.innerHTML = hhShell('t/01', `<div class="card"><div class="cardhead"><h4>${esc(code)} · ${esc(name || '')}</h4><div class="row"><button class="small secondary" onclick="S._hhShow['${esc(code)}']=!S._hhShow['${esc(code)}'];render()">${show[code] ? 'ซ่อน' : 'แสดง'}ข้อมูลส่วนบุคคล</button><button class="small" onclick="hhEdit('01','${reg.id}')">แก้ทะเบียน</button></div></div>
-    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" class="hh-mini"></div><div class="muted" id="hhMiniNote" style="margin:-4px 0 8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhLedgerMini === 'function' ? hhLedgerMini(code) : ''}${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
+    ${!isNaN(la) && !isNaN(lo) ? '<div id="hhMini" class="hh-mini"></div><div class="muted" id="hhMiniNote" style="margin:-4px 0 8px"></div>' : ''}${kvs(H.byKey['01'], reg)}</div>${typeof hhInnovMini === 'function' ? hhInnovMini(code) : ''}${typeof hhLedgerMini === 'function' ? hhLedgerMini(code) : ''}${typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : ''}<div class="grid-dash">${others}</div>`);
   if (!isNaN(la) && !isNaN(lo)) { if (typeof hhMiniMap === 'function') hhMiniMap(reg, { lat: la, lng: lo }); else { const m = L.map('hhMini'); addBaseLayer(m); m.setView([la, lo], 16); L.circleMarker([la, lo], { radius: 10, color: '#fff', weight: 2, fillColor: HH_COLORS[String(H.roleVal(reg, '01', 'group') ?? '')] || '#455A64', fillOpacity: .95 }).addTo(m); } }
 }
 

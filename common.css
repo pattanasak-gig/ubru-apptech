@@ -26,6 +26,7 @@ label { display:block; font-size: 14px; color: var(--muted); margin: 10px 0 4px;
 input, select, textarea { width:100%; font: inherit; padding: 10px; border:1px solid #cbd5e1; border-radius: 8px; background:#fff; min-height:44px; }
 input[type=checkbox], input[type=radio] { width:auto; min-height:auto; }
 button, .btn { font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--brand); background: var(--brand); color:#fff; cursor:pointer; min-height:44px; }
+a.btn { display:inline-flex; align-items:center; box-sizing:border-box; }   /* ลิงก์ที่เป็นปุ่ม: ไม่ทับบรรทัดข้างบน (DEC-128) */
 button.secondary, .btn.secondary { background:#fff; color: var(--brand); }
 button.danger { background:#fff; color: var(--danger); border-color: var(--danger); }
 button.small { padding: 6px 12px; min-height:44px; min-width:44px; font-size: 14px; }
@@ -156,3 +157,8 @@ button.lg-chip { font:inherit; }
 .lg-bar-top { display:flex; flex-wrap:wrap; align-items:center; gap:6px; justify-content:space-between; }
 .lg-bar-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; justify-content:space-between; margin-top:6px; font-size:14px; }
 .lg-prog { height:8px; background:#eef2f7; border-radius:4px; margin-top:6px; overflow:hidden; } .lg-prog div { height:8px; border-radius:4px; }
+
+/* นวัตกรชุมชน (DEC-128): ป้ายระดับ 1–4 สีเขียวอ่อน→เข้ม (ตรงกับสีบนแผนที่) */
+.inv-lv { display:inline-block; min-width:26px; padding:2px 6px; border-radius:6px; text-align:center; font-weight:700; font-size:13px; }
+.inv-lv.l1 { background:#C5E1A5; color:#1B3A0F; } .inv-lv.l2 { background:#7CB342; color:#fff; } .inv-lv.l3 { background:#388E3C; color:#fff; } .inv-lv.l4 { background:#1B5E20; color:#fff; } .inv-lv.none { background:#ECEFF1; color:#607D8B; }
+.inv-desc { padding:6px 0; border-top:1px solid var(--line); }

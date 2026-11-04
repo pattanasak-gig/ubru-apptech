@@ -239,7 +239,7 @@ function hhIncomePage(view) {
         ${st.level !== 'all' ? `<select aria-label="เลือก" style="width:auto;max-width:260px" onchange="S._lgd.key=this.value;render()"><option value="">ทั้งหมด</option>${opts(st.level).map(([v, l]) => `<option value="${esc(v)}" ${v === st.key ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}
         <label style="margin:0">ตั้งแต่ <input type="month" value="${st.from}" style="width:auto" onchange="S._lgd.from=this.value;render()"></label><label style="margin:0">ถึง <input type="month" value="${st.to}" style="width:auto" onchange="S._lgd.to=this.value;render()"></label>
         ${st.level !== 'all' ? '<button class="small secondary" onclick="S._lgd.level=\'all\';S._lgd.key=\'\';render()">‹ ทั้งโครงการ</button>' : ''}</div></div>
-    ${!rows.length ? `<div class="card"><div class="muted">ยังไม่มีการบันทึกในช่วงที่เลือก</div><a class="btn" style="margin-top:8px;text-decoration:none" href="#hh/ledger">＋ บันทึกรายรับรายจ่าย</a></div>` : `
+    ${!rows.length ? `<div class="card"><p class="muted" style="margin:0 0 12px">ยังไม่มีการบันทึกในช่วงที่เลือก</p><div><a class="btn" style="text-decoration:none" href="#hh/ledger">＋ บันทึกรายรับรายจ่าย</a></div></div>` : `
     <div class="kpis">
       <div class="kpi hero"><div class="l">เฉลี่ยต่อครัวเรือน เดือน ${lgMonthLabel(last)}</div><div class="v" style="color:${lgStatus(avg(lastRows.map(r => r.g.total))).c}">${lgBaht(avg(lastRows.map(r => r.g.total)))} บาท</div><div class="muted">เป้า ${lgBaht(LG_TARGET)} บาท/เดือน</div></div>
       <div class="kpi"><div class="l">ถึงเป้าในเดือน ${lgMonthLabel(last)}</div><div class="v">${fmtInt(reach)} / ${fmtInt(lastRows.length)}</div><div class="muted">ครัวเรือนที่บันทึก</div></div>
