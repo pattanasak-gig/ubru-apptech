@@ -29,20 +29,20 @@ const lgBaht = n => (n == null || isNaN(n) ? '-' : Number(n).toLocaleString('th-
 // ---------------------------------------------------------------------
 // ผลรวมต่อหมวดของการบันทึก 1 เดือน · self_qty = ปริมาณที่ใช้เอง (กก.)
 function lgSums(lines, itemById) {
-  const s = { e_direct: 0, e_indirect: 0, e_other: 0, i_related: 0, i_project: 0, i_other: 0, self_qty: 0 };
-  for (const l of lines) { const it = itemById[l.item_id]; if (!it || l.status === 'inactive') continue; if (it.grp === 'self_use') s.self_qty += +l.qty || 0; else s[it.grp] += +l.amount || 0; }
+  const s = { e_direct: 0, e_indirect: 0, e_other: 0, i_related: 0, i_project: 0, i_other: 0, self_qty: 0, e_feed: 0, e_fert: 0, n_feed: 0, n_fert: 0 };
+  for (const l of lines) { const it = itemById[l.item_id]; if (!it || l.status === 'inactive') continue; if (it.grp === 'self_use') s.self_qty += +l.qty || 0; else s[it.grp] += +l.amount || 0; if (it.grp === 'e_direct') { const p = /ปุ๋ย/.test(String(it.name || '')) ? 'fert' : 'feed'; s['n_' + p]++; s['e_' + p] += +l.amount || 0; } }
   s.income = s.i_related + s.i_project + s.i_other; s.expense = s.e_direct + s.e_indirect + s.e_other; s.net = s.income - s.expense;
   return s;
 }
 // ค่าฐาน: ค่าที่ admin กำหนด > ข้อมูลสำรวจ (ก. เท่านั้น)
 function lgBase(override, survey) {
   const eS = survey && survey.e_direct != null && !isNaN(survey.e_direct) ? survey.e_direct : null;
-  return { e_direct: override && override.e_direct != null ? +override.e_direct : eS, e_src: override && override.e_direct != null ? 'กำหนดเอง' : eS != null ? 'ข้อมูลสำรวจ' : null,
+  return { e_fert: survey && survey.e_fert != null ? survey.e_fert : 0, e_direct: override && override.e_direct != null ? +override.e_direct : eS, e_src: override && override.e_direct != null ? 'กำหนดเอง' : eS != null ? 'ข้อมูลสำรวจ' : null,
            i_related: override && override.i_related != null ? +override.i_related : null, i_src: override && override.i_related != null ? 'กำหนดเอง' : null };
 }
 // รายได้เพิ่ม + ต้นทุนลด ของ 1 เดือน (มติ 3A) · ส่วนที่ยังไม่มีฐาน = 0 และติดธง
 function lgGain(sums, base) {
-  const proj = sums.i_project, cut = base.e_direct != null ? base.e_direct - sums.e_direct : 0, rel = base.i_related != null ? sums.i_related - base.i_related : 0;
+  const proj = sums.i_project, fB = base.e_fert || 0, cut = base.e_direct != null ? (sums.n_feed ? base.e_direct - fB - sums.e_feed : 0) + (sums.n_fert ? fB - sums.e_fert : 0) : 0, rel = base.i_related != null ? sums.i_related - base.i_related : 0;
   return { proj, cut, rel, total: proj + cut + rel, noBaseE: base.e_direct == null, noBaseI: base.i_related == null };
 }
 const lgStatus = t => (t >= LG_TARGET ? { c: '#2E7D32', l: 'ถึงเป้า' } : t >= LG_TARGET * 0.6 ? { c: '#F9A825', l: 'ใกล้เป้า' } : { c: '#C62828', l: 'ยังห่างเป้า' });
@@ -66,7 +66,7 @@ async function lgLoad(projectId) {
 function lgSurvey(code) {
   const H = S._hh, r = H.reg.find(x => x.hh_code === code); if (!r) return null;
   const f = hhNumv(H.roleVal(r, '01', 'feed_cost')), z = hhNumv(H.roleVal(r, '01', 'fert_cost'));
-  return { e_direct: isNaN(f) && isNaN(z) ? null : (isNaN(f) ? 0 : f) + (isNaN(z) ? 0 : z) };
+  return { e_feed: isNaN(f) ? null : f, e_fert: isNaN(z) ? null : z, e_direct: isNaN(f) && isNaN(z) ? null : (isNaN(f) ? 0 : f) + (isNaN(z) ? 0 : z) };
 }
 const lgBaseOf = code => lgBase((S._hh.lg.base || {})[code], lgSurvey(code));
 // แถวสรุปรายครัวเรือนรายเดือน (เฉพาะเดือนที่บันทึก)
@@ -149,7 +149,7 @@ function lgCopyPrev(monthId) {
 function lgFormLines() {
   const L = S._hh.lg, out = [];
   for (const [id, v] of Object.entries(S._lgForm.vals)) { const it = L.itemById[id]; if (!it) continue;
-    const amount = it.mode === 'qty_price' ? (v.qty != null && v.price != null ? v.qty * v.price : null) : it.mode === 'qty_only' ? null : v.amount;
+    const amount = it.mode === 'qty_price' ? (v.qty != null && v.price != null ? v.qty * v.price : v.amount ?? null) : it.mode === 'qty_only' ? null : v.amount;
     if (amount == null && v.qty == null) continue; out.push({ item_id: id, amount, qty: v.qty }); }
   return out;
 }
@@ -168,8 +168,8 @@ async function lgSave() {
     else monthId = (await api.insert('hh.ledger_month', { project_id: H.link.project_id, hh_code: f.code, month: f.month + '-01', channel: f.channel, note: f.note || null })).id;
     const old = Object.fromEntries((L.byMonth[f.recId] || []).map(l => [l.item_id, l]));
     for (const it of L.items) {
-      const v = f.vals[it.id] || {}, has = it.mode === 'amount' ? v.amount != null && v.amount > 0 : v.qty != null && v.qty > 0, o = old[it.id];
-      const rec = { amount: it.mode === 'amount' ? v.amount : it.mode === 'qty_price' && v.qty != null && v.price != null ? Math.round(v.qty * v.price * 100) / 100 : null, qty: it.mode === 'amount' ? null : v.qty, price: it.mode === 'qty_price' ? v.price ?? null : null };
+      const v = f.vals[it.id] || {}, has = it.mode === 'amount' ? v.amount != null : it.mode === 'qty_price' ? (v.qty != null && v.qty > 0) || v.amount > 0 : v.qty != null && v.qty > 0, o = old[it.id];
+      const rec = { amount: it.mode === 'amount' ? v.amount : it.mode === 'qty_price' && v.qty != null && v.price != null ? Math.round(v.qty * v.price * 100) / 100 : it.mode === 'qty_price' ? v.amount ?? null : null, qty: it.mode === 'amount' ? null : v.qty, price: it.mode === 'qty_price' ? v.price ?? null : null };
       if (has && o) await api.update('hh.ledger_line', o.id, rec);
       else if (has) await api.insert('hh.ledger_line', { month_id: monthId, item_id: it.id, ...rec });
       else if (o) await api.update('hh.ledger_line', o.id, { status: 'inactive' });
@@ -232,7 +232,7 @@ function hhIncomePage(view) {
   const drill = k => next === 'month' ? '' : `onclick="S._lgd.level='${next}';S._lgd.key='${esc(k).replace(/'/g, "\\'")}';render()" style="cursor:pointer"`;
   const table = Object.values(grp).map(x => ({ ...x, t: avg(x.rows.map(r => r.g.total)), p: avg(x.rows.map(r => r.g.proj)), c: avg(x.rows.map(r => r.g.cut)), e: avg(x.rows.map(r => r.g.rel)), hit: x.rows.filter(r => r.g.total >= LG_TARGET).length / x.rows.length })).sort((a, b) => (next === 'month' ? a.k.localeCompare(b.k) : b.t - a.t));
   const scopeLabel = st.level === 'all' || !st.key ? 'ทั้งโครงการ' : st.level === 'tambon' ? 'ต.' + st.key : st.key;
-  const formulaQ = qBtn('รายได้เพิ่ม + ต้นทุนลด', `<p>= จ. รายได้โดยตรงจากโครงการ + (ฐาน ก. − ก. รายจ่ายที่โครงการลดได้โดยตรง) + (ง. รายได้เดิมที่เกี่ยวข้อง − ฐาน ง.)</p><p>ค่าเฉลี่ยคิดจากครัวเรือนที่บันทึกในเดือนนั้น · เป้าหมายโครงการ ${lgBaht(LG_TARGET)} บาท/ครัวเรือน/เดือน</p><p>ส่วนที่ยังไม่มีค่าฐานนับเป็น 0 (ไม่นับเกินจริง) · ไม่นับ ข. ค. ฉ. และผลผลิต BSF ที่ใช้เอง</p>`);
+  const formulaQ = qBtn('รายได้เพิ่ม + ต้นทุนลด', `<p>= จ. รายได้โดยตรงจากโครงการ + (ฐาน ก. − ก. รายจ่ายที่โครงการลดได้โดยตรง) + (ง. รายได้เดิมที่เกี่ยวข้อง − ฐาน ง.)</p><p>ค่าเฉลี่ยคิดจากครัวเรือนที่บันทึกในเดือนนั้น · เป้าหมายโครงการ ${lgBaht(LG_TARGET)} บาท/ครัวเรือน/เดือน</p><p>ส่วนที่ยังไม่มีค่าฐานนับเป็น 0 (ไม่นับเกินจริง) · ต้นทุนเทียบแยกอาหารสัตว์กับปุ๋ย นับเฉพาะส่วนที่กรอกแล้ว (กรอก 0 = ไม่ได้ซื้อ) · ไม่นับ ข. ค. ฉ. และผลผลิต BSF ที่ใช้เอง</p>`);
   view.innerHTML = hhShell('income', `<div class="card"><div class="cardhead"><h4>แดชบอร์ดรายได้ครัวเรือน · ${esc(scopeLabel)} ${formulaQ}</h4><button class="small secondary" onclick="exportCsv(S._lgCsv,'รายรับรายจ่ายครัวเรือน')">ส่งออก CSV</button></div>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
         <select aria-label="ระดับการดู" style="width:auto" onchange="S._lgd.level=this.value;S._lgd.key='';render()">${[['all', 'ทั้งโครงการ'], ['tambon', 'ตำบล'], ['moo', 'หมู่บ้าน'], ['hh', 'ครัวเรือน']].map(([k, l]) => `<option value="${k}" ${st.level === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
