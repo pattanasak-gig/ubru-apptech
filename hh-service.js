@@ -81,7 +81,7 @@ function svDraw() {
     <div class="lg-chips" style="margin-top:8px">${svChip(f.date === todayISO(), 'วันนี้', `svDate('${todayISO()}')`)}<label class="lg-chip">วันที่ <input type="date" value="${f.date}" max="${todayISO()}" style="width:auto;min-height:32px;padding:2px 6px" onchange="svDate(this.value)"></label>${svChip(f.backfill, 'บันทึกย้อนหลัง', 'S._svf.backfill=!S._svf.backfill;svDraw()')}</div></div>`;
   const feeding = ['feed_all', 'feed_part'].includes(f.outcome), keeping = ['feed_part', 'keep_all'].includes(f.outcome);
   if (keeping && !f.stage && days != null) f.stage = svStage(days);
-  const use = f.backfill || !prev ? '' : `<div class="card lg-grp lg-inc"><h4 style="margin:0 0 6px">1 · หนอนรอบก่อนใช้ทำอะไร</h4>${svOne('outcome', SV.outcome)}
+  const use = f.backfill ? '' : `<div class="card lg-grp lg-inc"><h4 style="margin:0 0 6px">1 · หนอนรอบก่อนใช้ทำอะไร</h4>${svOne('outcome', SV.outcome)}
     ${feeding ? `${svKg('feed_kg', 'ให้เป็นอาหารสัตว์ (กก. โดยประมาณ)')}${svFrac('feed_kg', pk)}` : ''}${f.outcome === 'feed_part' ? `${svKg('keep_kg', 'เก็บไว้เลี้ยงต่อ (กก. โดยประมาณ)')}${svFrac('keep_kg', pk)}` : ''}
     ${feeding ? `<label style="margin:10px 0 2px">เลี้ยงต่อกี่วันก่อนให้สัตว์: <b id="svKd">${f.keep_days}</b> วัน</label><input type="range" min="0" max="30" value="${f.keep_days}" style="width:100%" oninput="S._svf.keep_days=+this.value;$('#svKd').textContent=this.value" onchange="svDraw()">
       ${f.keep_days > 1 ? `<label style="margin:8px 0 2px">อาหารที่ให้หนอน (เลือกได้หลายข้อ)</label>${svMany('larva_feeds', SV.feeds)}` : ''}
@@ -90,7 +90,7 @@ function svDraw() {
     ${keeping ? `<label style="margin:10px 0 2px">สภาพหนอนที่เลี้ยงต่อ</label>${svOne('alive_status', SV.alive)}${f.alive_status === 'ตายบางส่วน' ? svMany('loss_reasons', SV.loss) : ''}
       <label style="margin:10px 0 2px">ระยะตอนนี้ ${days != null ? `<span class="muted">ระบบเลือกจาก ${days} วันหลังรับ แก้ได้</span>` : ''}</label>${svOne('stage', SV.stage.map(x => x[0]))}
       <label style="margin:10px 0 2px">ต้องการรับเพิ่มรอบการเลี้ยง</label><div class="lg-chips">${svChip(f.want_more === true, 'ต้องการ', 'S._svf.want_more=true;svDraw()')}${svChip(f.want_more === false, 'ไม่ต้องการ', 'S._svf.want_more=false;svDraw()')}</div>` : ''}</div>`;
-  const frass = f.backfill || !prev ? '' : `<div class="card lg-grp lg-inc"><h4 style="margin:0 0 6px">2 · ใช้ประโยชน์จากมูล</h4>${svMany('frass_use', SV.frass)}${f.frass_use.includes('ขาย') ? svMoney('fr', 'ขายมูล เดือนที่แล้ว') : ''}</div>`;
+  const frass = f.backfill ? '' : `<div class="card lg-grp lg-inc"><h4 style="margin:0 0 6px">2 · ใช้ประโยชน์จากมูล</h4>${svMany('frass_use', SV.frass)}${f.frass_use.includes('ขาย') ? svMoney('fr', 'ขายมูล เดือนที่แล้ว') : ''}</div>`;
   const sv = lgSurvey(f.code) || {}, ml = lgMonthLabel(svMonth());
   const cost = f.backfill ? '' : `<div class="card lg-grp lg-exp"><h4 style="margin:0 0 6px">3 · ต้นทุนเดือน ${ml}</h4>
     ${svMoney('feed', 'ซื้ออาหารสัตว์', sv.e_feed != null ? 'เดิม ' + lgBaht(sv.e_feed) + ' บาท/เดือน' : '')}<div class="lg-chips" style="margin-top:4px">${svChip(false, 'ไม่ได้ซื้อแล้ว', "svNoBuy('feed')")}</div>
