@@ -19,7 +19,7 @@ const svDays = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
 const svKgOf = r => (r ? (r.larvae_kg ?? r.total_kg) : null);
 const svNum = v => { const t = String(v ?? '').replace(/,/g, '').trim(); if (t === '') return null; const n = +t; return isNaN(n) || n < 0 ? null : n; };
 const svR2 = n => Math.round(n * 100) / 100;
-const svD = d => thDate(d).replace(/s*dd:dd$/, '');
+const svD = d => thDate(d).replace(/\s*\d\d:\d\d$/, '');
 
 async function svLoad() {
   const H = S._hh;
