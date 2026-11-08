@@ -19,7 +19,9 @@ function rpRows() {
       base: { e_direct: null, i_related: null }, g: { proj: ex, cut, rel: 0, total: ex + cut, noBaseE: false, noBaseI: false },
       reg, moo: reg ? String(H.roleVal(reg, '01', 'moo') ?? '').trim() : '', tambon: reg ? String(H.roleVal(reg, '01', 'tambon') ?? '').trim() : '', name: reg ? H.roleVal(reg, '01', 'name') || '' : '' }; });
 }
-// ระดับรายคน
+// ระดับรายคน · เป้าหมายรายระดับตามสไลด์รายงาน 6 เดือน (รวม 30 คน · ระดับ 3–4 ไม่น้อยกว่า 8 คนตามสัญญา)
+const RP_LV_TARGET = { 4: 2, 3: 6, 2: 10, 1: 12 };
+const RP_LV_NAME = { 1: 'Co-Ordinator', 2: 'Co-Creator', 3: 'Trainer', 4: 'Change Agent' };
 const rpLevel = (code, round) => { const x = ((S._hh.rp || {}).levels || {})[code]; return x && x[round] ? x[round].level : null; };
 async function rpLevelSet(code, round, level) {
   const H = S._hh; if (!H.rp) return toastErr('ยังไม่ได้รัน sql/025', 'รันไฟล์ 025 ใน SQL Editor ก่อน');
@@ -35,7 +37,7 @@ function rpLevelCard(sel) {
   const r = st.lvRound || 2, n = l => sel.filter(x => rpLevel(x.code, r) === l).length, none = sel.filter(x => rpLevel(x.code, r) == null).length, hi = n(3) + n(4);
   return `<div class="card"><div class="cardhead"><h4>ระดับนวัตกรรายคน ${qBtn('ระดับรายคน', '<p>นับระดับสูงสุดที่แสดงออกจริง ระดับสูงต้องทำบทบาทของระดับต่ำกว่าได้ด้วย (รายงานความก้าวหน้า 6 เดือน)</p><p>Co-Ordinator (1) · Co-Creator (2) · Trainer (3) · Change Agent (4)</p><p>เก็บในระบบ ไม่ซิงก์ลงชีต (ชีต 07 ไม่มีคอลัมน์นี้) · คะแนน 3 มิติยังบันทึกที่ชีต 07 ตามเดิม</p>')}</h4>
     <div class="lg-chips">${[1, 2, 3].map(x => `<button type="button" class="lg-chip ${r === x ? 'on' : ''}" onclick="S._inv.lvRound=${x};render()">รอบ ${x}</button>`).join('')}<button type="button" class="lg-chip ${st.lvEdit ? 'on' : ''}" onclick="S._inv.lvEdit=!S._inv.lvEdit;render()">${st.lvEdit ? 'เสร็จ' : 'กรอกระดับรายคน'}</button></div></div>
-    <div class="kpis">${[4, 3, 2, 1].map(l => `<div class="kpi"><div class="l">ระดับ ${l}</div><div class="v">${fmtInt(n(l))} <span class="muted" style="font-size:14px">คน</span></div></div>`).join('')}<div class="kpi"><div class="l">ระดับ 3–4 รวม (เป้า ≥ 8)</div><div class="v" style="color:${hi >= 8 ? '#2E7D32' : '#C62828'}">${fmtInt(hi)}</div></div></div>
+    <div class="kpis">${[4, 3, 2, 1].map(l => `<div class="kpi"><div class="l">ระดับ ${l} · ${RP_LV_NAME[l]}</div><div class="v">${fmtInt(n(l))} <span class="muted" style="font-size:14px">คน</span></div><div class="muted">เป้าหมาย ${RP_LV_TARGET[l]} คน</div></div>`).join('')}<div class="kpi"><div class="l">ระดับ 3–4 รวม (เป้า ≥ 8)</div><div class="v" style="color:${hi >= 8 ? '#2E7D32' : '#C62828'}">${fmtInt(hi)}</div></div></div>
     ${none ? `<div class="muted" style="margin-top:6px">ยังไม่ให้ระดับรอบ ${r}: ${fmtInt(none)} คน ${st.lvEdit ? '' : '· กด "กรอกระดับรายคน" แล้วกดเลข 1–4 ในตารางด้านล่าง'}</div>` : ''}</div>`;
 }
 // ช่องระดับรายคนในตาราง: แสดงผล หรือปุ่ม 1–4 เมื่ออยู่ในโหมดกรอก
