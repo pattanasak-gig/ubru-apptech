@@ -211,7 +211,7 @@ async function lgBaseSave(code) {
 function hhIncomePage(view) {
   const H = S._hh, L = H.lg; if (!L) return view.innerHTML = hhShell('income', lgNeed());
   const st = S._lgd = S._lgd || { level: 'all', key: '', from: lgShift(lgThisMonth(), -11), to: lgThisMonth() };
-  const all = lgRows().filter(r => r.month >= st.from && r.month <= st.to);
+  const all = (st.src === 'report' && H.rp ? rpRows() : lgRows()).filter(r => r.month >= st.from && r.month <= st.to);   // DEC-132: เลือกแหล่งข้อมูล
   const inScope = r => st.level === 'all' || !st.key ? true : st.level === 'tambon' ? r.tambon === st.key : st.level === 'moo' ? lgVillage(r) === st.key : r.code === st.key;
   const rows = all.filter(inScope);
   const regScope = H.reg.filter(r => inScope({ code: r.hh_code, tambon: String(H.roleVal(r, '01', 'tambon') ?? '').trim(), moo: String(H.roleVal(r, '01', 'moo') ?? '').trim() }));
@@ -238,7 +238,9 @@ function hhIncomePage(view) {
         <select aria-label="ระดับการดู" style="width:auto" onchange="S._lgd.level=this.value;S._lgd.key='';render()">${[['all', 'ทั้งโครงการ'], ['tambon', 'ตำบล'], ['moo', 'หมู่บ้าน'], ['hh', 'ครัวเรือน']].map(([k, l]) => `<option value="${k}" ${st.level === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         ${st.level !== 'all' ? `<select aria-label="เลือก" style="width:auto;max-width:260px" onchange="S._lgd.key=this.value;render()"><option value="">ทั้งหมด</option>${opts(st.level).map(([v, l]) => `<option value="${esc(v)}" ${v === st.key ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}
         <label style="margin:0">ตั้งแต่ <input type="month" value="${st.from}" style="width:auto" onchange="S._lgd.from=this.value;render()"></label><label style="margin:0">ถึง <input type="month" value="${st.to}" style="width:auto" onchange="S._lgd.to=this.value;render()"></label>
+        <select aria-label="แหล่งข้อมูล" style="width:auto" onchange="S._lgd.src=this.value;render()"><option value="ledger">จากบันทึกรายรับรายจ่าย</option><option value="report" ${st.src === 'report' ? 'selected' : ''} ${H.rp ? '' : 'disabled'}>ตามรายงาน (ชีต 10)</option></select>
         ${st.level !== 'all' ? '<button class="small secondary" onclick="S._lgd.level=\'all\';S._lgd.key=\'\';render()">‹ ทั้งโครงการ</button>' : ''}</div></div>
+    ${st.src === 'report' ? '<div class="banner info" style="margin:0 0 8px">ค่าตามรายงาน (ชีต 10): รายได้เสริม + ต้นทุนลด ที่ใส่ในชีตรายครัวเรือนรายเดือน ไม่ใช่ยอดจากบันทึกรายรับรายจ่าย · "จ." = รายได้เสริม</div>' : ''}
     ${!rows.length ? `<div class="card"><p class="muted" style="margin:0 0 12px">ยังไม่มีการบันทึกในช่วงที่เลือก</p><div><a class="btn" style="text-decoration:none" href="#hh/ledger">＋ บันทึกรายรับรายจ่าย</a></div></div>` : `
     <div class="kpis">
       <div class="kpi hero"><div class="l">เฉลี่ยต่อครัวเรือน เดือน ${lgMonthLabel(last)}</div><div class="v" style="color:${lgStatus(avg(lastRows.map(r => r.g.total))).c}">${lgBaht(avg(lastRows.map(r => r.g.total)))} บาท</div><div class="muted">เป้า ${lgBaht(LG_TARGET)} บาท/เดือน</div></div>
@@ -249,7 +251,7 @@ function hhIncomePage(view) {
     <div class="grid-dash" style="margin-top:12px">
       <div class="card"><div class="cardhead"><h4>รายได้เพิ่ม + ต้นทุนลด เฉลี่ยต่อครัวเรือน (บาท/เดือน)</h4></div><div class="chartbox"><canvas id="lgTrend"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>องค์ประกอบ (เฉลี่ยต่อครัวเรือน)</h4></div><div class="chartbox"><canvas id="lgParts"></canvas></div></div>
-      <div class="card"><div class="cardhead"><h4>รายรับ–รายจ่ายรวม (บาท)</h4></div><div class="chartbox"><canvas id="lgFlow"></canvas></div></div>
+      ${st.src === 'report' ? '' : '<div class="card"><div class="cardhead"><h4>รายรับ–รายจ่ายรวม (บาท)</h4></div><div class="chartbox"><canvas id="lgFlow"></canvas></div></div>'}
       <div class="card"><div class="cardhead"><h4>ยังไม่บันทึกเดือน ${lgMonthLabel(last)} (${fmtInt(missing.length)})</h4></div><div class="lg-chips" style="max-height:220px;overflow:auto">${missing.map(r => `<a class="lg-chip" href="#hh/ledger/${encodeURIComponent(r.hh_code)}/${last || lgThisMonth()}">${esc(r.hh_code)} · ${esc(H.roleVal(r, '01', 'name') || '')}</a>`).join('') || '<span class="muted">บันทึกครบแล้ว</span>'}</div></div></div>
     <div class="card"><div class="cardhead"><h4>${next === 'tambon' ? 'รายตำบล' : next === 'moo' ? 'รายหมู่บ้าน' : next === 'hh' ? 'รายครัวเรือน' : 'รายเดือน'} ${next !== 'month' ? '<span class="muted">กดแถวเพื่อดูละเอียด</span>' : ''}</h4></div><div class="tscroll"><table><thead><tr><th>${next === 'month' ? 'เดือน' : 'ชื่อ'}</th><th class="num">ครัวเรือน</th><th class="num">เดือนที่บันทึก</th><th class="num">รายได้เพิ่ม+ต้นทุนลด/เดือน</th><th class="num">จ. จากโครงการ</th><th class="num">ต้นทุนลด</th><th class="num">รายได้เดิมเพิ่ม</th><th class="num">เดือนที่ถึงเป้า</th></tr></thead><tbody>
       ${table.map(x => { const s = lgStatus(x.t); return `<tr ${drill(x.k)}><td><i class="dot" style="background:${s.c}"></i> ${esc(lab(x.k))}</td><td class="num">${fmtInt(x.hh.size)}</td><td class="num">${fmtInt(x.rows.length)}</td><td class="num"><b>${lgBaht(x.t)}</b></td><td class="num">${lgBaht(x.p)}</td><td class="num">${lgBaht(x.c)}</td><td class="num">${lgBaht(x.e)}</td><td class="num">${fmt(x.hit * 100, 0)}%</td></tr>`; }).join('')}
@@ -259,7 +261,7 @@ function hhIncomePage(view) {
   mkChart($('#lgTrend'), { data: { labels: lab2, datasets: [{ type: 'line', label: 'เฉลี่ยต่อครัวเรือน', data: by(r => r.g.total), borderColor: '#1F3A5F', backgroundColor: '#1F3A5F', tension: .2 }, { type: 'line', label: 'เป้า 5,000', data: months.map(() => LG_TARGET), borderColor: '#2E7D32', borderDash: [6, 4], pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } } });
   mkChart($('#lgParts'), { type: 'bar', data: { labels: lab2, datasets: [{ label: 'จ. รายได้จากโครงการ', data: by(r => r.g.proj), backgroundColor: '#2E7D32' }, { label: 'ต้นทุนที่ลดลง', data: by(r => r.g.cut), backgroundColor: '#7CB342' }, { label: 'รายได้เดิมที่เพิ่มขึ้น', data: by(r => r.g.rel), backgroundColor: '#F9A825' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true } } } });
   const tot = k => months.map(mo => Math.round(rows.filter(r => r.month === mo).reduce((a, r) => a + r.sums[k], 0)));
-  mkChart($('#lgFlow'), { type: 'bar', data: { labels: lab2, datasets: [{ label: 'รายรับ', data: tot('income'), backgroundColor: '#1F3A5F' }, { label: 'รายจ่าย', data: tot('expense'), backgroundColor: '#C62828' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } } });
+  if ($('#lgFlow')) mkChart($('#lgFlow'), { type: 'bar', data: { labels: lab2, datasets: [{ label: 'รายรับ', data: tot('income'), backgroundColor: '#1F3A5F' }, { label: 'รายจ่าย', data: tot('expense'), backgroundColor: '#C62828' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } } });
 }
 // สรุปสั้นในหน้าข้อมูลครัวเรือน
 function hhLedgerMini(code) {

@@ -43,6 +43,7 @@ async function hhLoad(force) {
     routes = Object.fromEntries(rt.map(x => [x.hh_code, x])); photos = {}; for (const x of ph) (photos[x.hh_code] = photos[x.hh_code] || []).push(x); } catch (e) { console.warn('hh.route/hh.photo (sql/022) missing:', e && e.message); }
   S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, routes, photos, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
   S._hh.lg = typeof lgLoad === 'function' ? await lgLoad(link.project_id) : null;   // DEC-127 รายรับรายจ่าย (sql/023)
+  S._hh.rp = typeof rpLoad === 'function' ? await rpLoad(link.project_id) : null;   // DEC-132 ค่าตามรายงาน + ระดับรายคน (sql/025)
   return S._hh;
 }
 function hhMenu(sub) {
