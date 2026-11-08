@@ -169,3 +169,15 @@ button.lg-chip { font:inherit; }
 .hh-groups a.active { background:#e8eef6; border-color:var(--brand); color:var(--brand); }
 .hh-groups .s { display:none; }
 @media (max-width: 640px) { .hh-groups .l { display:none; } .hh-groups .s { display:inline; } .hh-groups a { white-space:nowrap; font-size:13px; padding:2px; min-width:0; } }
+
+/* หน้าครัวเรือน (DEC-131): หมวดย่อ/ขยาย · ป้ายชื่อ:ค่า หลายคอลัมน์ */
+details.kvs { border-top:1px solid var(--line); padding:6px 0; }
+details.kvs > summary { cursor:pointer; font-weight:600; padding:4px 0; }
+.kvg { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:2px 20px; margin-top:4px; }
+.kv { display:flex; gap:8px; padding:4px 0; border-bottom:1px dashed var(--line); min-width:0; }
+.kv .k { color:var(--muted); flex:0 0 46%; font-size:14px; }
+.kv .v { flex:1; min-width:0; overflow-wrap:anywhere; }
+.kv.wide { grid-column:1 / -1; } .kv.wide .k { flex-basis:23%; }
+.hh-rec + .hh-rec { border-top:2px solid var(--line); margin-top:10px; padding-top:8px; }
+.fsec { grid-column:1 / -1; font-weight:700; color:var(--brand); border-bottom:1px solid var(--line); padding:6px 0 2px; margin-top:4px; }
+@media (max-width: 640px) { .kv.wide .k { flex-basis:46%; } }

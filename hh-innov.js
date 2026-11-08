@@ -165,3 +165,26 @@ function hhInnovMini(code) {
   return `<div class="card"><div class="cardhead"><h4>นวัตกรชุมชน</h4><a class="small" href="javascript:void 0" onclick="invDetail('${esc(code)}')">ดูเกณฑ์และระดับ ›</a></div>
     <div><i class="dot" style="background:${r.st.c}"></i> ${esc(r.st.l)}${r.dev.cur ? ' · ' + r.dev.cur.map((v, i) => `ม.${i + 1} ${invChip(v)}`).join(' ') + (r.dev.sumCur != null ? ` · รวม ${r.dev.sumCur}` : '') : ''}</div></div>`;
 }
+
+// ---------------------------------------------------------------------
+// สรุปพัฒนาการ (แท็บ 09) คำนวณจาก 01/06/07 ตามคอลัมน์ของชีต 09 · ไม่กรอกเอง (DEC-131)
+// ---------------------------------------------------------------------
+function hhDevRows() {
+  const H = S._hh;
+  return invRows().filter(r => r.scr || r.dev.latest).map(r => {
+    const o = { 'รหัสครัวเรือน': r.code, 'ชื่อ-สกุล': r.name, 'ตำบล': r.tambon, 'กลุ่ม': r.group, 'สรุปคัดกรอง': r.scr || '–', 'มิติเด่น': r.strength || '–' };
+    const sum = a => (a && a.every(v => v != null) ? a.reduce((x, y) => x + y, 0) : null);
+    [1, 2, 3].forEach(i => { const g = n => (r.rounds[n] || [])[i - 1] ?? null; o[`ม.${i} รอบก่อน`] = g(1); o[`ม.${i} ระหว่าง`] = g(2); o[`ม.${i} ให้ระดับ`] = g(3); o[`ม.${i} พัฒนาการ`] = g(3) != null && g(1) != null ? g(3) - g(1) : null; });
+    o['รวมระดับก่อน'] = sum(r.rounds[1]); o['รวมระดับสุดท้าย'] = sum(r.rounds[3]); o['พัฒนาการรวม'] = o['รวมระดับก่อน'] != null && o['รวมระดับสุดท้าย'] != null ? o['รวมระดับสุดท้าย'] - o['รวมระดับก่อน'] : null;
+    o['สถานะการประเมิน'] = r.st.l; const lr = r.dev.latest ? r.rows7[r.dev.latest] : null; o['สถานะ PMUA'] = lr ? (lr.data || {})['สถานะนำเข้า PMUA'] || '–' : '–';
+    return o;
+  });
+}
+function hhDevPage(view) {
+  const rows = hhDevRows(); S._devCsv = rows;
+  const c = v => (v == null ? '<span class="muted">–</span>' : esc(String(v)));
+  view.innerHTML = hhShell('t/09', `<div class="card"><div class="cardhead"><h4>สรุปพัฒนาการ (${fmtInt(rows.length)}) ${qBtn('สรุปพัฒนาการ', '<p>ระบบคำนวณจากแท็บ 01 คัดกรอง 06 และประเมิน 07 ตามคอลัมน์ของชีต 09 จึงไม่ต้องกรอกเอง</p><p>พัฒนาการ = ระดับรอบ 3 (ให้ระดับ) − รอบ 1 (ก่อนพัฒนา) · แก้ระดับได้ที่เมนูนวัตกรชุมชนหรือประเมินนวัตกร</p><p>ส่งออก CSV ได้ คอลัมน์เรียงเหมือนชีต 09</p>')}</h4><button class="small secondary" onclick="exportCsv(S._devCsv,'สรุปพัฒนาการ')">ส่งออก CSV</button></div>
+    <div class="tscroll"><table><thead><tr><th>ครัวเรือน</th><th>คัดกรอง</th>${[1, 2, 3].map(i => `<th class="num">ม.${i} ก่อน</th><th class="num">ระหว่าง</th><th class="num">ให้ระดับ</th><th class="num">พัฒนาการ</th>`).join('')}<th class="num">รวมก่อน</th><th class="num">รวมสุดท้าย</th><th>สถานะ</th></tr></thead><tbody>
+    ${rows.map(o => `<tr onclick="invDetail('${esc(o['รหัสครัวเรือน'])}')" style="cursor:pointer"><td class="nowrap"><b>${esc(o['รหัสครัวเรือน'])}</b> ${esc(o['ชื่อ-สกุล'])}</td><td>${esc(o['สรุปคัดกรอง'])}</td>${[1, 2, 3].map(i => `<td class="num">${o[`ม.${i} รอบก่อน`] == null ? '–' : invChip(o[`ม.${i} รอบก่อน`])}</td><td class="num">${o[`ม.${i} ระหว่าง`] == null ? '–' : invChip(o[`ม.${i} ระหว่าง`])}</td><td class="num">${o[`ม.${i} ให้ระดับ`] == null ? '–' : invChip(o[`ม.${i} ให้ระดับ`])}</td><td class="num">${invDelta(o[`ม.${i} พัฒนาการ`])}</td>`).join('')}<td class="num">${c(o['รวมระดับก่อน'])}</td><td class="num">${c(o['รวมระดับสุดท้าย'])}</td><td class="nowrap">${esc(o['สถานะการประเมิน'])}</td></tr>`).join('') || '<tr><td colspan="17" class="muted">ยังไม่มีข้อมูลคัดกรองหรือประเมิน</td></tr>'}
+    </tbody></table></div></div>`);
+}

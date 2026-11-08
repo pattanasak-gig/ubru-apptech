@@ -66,7 +66,7 @@ async function pageHH(view) {
   if (!sub && hhCanAdmin() && typeof hhServicePage === 'function') return hhServicePage(view);   // DEC-130: หน้าแรกของผู้ดูแล = รับหนอน/บริการ
   if (sub === 'overview') return hhOverview(view);
   if (sub === 't') return hhTabPage(view, parts[1] || '01');
-  if (sub === 'h') return hhDetail(view, decodeURIComponent(parts[1] || ''));
+  if (sub === 'h') return hhDetail(view, decodeURIComponent(parts[1] || ''), parts[2]);   // DEC-131: เปิดตรงแถบส่วน
   if (sub === 'map') return hhMap(view);
   if (sub === 'ledger') return hhLedgerPage(view, parts[1], parts[2]);   // DEC-127
   if (sub === 'income') return hhIncomePage(view);
@@ -126,6 +126,7 @@ function hhOverview(view) {
 // ตารางรายแท็บ + ตัวกรอง (แทนแท็บ 91) + เพิ่ม/แก้
 // ---------------------------------------------------------------------
 function hhTabPage(view, key) {
+  if (key === '09' && typeof hhDevPage === 'function') return hhDevPage(view);   // DEC-131: สรุปพัฒนาการคำนวณจาก 01/06/07 ไม่กรอกเอง
   const H = S._hh, T = H.byKey[key]; if (!T) return view.innerHTML = hhShell('t/' + key, '<div class="card">ไม่พบแท็บนี้ (ซิงก์กับชีตก่อน)</div>');
   const f = S._hhf = S._hhf || {}; const st = f[key] = f[key] || { q: '', group: '', tambon: '', status: '', imin: '', imax: '' };
   const cols = T.cols.filter(c => c.in_list); const listCols = cols.length ? cols : T.cols.slice(0, 6);
@@ -143,7 +144,7 @@ function hhTabPage(view, key) {
   const cell = (r, c) => { const v = (r.data || {})[c.header]; if (c.sensitive) return `<span class="mono">${esc(hhMask(v, c.header))}</span>`; const s = String(v ?? ''); return esc(s.length > 60 ? s.slice(0, 60) + '…' : s); };
   const data = rows.map(r => ({ _r: r, code: r.row_key, ...Object.fromEntries(listCols.map(c => [c.header, (r.data || {})[c.header]])) }));
   const tbl = pagedTable('hhTbl' + key, data, [{ label: 'รหัส', key: 'code', cls: 'nowrap' }, ...listCols.map(c => ({ label: c.header + (c.is_formula ? ' ⓕ' : ''), key: c.header })), { label: '' }],
-    d => `<tr><td class="nowrap"><a href="#hh/h/${encodeURIComponent(d._r.hh_code)}">${esc(d.code)}</a></td>${listCols.map(c => `<td${hhNumv(d[c.header]) === hhNumv(d[c.header]) && !isNaN(hhNumv(d[c.header])) ? ' class="num"' : ''}>${cell(d._r, c)}</td>`).join('')}<td><button class="small secondary" onclick="hhEdit('${key}','${d._r.id}')">แก้</button></td></tr>`, { resetPage: false });
+    d => `<tr><td class="nowrap"><a href="#hh/h/${encodeURIComponent(d._r.hh_code)}/${key}">${esc(d.code)}</a></td>${listCols.map(c => `<td${hhNumv(d[c.header]) === hhNumv(d[c.header]) && !isNaN(hhNumv(d[c.header])) ? ' class="num"' : ''}>${cell(d._r, c)}</td>`).join('')}<td><button class="small secondary" onclick="hhEdit('${key}','${d._r.id}')">แก้</button></td></tr>`, { resetPage: false });
   view.innerHTML = hhShell('t/' + key, `<div class="card"><div class="cardhead"><h4>${esc(T.tab.label)} (${fmtInt(rows.length)}${rows.length !== T.rows.length ? ' จาก ' + fmtInt(T.rows.length) : ''})</h4><div class="row"><button class="small secondary" onclick="hhExport('${key}')">ส่งออก CSV</button><button class="small" onclick="hhEdit('${key}')">＋ เพิ่ม${key === '01' ? 'ครัวเรือน' : 'แถว'}</button></div></div>
     <div class="row" style="margin-bottom:6px"><input aria-label="ค้นหาครัวเรือน" type="search" placeholder="ค้นหารหัส/ข้อความ…" value="${esc(st.q)}" style="flex:1;min-width:160px" onchange="S._hhf['${key}'].q=this.value;render()">${sel('group', 'ทุกกลุ่ม', uniq('group'))}${sel('tambon', 'ทุกตำบล', uniq('tambon'))}${sel('status', 'ทุกสถานะ', uniq('status'))}
       <label style="margin:0">รายได้ <input type="number" placeholder="ต่ำสุด" value="${esc(st.imin)}" style="width:110px" onchange="S._hhf['${key}'].imin=this.value;render()"> – <input type="number" placeholder="สูงสุด" value="${esc(st.imax)}" style="width:110px" onchange="S._hhf['${key}'].imax=this.value;render()"></label></div>
@@ -164,10 +165,13 @@ function hhEdit(key, id, preset) {
     if (isKey && r) return `<div><label>${esc(c.header)} <span class="muted">(กุญแจ แก้ไม่ได้)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (Array.isArray(c.options) && c.options.length) { const opts = c.options.map(String); const extra = !hhBlank(v) && !opts.includes(String(v)) ? [String(v)] : []; return `<div><label>${esc(c.header)}${isKey ? ' *' : ''}</label><select id="${fid}"><option value="">—</option>${opts.concat(extra).map(o => `<option ${String(v ?? '') === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`; }
     if (HH_LONG.test(c.header)) return `<div style="grid-column:1/-1"><label>${esc(c.header)}</label><textarea id="${fid}" rows="2">${esc(v ?? '')}</textarea></div>`;
-    return `<div><label>${esc(c.header)}${isKey ? ' *' : ''}</label><input id="${fid}" value="${esc(v ?? '')}" ${key === '01' && c.header === 'รหัสครัวเรือน' ? 'placeholder="เช่น BSF-062" autocapitalize="characters"' : ''}></div>`;
+    const hi = !isKey && typeof hhHints === 'function' ? hhHints(T, c.header) : { toks: [] }, cur = String(v ?? '').split(/\s*,\s*/);   // DEC-131: ช่วยกรอกจากค่าที่เคยกรอก
+    const dl = !hi.multi && hi.toks.length && !hi.numeric ? `<datalist id="dl_${fid}">${hi.toks.map(t => `<option value="${esc(t)}">`).join('')}</datalist>` : '';
+    const chips = hi.multi && hi.toks.length ? `<div class="lg-chips" style="margin-top:4px">${hi.toks.map(t => `<button type="button" class="lg-chip ${cur.includes(t) ? 'on' : ''}" data-t="${esc(t)}" onclick="hhTok('${fid}','${esc(t).replace(/'/g, "\\'")}')">${esc(t)}</button>`).join('')}</div>` : '';
+    return `<div${chips ? ' style="grid-column:1/-1"' : ''}><label>${esc(c.header)}${isKey ? ' *' : ''}</label><input id="${fid}" value="${esc(v ?? '')}" ${dl ? `list="dl_${fid}"` : ''} ${hi.numeric ? 'inputmode="decimal"' : ''} ${key === '01' && c.header === 'รหัสครัวเรือน' ? 'placeholder="เช่น BSF-062" autocapitalize="characters"' : ''}>${dl}${chips}</div>`;
   };
   openModal(`<h3 style="margin-top:0">${r ? 'แก้' : 'เพิ่ม'} ${esc(T.tab.label)}${r ? ' · ' + esc(r.row_key) : ''}</h3><div class="muted" style="margin-bottom:8px">บันทึกแล้วยังไม่ลงชีตทันที · ไปที่ "ซิงก์กับชีต" เพื่อส่งค่าที่แก้ลงชีต (ชีตยังเป็นหลัก)</div>
-    <div class="fgrid" style="max-height:60vh;overflow:auto">${T.cols.map(field).join('')}</div>
+    <div class="fgrid" style="max-height:60vh;overflow:auto">${typeof hhSections === 'function' ? hhSections(T).map(s => `<div class="fsec">${esc(s.t)}${s.t === 'ข้อมูลอัตโนมัติจากชีต' ? ' (อ่านอย่างเดียว)' : ''}</div>${s.cols.map(field).join('')}`).join('') : T.cols.map(field).join('')}</div>
     <div class="row" style="margin-top:12px"><button id="hfSave">บันทึก</button><button class="secondary" onclick="closeModal()">ยกเลิก</button></div>`);
   $('#hfSave').onclick = async () => {
     const nd = { ...d };
