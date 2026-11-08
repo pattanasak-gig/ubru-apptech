@@ -162,3 +162,10 @@ button.lg-chip { font:inherit; }
 .inv-lv { display:inline-block; min-width:26px; padding:2px 6px; border-radius:6px; text-align:center; font-weight:700; font-size:13px; }
 .inv-lv.l1 { background:#C5E1A5; color:#1B3A0F; } .inv-lv.l2 { background:#7CB342; color:#fff; } .inv-lv.l3 { background:#388E3C; color:#fff; } .inv-lv.l4 { background:#1B5E20; color:#fff; } .inv-lv.none { background:#ECEFF1; color:#607D8B; }
 .inv-desc { padding:6px 0; border-top:1px solid var(--line); }
+
+/* กลุ่มเมนูครัวเรือน (DEC-130) */
+.hh-groups { display:flex; gap:6px; margin:4px 0 8px; }
+.hh-groups a { flex:1 1 0; display:flex; align-items:center; justify-content:center; text-align:center; min-height:44px; padding:6px 8px; border:1px solid var(--line); border-radius:10px; background:#fff; color:#374151; text-decoration:none; font-weight:600; font-size:14px; line-height:1.25; }
+.hh-groups a.active { background:#e8eef6; border-color:var(--brand); color:var(--brand); }
+.hh-groups .s { display:none; }
+@media (max-width: 640px) { .hh-groups .l { display:none; } .hh-groups .s { display:inline; } .hh-groups a { white-space:nowrap; font-size:13px; padding:2px; min-width:0; } }

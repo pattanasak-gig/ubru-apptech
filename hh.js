@@ -4,7 +4,10 @@
 //   ซิงก์แบบกดปุ่ม (ระบบหลังบ้าน hh_sync): ตรวจ → อัปเดต · ไม่อัตโนมัติ
 //   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/sync · #hh/ref · #hh/cols
 // =====================================================================
-const HH_SUB = [['', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต']];
+const HH_SUB = [['overview', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต'], ['items', 'รายการรายรับรายจ่าย'], ['cols', 'ตั้งค่าคอลัมน์']];
+// กลุ่มเมนูตามงาน (DEC-130): บันทึกงานประจำ · รายงาน · ข้อมูลพื้นฐานจากชีต · ดูแลข้อมูลและตั้งค่า (admin)
+const HH_GROUPS = [['work', 'บันทึกงานประจำ|งานประจำ', ['service', 'ledger', 't/07']], ['report', 'รายงาน|รายงาน', ['overview', 'income', 'innov', 'map']], ['base', 'ข้อมูลพื้นฐาน|พื้นฐาน', ['t/01', 't/02', 't/03', 't/04', 't/05', 't/06', 't/09']], ['admin', 'ดูแลข้อมูลและตั้งค่า|ตั้งค่า', ['sync', 'check', 'items', 'cols', 'ref']]];
+const HH_ADMIN_ONLY = ['service', 'items', 'cols'];
 const HH_LONG = /หมายเหตุ|หลักฐาน|Pain|Gain|ทักษะ|คุณลักษณะ|จุดแข็ง|สิ่งที่ต้องพัฒนา|แผนพัฒนา|เรื่องที่เคยถ่ายทอด|เครือข่ายความร่วมมือ|ผลผลิตหลัก|ช่องทาง/;
 const HH_COLORS = { A: '#2E7D32', B: '#F9A825', C: '#EF6C00', '': '#455A64' };
 const hhCanAdmin = () => isSuper() || (S.me && S.me.role === 'admin');
@@ -42,17 +45,26 @@ async function hhLoad(force) {
   S._hh.lg = typeof lgLoad === 'function' ? await lgLoad(link.project_id) : null;   // DEC-127 รายรับรายจ่าย (sql/023)
   return S._hh;
 }
+function hhMenu(sub) {
+  const cur = sub || 'overview', adm = hhCanAdmin(), lbl = Object.fromEntries(HH_SUB);
+  const groups = HH_GROUPS.filter(g => adm || g[0] !== 'admin').map(([k, l, subs]) => [k, l, subs.filter(x => adm || !HH_ADMIN_ONLY.includes(x))]);
+  const g = groups.find(x => x[2].includes(cur)) || groups.find(x => x[0] === S._hhg) || groups[0]; S._hhg = g[0];
+  return `<div class="hh-groups">${groups.map(([k, l, subs]) => `<a href="#hh/${subs[0]}" class="${k === g[0] ? 'active' : ''}"><span class="l">${l.split('|')[0]}</span><span class="s">${l.split('|')[1]}</span></a>`).join('')}</div>
+    <div class="subtabs">${g[2].map(k => `<a href="#hh/${k}" class="${cur === k ? 'active' : ''}">${lbl[k] || k}</a>`).join('')}</div>`;
+}
 function hhShell(sub, body) {
   const H = S._hh; const last = H && H.link.last_sync_at ? `ซิงก์ล่าสุด ${thDate(H.link.last_sync_at)}` : 'ยังไม่เคยซิงก์กับชีต';
   setTimeout(() => { const a = document.querySelector('.subtabs a.active'), bar = a && a.parentElement; if (bar && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2; }, 0);   // จอแคบ: เลื่อนเมนูย่อยให้เห็นเมนูที่เลือก
   return `<div class="card"><div class="cardhead"><h4>ครัวเรือน AppTech ${helpBtn('hh')}</h4><span class="muted">${esc(H ? H.link.name : '')} · ${last}</span></div>
-    <div class="subtabs" style="flex-wrap:wrap">${HH_SUB.filter(([k]) => k !== 'cols' || hhCanAdmin()).map(([k, l]) => `<a href="#hh${k ? '/' + k : ''}" class="${sub === k ? 'active' : ''}">${l}</a>`).join('')}${hhCanAdmin() ? `<a href="#hh/items" class="${sub === 'items' ? 'active' : ''}">รายการรายรับรายจ่าย</a><a href="#hh/cols" class="${sub === 'cols' ? 'active' : ''}">ตั้งค่าคอลัมน์</a>` : ''}</div></div>${body}`;
+    ${hhMenu(sub)}</div></div>${body}`;
 }
 async function pageHH(view) {
   const parts = location.hash.replace(/^#hh\/?/, '').split('/'), sub = parts[0] || '';
   let H; try { H = await hhLoad(); } catch (e) { const f = friendlyError(e); return view.innerHTML = `<div class="card"><h3 style="margin-top:0">ครัวเรือน AppTech</h3><div class="banner warn">${esc(f.title)}</div><div class="muted" style="margin-top:6px">${esc(f.hint)} (เจ้าของโครงการต้องรัน sql/014_household.sql และเพิ่มสคีมา hh ใน Exposed schemas ก่อน)</div></div>`; }
   if (!H) return view.innerHTML = `<div class="card">บัญชีนี้ไม่มีสิทธิ์ข้อมูลครัวเรือน (เฉพาะ super admin · admin · ผู้บันทึกที่สังกัดโครงการ บพท.69_AppTech)</div>`;
   if (!H.reg.length && !['sync', 'cols', 'ref'].includes(sub)) return view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">ยังไม่มีข้อมูลครัวเรือนในระบบ</h4><div>ขั้นแรก ดึงข้อมูลจากชีตเข้าระบบที่แท็บ <a href="#hh/sync">ซิงก์กับชีต</a> → "ตรวจกับชีต" → "อัปเดตตามนี้"${hhCanAdmin() ? '' : ' (admin เป็นผู้กดอัปเดต)'}</div></div>`);
+  if (!sub && hhCanAdmin() && typeof hhServicePage === 'function') return hhServicePage(view);   // DEC-130: หน้าแรกของผู้ดูแล = รับหนอน/บริการ
+  if (sub === 'overview') return hhOverview(view);
   if (sub === 't') return hhTabPage(view, parts[1] || '01');
   if (sub === 'h') return hhDetail(view, decodeURIComponent(parts[1] || ''));
   if (sub === 'map') return hhMap(view);
