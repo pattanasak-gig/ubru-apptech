@@ -43,7 +43,8 @@ async function hhLoad(force) {
     routes = Object.fromEntries(rt.map(x => [x.hh_code, x])); photos = {}; for (const x of ph) (photos[x.hh_code] = photos[x.hh_code] || []).push(x); } catch (e) { console.warn('hh.route/hh.photo (sql/022) missing:', e && e.message); }
   S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, routes, photos, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
   S._hh.lg = typeof lgLoad === 'function' ? await lgLoad(link.project_id) : null;   // DEC-127 รายรับรายจ่าย (sql/023)
-  S._hh.rp = typeof rpLoad === 'function' ? await rpLoad(link.project_id) : null;   // DEC-132 ค่าตามรายงาน + ระดับรายคน (sql/025)
+  S._hh.rp = typeof rpLoad === 'function' ? await rpLoad(link.project_id) : null;
+  try { const ps = await api.list('core.app_setting', { eq: { key: 'hh_sheet_pull_off' } }); S._hhPullOff = (ps[0] && ps[0].value) || ''; } catch (e) { S._hhPullOff = ''; }   // DEC-133   // DEC-132 ค่าตามรายงาน + ระดับรายคน (sql/025)
   return S._hh;
 }
 function hhMenu(sub) {
@@ -239,7 +240,8 @@ function hhSyncPage(view) {
   const head = `<div class="card"><div class="cardhead"><h4>ซิงก์กับ Google Sheet ${helpBtn('hh-sync')}</h4><a class="small" href="https://docs.google.com/spreadsheets/d/${esc(H.link.spreadsheet_id)}" target="_blank" rel="noopener">เปิดชีต ›</a></div>
     <div>ชีตเป็นหลักในช่วงเปลี่ยนผ่าน · ระบบไม่ซิงก์อัตโนมัติ · กด <b>ตรวจกับชีต</b> เพื่อดูว่าฝั่งไหนเปลี่ยนอะไร แล้ว${hhCanAdmin() ? ' กด <b>อัปเดตตามนี้</b>' : ' ให้ admin กดอัปเดต'}</div>
     <ul style="margin:6px 0 0;padding-left:20px" class="muted"><li>ช่องที่เปลี่ยนฝั่งเดียว → อัปเดตตามฝั่งที่เปลี่ยน (ชีต → ระบบ หรือ ระบบ → ชีต)</li><li>ช่องที่เปลี่ยนทั้งสองฝั่งต่างกัน = ขัดแย้ง → เลือกเองรายช่อง (ไม่เลือก = ใช้ค่าในชีต)</li><li>ช่องสูตรในชีตไม่ถูกเขียนทับ · แถวที่ลบในชีต ระบบปิดใช้งาน (ไม่ลบทิ้ง)</li></ul>
-    <div class="row" style="margin-top:10px"><button id="hhPrev">ตรวจกับชีต</button>${P && hhCanAdmin() ? '<button id="hhApply" class="secondary">อัปเดตตามนี้</button>' : ''}</div></div>`;
+    ${S._hhPullOff ? `<div class="banner warn" style="margin-top:8px">หยุดรับข้อมูลจากชีตตั้งแต่ ${esc(S._hhPullOff)} · ตรวจกับชีตได้ แต่กดอัปเดตไม่ได้ เพื่อไม่ให้ค่าเก่าจากชีตทับข้อมูลในระบบ</div>` : ''}
+    <div class="row" style="margin-top:10px"><button id="hhPrev">ตรวจกับชีต</button>${P && hhCanAdmin() && !S._hhPullOff ? '<button id="hhApply" class="secondary">อัปเดตตามนี้</button>' : ''}${isSuper() ? `<button class="small secondary" onclick="hhPullToggle()">${S._hhPullOff ? 'เปิดรับข้อมูลจากชีตอีกครั้ง' : 'หยุดรับข้อมูลจากชีต'}</button>` : ''}</div></div>`;
   const planHtml = !P ? '' : `<div class="card"><div class="cardhead"><h4>ผลการ${P.mode === 'apply' ? 'อัปเดต' : 'ตรวจ'} (${thDate(P.at)})</h4></div>${P.warnings && P.warnings.length ? `<div class="banner warn">${P.warnings.map(esc).join('<br>')}</div>` : ''}
     <div class="tscroll"><table><thead><tr><th>แท็บ</th><th class="num">แถวในชีต</th><th class="num">ใหม่จากชีต</th><th class="num">ชีต → ระบบ</th><th class="num">ระบบ → ชีต</th><th class="num">ใหม่จากระบบ</th><th class="num">หายจากชีต</th><th class="num">ขัดแย้ง</th><th class="num">ไม่เปลี่ยน</th></tr></thead><tbody>
     ${P.tabs.map(t => t.kind === 'reference' ? `<tr><td>${esc(t.tab_key)} ${esc(t.label)}</td><td colspan="8" class="muted">ตารางเกณฑ์ ${t.reference_rows} แถว (อ่านอย่างเดียว)</td></tr>` : `<tr><td>${esc(t.tab_key)} ${esc(t.label)}${(t.duplicate_keys || []).length ? `<div class="muted">รหัสซ้ำในแท็บ: ${esc(t.duplicate_keys.join(', '))}</div>` : ''}</td><td class="num">${t.sheet_rows}</td><td class="num">${t.new_from_sheet}</td><td class="num">${t.update_from_sheet}</td><td class="num">${t.update_to_sheet}</td><td class="num">${t.new_to_sheet}</td><td class="num">${t.removed_in_sheet}</td><td class="num">${t.conflicts ? `<b style="color:var(--danger)">${t.conflicts}</b>` : 0}</td><td class="num">${t.unchanged}</td></tr>`).join('')}</tbody></table></div>
@@ -258,6 +260,13 @@ function hhSyncPage(view) {
   };
   $('#hhPrev').onclick = e => run('preview', e.target);
   if ($('#hhApply')) $('#hhApply').onclick = e => { if (confirm('อัปเดตระบบและชีตตามผลตรวจล่าสุด? (ช่องที่ขัดแย้งใช้ค่าที่เลือกไว้)')) run('apply', e.target); };
+}
+async function hhPullToggle() {   // DEC-133: ช่วงที่เปลี่ยนไปบันทึกในระบบอย่างเดียว
+  const v = S._hhPullOff ? '' : todayISO();
+  if (!confirm(v ? 'หยุดรับข้อมูลจากชีต? (ปุ่มอัปเดตตามนี้จะถูกซ่อน จนกว่าจะเปิดใหม่)' : 'เปิดรับข้อมูลจากชีตอีกครั้ง?')) return;
+  try { const ex = await api.list('core.app_setting', { eq: { key: 'hh_sheet_pull_off' } });
+    if (ex.length) await api.update('core.app_setting', 'hh_sheet_pull_off', { value: v }, 'key'); else await api.insert('core.app_setting', { key: 'hh_sheet_pull_off', value: v, description: 'วันที่หยุดรับข้อมูลครัวเรือนจากชีต (ว่าง = รับตามปกติ)' });
+    S._hhPullOff = v; toast(v ? 'หยุดรับข้อมูลจากชีตแล้ว' : 'เปิดรับข้อมูลจากชีตแล้ว'); render(); } catch (e) { fail(e, 'บันทึกการตั้งค่าไม่สำเร็จ'); }
 }
 function hhPick(i, v) { const c = S._hhPlan.conflicts[i]; S._hhChoice = S._hhChoice || {}; S._hhChoice[c.tab_key + '\u0002' + c.key + '\u0001' + c.header] = v; }
 
