@@ -272,7 +272,7 @@ const DemoBackend = () => {
                 ['BSF-006', 'ข้อมูลครบ', 'C', 'ร้านอาหารสาธิต', 'ตำบลสาธิต ข', 15.2385, 104.8870, 2, 1, 1, 30000, 25000, 0, 0, '', 0, '']];
     const row = (k, key, code, data) => add('hh.row', { org_id: o1.id, project_id: pBsf.id, tab_id: T[k].id, row_key: key, hh_code: code, data, sync_base: { ...data }, sheet_row: null, synced_at: now() });
     HH.forEach(([c, st, g, nm, tb, la, lo, mem, m, f, inc, exp, feed, fert, ani, feedAmt, scr], i) => {
-      row('01', c, c, { 'รหัสครัวเรือน': c, 'สถานะข้อมูล': st, 'วันที่สำรวจ': '2569-10-0' + (i + 1), 'กลุ่มหลัก': g, 'ชื่อ-สกุล': nm, 'เลขบัตรประชาชน': null, 'โทรศัพท์': '080-000-000' + (i + 1), 'หมู่': String(1 + (i % 3)), 'ตำบล': tb, 'ละติจูด': la, 'ลองจิจูด': lo, 'สมาชิกครัวเรือน (คน)': mem, 'ชาย': m, 'หญิง': f, 'รายได้รวม/เดือน (อัตโนมัติ)': inc, 'ความสม่ำเสมอรายได้': inc ? 'ไม่แน่นอน' : null, 'รายจ่ายครัวเรือนรวม/เดือน': exp, 'ค่าอาหารสัตว์รวม/เดือน (อัตโนมัติ)': feed, 'ค่าปุ๋ยรวม/เดือน (อัตโนมัติ)': fert, 'Baseline BSF ทดแทน/เดือน (อัตโนมัติ)': feed + fert, 'ต้องการหนอน BSF (กก./เดือน)': g === 'A' ? 20 : null, 'ความยินยอม PDPA': 'ยินยอม', 'หมายเหตุ': 'ข้อมูลสาธิต' });
+      row('01', c, c, { 'รหัสครัวเรือน': c, 'สถานะข้อมูล': st, 'วันที่สำรวจ': '2569-10-0' + (i + 1), 'กลุ่มหลัก': g, 'ชื่อ-สกุล': nm, 'เลขบัตรประชาชน': null, 'โทรศัพท์': '080-000-000' + (i + 1), 'หมู่': String(1 + (i % 3)), 'ตำบล': tb, 'ละติจูด': la, 'ลองจิจูด': lo, 'สมาชิกครัวเรือน (คน)': mem, 'ชาย': m, 'หญิง': f, 'รายได้รวม/เดือน (อัตโนมัติ)': inc, 'ความสม่ำเสมอรายได้': inc ? 'ไม่แน่นอน' : null, 'รายจ่ายครัวเรือนรวม/เดือน': exp, 'ค่าอาหารสัตว์รวม/เดือน (อัตโนมัติ)': feed, 'ค่าปุ๋ยรวม/เดือน (อัตโนมัติ)': fert, 'Baseline BSF ทดแทน/เดือน (อัตโนมัติ)': feed + fert, 'ต้องการหนอน BSF (กก./เดือน)': g === 'A' ? 20 : null, 'ความยินยอม PDPA': c === 'BSF-006' ? 'ไม่ยินยอม' : 'ยินยอม', 'ยินยอมใช้ข้อมูลไม่เปิดเผยตัวตน': c === 'BSF-006' ? 'ไม่' : 'ใช่', 'หมายเหตุ': 'ข้อมูลสาธิต' });
       if (inc) row('02', c, c, { 'รหัสครัวเรือน': c, 'ชื่อ-สกุล (อัตโนมัติ)': nm, 'แหล่งรายได้': g === 'C' ? 'ค้าขาย/ธุรกิจ' : 'การเกษตร (พืช), ปศุสัตว์/ประมง', 'รายได้ต่อเดือน (บาท)': inc, 'หมายเหตุ': null });
       if (ani) row('03', c, c, { 'รหัสครัวเรือน': c, 'ชื่อ-สกุล (อัตโนมัติ)': nm, 'ชนิดสัตว์': ani, 'จำนวน (ตัว)': 50, 'ค่าอาหาร/เดือน (บาท)': feedAmt, 'ตรวจสอบ (อัตโนมัติ)': '✓ สอดคล้อง' });
       if (scr) { const np = scr === 'ใช่' ? 6 - (i % 2) : scr === 'รอพิจารณา' ? 4 : 2, cr = {}; for (let k = 1; k <= 6; k++) { cr['ผลตรวจเกณฑ์ ' + k] = k <= np ? 'ผ่าน' : 'ไม่ผ่าน'; cr['หลักฐานเกณฑ์ ' + k] = k <= np ? 'หลักฐานเกณฑ์ ' + k + ' (สาธิต)' : null; }
@@ -302,6 +302,25 @@ const DemoBackend = () => {
   }
   let me = null;
   const byId = (t, id) => D[t].find(r => r.id === id) || {};
+  // สาธิต hh.public_innov (= sql/026 · DEC-135): รหัสแทนชื่อ · จุดอ้างอิงหมู่บ้าน (ปัด 2 ตำแหน่ง) · เฉพาะผู้ยินยอม
+  const demoPublicInnov = () => {
+    const lk = [...D['hh.link']].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0]; if (!lk) return null;
+    const tabs = D['hh.tab'].filter(t => t.link_id === lk.id), tab = k => tabs.find(t => t.tab_key === k) || {};
+    const hd = (k, role) => (D['hh.col'].find(c => c.tab_id === tab(k).id && c.role === role && c.present !== false) || {}).header;
+    const rows = k => D['hh.row'].filter(r => r.tab_id === tab(k).id && r.status === 'active');
+    const tx = v => String(v ?? '').trim(), num = v => { const x = String(v ?? '').replace(/[^0-9.\-]/g, ''); return x === '' ? null : Number(x); };
+    const reg = rows('01').map(r => { const d = r.data || {}, cA = tx(d['ความยินยอม PDPA']), cB = tx(d['ยินยอมใช้ข้อมูลไม่เปิดเผยตัวตน']);
+      return { code: r.hh_code, tambon: tx(d[hd('01', 'tambon')]), moo: tx(d[hd('01', 'moo')] ?? d['หมู่']), grp: tx(d[hd('01', 'group')]), lat: num(d[hd('01', 'lat')]), lng: num(d[hd('01', 'lng')]), ok: cA === 'ยินยอม' && cB === 'ใช่', unknown: !cA && !cB }; });
+    const vil = {}; for (const g of reg) { if (g.lat == null || g.lng == null) continue; const k = g.tambon + '|' + g.moo; const v = vil[k] = vil[k] || { tambon: g.tambon, moo: g.moo, la: 0, lo: 0, c: 0, n: 0 }; v.la += g.lat; v.lo += g.lng; v.c++; if (g.ok) v.n++; }
+    const r2 = x => Math.round(x * 100) / 100, scr = Object.fromEntries(rows('06').map(r => [r.hh_code, tx((r.data || {})[hd('06', 'screen_result')])]));
+    const ev = rows('07').map(r => { const d = r.data || {}, m = tx(d[hd('07', 'round')]).match(/\d+/), dn = k => { const x = String(d[hd('07', k)] ?? '').replace(/[^0-9.]/g, ''); return x === '' ? null : Number(x); }; return { code: r.hh_code, rnd: m ? +m[0] : null, dims: [dn('dim1'), dn('dim2'), dn('dim3')] }; });
+    return { project: byId('core.project', lk.project_id).name || null, updated: lk.last_sync_at || null,
+      consent: { total: reg.length, yes: reg.filter(g => g.ok).length, unknown: reg.filter(g => g.unknown).length, no: reg.filter(g => !g.ok && !g.unknown).length },
+      villages: Object.values(vil).filter(v => v.n > 0).sort((a, b) => (a.tambon + a.moo).localeCompare(b.tambon + b.moo)).map(v => ({ tambon: v.tambon, moo: v.moo, lat: r2(v.la / v.c), lng: r2(v.lo / v.c), n: v.n })),
+      households: reg.filter(g => g.ok).sort((a, b) => a.code.localeCompare(b.code)).map(g => ({ code: g.code, tambon: g.tambon, moo: g.moo, group: g.grp })),
+      innov: reg.filter(g => g.ok && (scr[g.code] === 'ใช่' || ev.some(e => e.code === g.code))).sort((a, b) => a.code.localeCompare(b.code)).map(g => {
+        const es = ev.filter(e => e.code === g.code && e.rnd != null); return { code: g.code, tambon: g.tambon, moo: g.moo, sel: scr[g.code] === 'ใช่', rounds: es.length ? Object.fromEntries(es.map(e => [String(e.rnd), e.dims])) : null }; }) };
+  };
   const userName = id => (D['core.app_user'].find(u => u.id === id) || {}).display_name || null;
   const itemsOf = pid => D['food.pickup_item'].filter(i => i.pickup_id === pid && i.status === 'active');
   const r2 = n => Math.round(n * 100) / 100;
@@ -419,6 +438,7 @@ const DemoBackend = () => {
     },
     async remove(name, id) { const i = D[name].findIndex(r => r.id === id); if (i >= 0) D[name].splice(i, 1); },
     async rpc(name, args) {   // สาธิตของ food.public_source_report (019) · รหัส "demo" = แหล่งแรกที่มีการส่งมอบ
+      if (name === 'hh.public_innov') return demoPublicInnov();   // = sql/026 (DEC-135)
       if (name !== 'food.public_source_report') throw new Error('สาธิต: ไม่รองรับ ' + name);
       const t = String((args || {}).p_token || ''); let sh = D['food.source_share'].find(x => x.token === t && x.status === 'active');
       if (!sh && t === 'demo') { const it = D['food.pickup_item'].find(i => i.status === 'active'); if (it) sh = { source_id: it.source_id, project_id: null, org_id: it.org_id }; }

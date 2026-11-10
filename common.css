@@ -181,3 +181,9 @@ details.kvs > summary { cursor:pointer; font-weight:600; padding:4px 0; }
 .hh-rec + .hh-rec { border-top:2px solid var(--line); margin-top:10px; padding-top:8px; }
 .fsec { grid-column:1 / -1; font-weight:700; color:var(--brand); border-bottom:1px solid var(--line); padding:6px 0 2px; margin-top:4px; }
 @media (max-width: 640px) { .kv.wide .k { flex-basis:46%; } }
+/* DEC-135 ตัวเลขบนจุดแผนที่หน้าสาธารณะ */
+.leaflet-tooltip.pi-count { background:transparent; border:0; box-shadow:none; color:#fff; font-weight:700; font-size:12px; padding:0; text-shadow:0 0 3px rgba(0,0,0,.85); }
+.leaflet-tooltip.pi-count::before { display:none; }
+.leaflet-tooltip.hh-code-tip { background:rgba(255,255,255,.88); border:1px solid #CFD8DC; box-shadow:none; padding:0 4px; font-size:11px; font-weight:600; color:#1F3A5F; }
+.leaflet-tooltip.hh-code-tip::before { display:none; }
+.pi-map { position:relative; z-index:0; isolation:isolate; }

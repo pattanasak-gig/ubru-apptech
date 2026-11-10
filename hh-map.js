@@ -94,13 +94,29 @@ function hhColoring(codes, st) {
 // ---------------------------------------------------------------------
 const HH_MAP_KEY = 'hhMapState';
 function hhMapState() {
-  if (!S._hhm) { let saved = {}; try { saved = JSON.parse(localStorage.getItem(HH_MAP_KEY) || '{}') || {}; } catch (e) { saved = {}; } S._hhm = { group: '', tambon: '', cm: 'group', round: '', col: '', routes: false, ...saved }; }
+  if (!S._hhm) { let saved = {}; try { saved = JSON.parse(localStorage.getItem(HH_MAP_KEY) || '{}') || {}; } catch (e) { saved = {}; } S._hhm = { group: '', tambon: '', moo: '', inv: '', lv: '', cm: 'group', round: '', col: '', routes: false, labels: false, ...saved }; }
   return S._hhm;
 }
-function hhMapSet(k, v) { const st = hhMapState(); st[k] = v; try { localStorage.setItem(HH_MAP_KEY, JSON.stringify({ cm: st.cm, round: st.round, col: st.col, routes: st.routes })); } catch (e) { /* เบราว์เซอร์ปิดที่เก็บข้อมูล */ } render(); }
+function hhMapSet(k, v) { const st = hhMapState(); st[k] = v; try { localStorage.setItem(HH_MAP_KEY, JSON.stringify({ cm: st.cm, round: st.round, col: st.col, routes: st.routes, labels: st.labels })); } catch (e) { /* เบราว์เซอร์ปิดที่เก็บข้อมูล */ } render(); }
+// DEC-135 ระดับปัจจุบันรายคน = ค่าสูงสุด 3 มิติ ของรอบล่าสุดที่ประเมินครบ (DEC-133) · '' = ยังไม่ประเมิน
+function hhCurLv(code) {
+  const H = S._hh, T = H.byKey['07']; if (!T) return '';
+  const rs = T.rows.filter(r => r.hh_code === code).sort((a, b) => hhRoundNo(H.roleVal(b, '07', 'round')) - hhRoundNo(H.roleVal(a, '07', 'round')));
+  for (const r of rs) { const d = hhDims(r); if (d) return Math.max(1, Math.min(4, Math.floor(Math.max(...d)))); }
+  return '';
+}
+const hhIsInnov = code => { const r = hhLast(code, '06'); return !!r && String(S._hh.roleVal(r, '06', 'screen_result') ?? '').trim() === 'ใช่'; };
+const hhMapTx = (r, role) => String(S._hh.roleVal(r, '01', role) ?? '').trim();
+// ตัวกรองแผนที่ (ใช้ร่วมกับการคำนวณเส้นทาง): กลุ่ม · ตำบล · หมู่ · นวัตกร · ระดับปัจจุบัน
+function hhMapRows(st) {
+  return S._hh.reg.filter(r => (!st.group || hhMapTx(r, 'group') === st.group) && (!st.tambon || hhMapTx(r, 'tambon') === st.tambon) && (!st.moo || hhMapTx(r, 'moo') === st.moo)
+    && (!st.inv || (st.inv === 'y') === hhIsInnov(r.hh_code)) && (!st.lv || String(hhCurLv(r.hh_code)) === (st.lv === 'none' ? '' : st.lv)));
+}
+function hhMapClear() { const st = hhMapState(); Object.assign(st, { group: '', tambon: '', moo: '', inv: '', lv: '' }); render(); }
+function hhMapFind(v) { const code = String(v || '').trim().toUpperCase(); if (!code) return; if ((S._hhMarkers || {})[code]) return hhFocus(code); toastErr('ไม่พบ ' + code + ' บนแผนที่', 'ครัวเรือนนี้อาจถูกตัวกรองซ่อนอยู่หรือยังไม่มีพิกัด กด "ล้างตัวกรอง" แล้วลองใหม่'); }
 function hhMap(view) {
   const H = S._hh, st = hhMapState(), c = hhCenter();
-  const rows = H.reg.filter(r => (!st.group || String(H.roleVal(r, '01', 'group') ?? '') === st.group) && (!st.tambon || String(H.roleVal(r, '01', 'tambon') ?? '') === st.tambon));
+  const rows = hhMapRows(st), nFilter = ['group', 'tambon', 'moo', 'inv', 'lv'].filter(k => st[k]).length;
   const uniq = role => [...new Set(H.reg.map(r => String(H.roleVal(r, '01', role) ?? '').trim()).filter(Boolean))].sort();
   const col = hhColoring(rows.map(r => r.hh_code), st), cm = col.m;
   const rounds = H.byKey['07'] ? [...new Set(H.byKey['07'].rows.map(r => String(H.roleVal(r, '07', 'round') ?? '').trim()).filter(Boolean))].sort((a, b) => hhRoundNo(a) - hhRoundNo(b)) : [];
@@ -114,12 +130,20 @@ function hhMap(view) {
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
         ${sel('กรองตามกลุ่ม', 'group', [['', 'ทุกกลุ่ม'], ...uniq('group').map(g => [g, 'กลุ่ม ' + g])], st.group)}
         ${sel('กรองตามตำบล', 'tambon', [['', 'ทุกตำบล'], ...uniq('tambon').map(g => [g, 'ต.' + g])], st.tambon)}
+        ${sel('กรองตามหมู่', 'moo', [['', 'ทุกหมู่'], ...[...new Set(H.reg.filter(r => !st.tambon || hhMapTx(r, 'tambon') === st.tambon).map(r => hhMapTx(r, 'moo')).filter(Boolean))].sort((a, b) => hhRoundNo(a) - hhRoundNo(b) || a.localeCompare(b)).map(m => [m, 'หมู่ ' + m])], st.moo)}
+        ${sel('กรองตามสถานะนวัตกร', 'inv', [['', 'ทุกครัวเรือน'], ['y', 'เฉพาะนวัตกร (06 = ใช่)'], ['n', 'ไม่ใช่นวัตกร']], st.inv)}
+        ${sel('กรองตามระดับปัจจุบัน', 'lv', [['', 'ทุกระดับ'], ['4', 'ระดับ 4'], ['3', 'ระดับ 3'], ['2', 'ระดับ 2'], ['1', 'ระดับ 1'], ['none', 'ยังไม่ประเมิน']], st.lv)}
+        ${nFilter ? `<button class="small secondary" onclick="hhMapClear()">ล้างตัวกรอง (${nFilter})</button>` : ''}
+        <input list="hhMapCodes" placeholder="ค้นรหัส เช่น BSF-001" aria-label="ค้นหารหัสครัวเรือนบนแผนที่" style="width:170px" onchange="hhMapFind(this.value)"><datalist id="hhMapCodes">${rows.filter(r => hhPos(r)).map(r => `<option value="${esc(r.hh_code)}">`).join('')}</datalist>
+      </div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
         <label style="margin:0">สีตาม ${sel('เกณฑ์สีของจุด', 'cm', HH_CM.map(x => [x.key, x.label]), cm.key)}</label>${colorQ}
         ${cm.round || (cm.key === 'col' && String(st.col).startsWith('07|')) ? sel('รอบการประเมิน', 'round', [['', 'รอบล่าสุด'], ...rounds.map(r => [r, r])], st.round) : ''}
         ${cm.key === 'col' ? sel('คอลัมน์ที่ใช้กำหนดสี', 'col', [['', '— เลือกคอลัมน์ —'], ...hhColChoices().map(x => [x.v, x.l])], st.col) : ''}
       </div>
       <div class="legend" style="margin-top:8px">${col.legend.map(l => `<span><i class="dot" style="background:${l.color}"></i>${esc(String(l.label))} (${fmtInt(l.n)})</span>`).join('')}<span><i class="dot" style="background:#C62828;border-radius:3px"></i>ศูนย์</span></div>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <label class="chk" style="margin:0"><input type="checkbox" ${st.labels ? 'checked' : ''} onchange="hhMapSet('labels',this.checked)"> แสดงรหัสบนจุด</label>
         <label class="chk" style="margin:0"><input type="checkbox" ${st.routes ? 'checked' : ''} onchange="hhMapSet('routes',this.checked)"> แสดงเส้นทางทุกครัวเรือนไปศูนย์</label>${distQ}
         ${hasRoutes && c && todo.length && canWrite() ? `<button class="small secondary" onclick="hhRouteCalc()">คำนวณเส้นทาง (${fmtInt(todo.length)} ครัวเรือน)</button>` : ''}
         ${!hasRoutes ? '<span class="muted">ฐานข้อมูลยังไม่มีส่วนเส้นทาง (sql/022)</span>' : !c ? '<span class="muted">ยังไม่มีพิกัดศูนย์: ใส่พิกัดฟาร์มศูนย์ที่ จัดการ → ฟาร์ม</span>' : ''}
@@ -134,11 +158,13 @@ function hhMap(view) {
     const code = r.hh_code, clr = col.color(code), d = (H.routes || {})[code];
     if (st.routes && d && d.path && d.path.coordinates && d.source === HH_ROUTE_SRC) { hhDrawRoute(rl, d.path, p, c, clr === HH_NONE ? '#607D8B' : clr, 3); }
     else if (st.routes && c) L.polyline([[p.lat, p.lng], [c.lat, c.lng]], { color: '#90A4AE', weight: 1.5, dashArray: '4 6' }).addTo(rl);   // ยังไม่คำนวณ: เส้นประ (เส้นตรง)
-    S._hhMarkers[code] = L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 1.5, fillColor: clr, fillOpacity: .95 }).bindPopup(() => hhPopup(r, col, c), { maxWidth: 300 }).addTo(g);
+    const inv = hhIsInnov(code);
+    S._hhMarkers[code] = L.circleMarker([p.lat, p.lng], { radius: inv ? 10 : 7, color: inv ? '#1F3A5F' : '#fff', weight: inv ? 2.5 : 1.5, fillColor: clr, fillOpacity: .95 }).bindPopup(() => hhPopup(r, col, c), { maxWidth: 300 }).addTo(g);
+    if (st.labels) S._hhMarkers[code].bindTooltip(esc(code), { permanent: true, direction: 'right', offset: [8, 0], className: 'hh-code-tip' });
   }
   if (st.routes) rl.addTo(map);
   fitAll(map, g);
-  $('#hhMapNote').textContent = `แสดง ${rows.length - miss} ครัวเรือน${miss ? ` · ${miss} ครัวเรือนยังไม่มีพิกัด` : ''}${st.routes ? ' · เส้นทึบ = ตามถนน · เส้นประ = ยังไม่ได้คำนวณ (แสดงเส้นตรง) · เส้นจุดสั้น = ช่วงจากถนนถึงพิกัดบ้าน/ศูนย์' : ''} · แผนที่นี้แสดงเฉพาะในเมนูครัวเรือน AppTech`;
+  $('#hhMapNote').textContent = `แสดง ${rows.length - miss} จาก ${H.reg.length} ครัวเรือน (จุดใหญ่ขอบน้ำเงิน = นวัตกร)${miss ? ` · ${miss} ครัวเรือนยังไม่มีพิกัด` : ''}${st.routes ? ' · เส้นทึบ = ตามถนน · เส้นประ = ยังไม่ได้คำนวณ (แสดงเส้นตรง) · เส้นจุดสั้น = ช่วงจากถนนถึงพิกัดบ้าน/ศูนย์' : ''} · แผนที่นี้แสดงเฉพาะในเมนูครัวเรือน AppTech`;
   // ตารางระยะทาง (เรียงตามระยะตามถนน)
   const T = rows.map(r => { const p = hhPos(r), d = info((H.routes || {})[r.hh_code]); return { r, p, ...d, line: p && c ? hhLine(p, c) / 1000 : null, stale: p && c && hasRoutes ? hhRouteStale(r.hh_code, p, c) : false, photos: ((H.photos || {})[r.hh_code] || []).length }; })
     .sort((a, b) => (a.road ?? a.line ?? 1e9) - (b.road ?? b.line ?? 1e9));
@@ -173,7 +199,8 @@ function hhFocus(code) { const m = (S._hhMarkers || {})[code]; if (!m) return; $
 function hhPopup(r, col, c) {
   const H = S._hh, code = r.hh_code, d = (H.routes || {})[code], p = hhPos(r), ps = ((H.photos || {})[code] || []);
   const lineKm = p && c ? hhLine(p, c) / 1000 : null;
-  return `<b>${esc(code)}</b> ${esc(H.roleVal(r, '01', 'name') || '')}<br>กลุ่ม ${esc(H.roleVal(r, '01', 'group') || '-')} · ต.${esc(H.roleVal(r, '01', 'tambon') || '-')}<br>${esc(col.m.key === 'col' ? 'ค่า' : col.m.label.replace(/ \(แท็บ.*\)$/, ''))}: <b>${esc(String(col.val(code) || '-'))}</b>
+  const lv = hhCurLv(code);
+  return `<b>${esc(code)}</b> ${esc(H.roleVal(r, '01', 'name') || '')}<br>กลุ่ม ${esc(H.roleVal(r, '01', 'group') || '-')} · ${H.roleVal(r, '01', 'moo') ? 'หมู่ ' + esc(H.roleVal(r, '01', 'moo')) + ' ' : ''}ต.${esc(H.roleVal(r, '01', 'tambon') || '-')}<br>${hhIsInnov(code) ? `นวัตกร · ระดับปัจจุบัน <b>${lv || 'ยังไม่ประเมิน'}</b><br>` : ''}${esc(col.m.key === 'col' ? 'ค่า' : col.m.label.replace(/ \(แท็บ.*\)$/, ''))}: <b>${esc(String(col.val(code) || '-'))}</b>
     <br>ถึงศูนย์: ${d && d.road_m != null ? `ตามถนน ${fmt(d.road_m / 1000, 1)} กม. · ${fmtInt(d.road_s / 60)} นาที · ` : ''}เส้นตรง ${lineKm == null ? '-' : fmt(lineKm, 1)} กม.
     ${ps.length ? `<div class="photos" style="margin-top:6px">${ps.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener"><img src="${esc(x.url)}" alt="${esc(x.caption || 'รูปของครัวเรือน ' + code)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px" onerror="photoMissing(this)"></a>`).join('')}</div>` : ''}
     <div style="margin-top:6px"><a href="#hh/h/${encodeURIComponent(code)}">เปิดข้อมูลครัวเรือน ›</a></div>`;
@@ -182,7 +209,7 @@ function hhPopup(r, col, c) {
 async function hhRouteCalc() {
   const H = S._hh, c = hhCenter(); if (!c) return toastErr('ยังไม่มีพิกัดศูนย์', 'ใส่พิกัดฟาร์มศูนย์ที่ จัดการ → ฟาร์ม');
   const st = hhMapState();
-  const todo = H.reg.filter(r => (!st.group || String(H.roleVal(r, '01', 'group') ?? '') === st.group) && (!st.tambon || String(H.roleVal(r, '01', 'tambon') ?? '') === st.tambon)).map(r => ({ r, p: hhPos(r) })).filter(x => x.p && hhRouteStale(x.r.hh_code, x.p, c));
+  const todo = hhMapRows(st).map(r => ({ r, p: hhPos(r) })).filter(x => x.p && hhRouteStale(x.r.hh_code, x.p, c));
   if (!todo.length) return toast('เส้นทางเป็นปัจจุบันแล้ว');
   if (!confirm(`คำนวณเส้นทางตามถนน ${todo.length} ครัวเรือน ใช้เวลาประมาณ ${Math.ceil(todo.length * 1.2)} วินาที\nระหว่างนี้อย่าปิดหน้านี้`)) return;
   let ok = 0, bad = 0;
