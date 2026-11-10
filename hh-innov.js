@@ -108,7 +108,7 @@ function hhInnovPage(view) {
       <div class="kpi"><div class="l">ได้ระดับทางการ (รอบ 3)</div><div class="v">${fmtInt(official.length)} / ${fmtInt(sel.length)}</div><div class="muted">ใช้รายงาน บพท.</div></div></div>
     ${selNoAssess.length ? `<div class="banner warn" style="margin-top:8px">ได้รับเลือกแต่ยังไม่ประเมิน ${fmtInt(selNoAssess.length)} ครัวเรือน: ${selNoAssess.slice(0, 12).map(r => `<a href="javascript:void 0" onclick="invDetail('${esc(r.code)}')">${esc(r.code)}</a>`).join(' · ')}${selNoAssess.length > 12 ? ' …' : ''}</div>` : ''}
     ${assessNoSel.length ? `<div class="banner warn" style="margin-top:8px">มีผลประเมินแต่สรุปคัดกรองไม่ใช่ "ใช่" ${fmtInt(assessNoSel.length)} ครัวเรือน (ตรวจข้อมูล): ${assessNoSel.slice(0, 12).map(r => `<a href="javascript:void 0" onclick="invDetail('${esc(r.code)}')">${esc(r.code)}</a>`).join(' · ')}</div>` : ''}</div>
-    ${invLevelCard(sel)}
+    ${invLevelCard(sel, all)}
     <div class="grid-dash">
       <div class="card"><div class="cardhead"><h4>ระดับรายมิติของนวัตกร · ${st.round ? esc(INV_ROUNDS[st.round - 1][1]) : 'รอบล่าสุด'}</h4>
         <select aria-label="รอบการประเมิน" style="width:auto" onchange="S._inv.round=+this.value;render()"><option value="0">รอบล่าสุด</option>${INV_ROUNDS.map(([n, l]) => `<option value="${n}" ${st.round === n ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="chartbox"><canvas id="invLv"></canvas></div></div>
@@ -124,11 +124,11 @@ function hhInnovPage(view) {
       <div class="muted" style="margin-top:4px">ระดับ: ${[1, 2, 3, 4].map(l => invChip(l)).join(' ')} · ระดับรายคน = ค่าสูงสุดของ 3 มิติ · ม.1–3 แสดงคะแนนรอบล่าสุดและการเปลี่ยนแปลงจากรอบ 1 · ⚠ = ต่ำกว่ารอบ 1 · ${dn.map((d, i) => `ม.${i + 1} ${esc(d.replace(/^มิติ\s*\d+\s*/, ''))}`).join(' · ')}</div></div>`);
   if (!window.Chart) return;
   // กราฟ 1: จำนวนนวัตกรในแต่ละระดับ แยกมิติ (เฉพาะผู้ได้รับเลือก)
-  const lvs = sel.map(lvAt).filter(Boolean);
+  const lvs = (st.round ? all.filter(x => invLvl(x.rounds[st.round]) != null) : sel).map(lvAt).filter(Boolean);   // DEC-134
   mkChart($('#invLv'), { type: 'bar', data: { labels: dn.map((d, i) => 'ม.' + (i + 1)), datasets: [1, 2, 3, 4].map(l => ({ label: 'ระดับ ' + l, data: [0, 1, 2].map(i => lvs.filter(a => a[i] === l).length), backgroundColor: HH_LEVEL_COLORS[l] })) },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { title: c => dn[c[0].dataIndex] } } }, scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true } } } });
   // กราฟ 2: ระดับเฉลี่ยของแต่ละมิติในแต่ละรอบ (เฉพาะรอบที่มีข้อมูล)
-  const avgOf = (n, i) => { const v = sel.map(r => (r.rounds[n] || [])[i]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100 : null; };
+  const avgOf = (n, i) => { const v = all.map(r => (r.rounds[n] || [])[i]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100 : null; };
   const rs = INV_ROUNDS.filter(([n]) => sel.some(r => (r.rounds[n] || []).some(v => v != null)));
   mkChart($('#invDev'), { type: 'bar', data: { labels: dn.map((d, i) => 'ม.' + (i + 1)), datasets: rs.map(([n, l], k) => ({ label: l, data: [0, 1, 2].map(i => avgOf(n, i)), backgroundColor: ['#9CCC65', '#43A047', '#1B5E20'][n - 1] })) },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { title: c => dn[c[0].dataIndex] } } }, scales: { y: { min: 0, max: 4, ticks: { stepSize: 1 } } } } });
@@ -199,12 +199,13 @@ function hhDevPage(view) {
 }
 
 // การ์ดนับระดับรายคน (DEC-133): ล่าสุด หรือรอบที่เลือก · คนละ 1 ค่า · เทียบเป้าหมายตามสไลด์และสัญญา
-function invLevelCard(sel) {
+function invLevelCard(sel, all) {
   const st = S._inv, r = st.lvRound || 0, lv = x => (r ? invLvl(x.rounds[r]) : x.lvCur);
-  const n = l => sel.filter(x => lv(x) === l).length, none = sel.filter(x => lv(x) == null).length, hi = n(3) + n(4), warn = sel.filter(x => x.warn).length;
+  const pop = r ? (all || sel).filter(x => invLvl(x.rounds[r]) != null) : sel;   // DEC-134: รายรอบนับทุกคนที่ประเมินในรอบนั้น (ประวัติจริง) · ล่าสุดนับผู้ได้รับเลือกปัจจุบัน
+  const n = l => pop.filter(x => lv(x) === l).length, none = r ? 0 : sel.filter(x => lv(x) == null).length, hi = n(3) + n(4), warn = sel.filter(x => x.warn).length;
   const T = typeof RP_LV_TARGET !== 'undefined' ? RP_LV_TARGET : {}, NM = typeof RP_LV_NAME !== 'undefined' ? RP_LV_NAME : {};
   return `<div class="card"><div class="cardhead"><h4>ระดับนวัตกรรายคน ${qBtn('ระดับรายคน', '<p>ระดับรายคน = ค่าสูงสุดของมิติ 1–3 (ชีต 07 คอลัมน์ N P R) ในรอบล่าสุดที่คะแนนครบ 3 มิติ ถ้ารอบล่าสุดยังไม่ครบ ใช้รอบก่อนหน้า</p><p>จับคู่ด้วยรหัสครัวเรือน + เลขรอบ (ตัวเลขตัวแรกของคอลัมน์ B) ลำดับแถวไม่มีผล · นับคนละ 1 ค่า</p><p>Co-Ordinator (1) · Co-Creator (2) · Trainer (3) · Change Agent (4)</p>')}</h4>
     <div class="lg-chips">${[[0, 'ล่าสุด'], [1, 'รอบ 1'], [2, 'รอบ 2'], [3, 'รอบ 3']].map(([k, l]) => `<button type="button" class="lg-chip ${r === k ? 'on' : ''}" onclick="S._inv.lvRound=${k};render()">${l}</button>`).join('')}</div></div>
-    <div class="kpis">${[4, 3, 2, 1].map(l => `<div class="kpi"><div class="l">ระดับ ${l}${NM[l] ? ' · ' + NM[l] : ''}</div><div class="v">${fmtInt(n(l))} <span class="muted" style="font-size:14px">คน</span></div>${T[l] != null ? `<div class="muted">เป้าหมาย ${T[l]} คน</div>` : ''}</div>`).join('')}<div class="kpi"><div class="l">ระดับ 3–4 รวม (เป้า ≥ 8)</div><div class="v" style="color:${hi >= 8 ? '#2E7D32' : '#C62828'}">${fmtInt(hi)}</div><div class="muted">รวมทุกระดับ ${fmtInt(sel.length - none)} คน</div></div></div>
+    <div class="kpis">${[4, 3, 2, 1].map(l => `<div class="kpi"><div class="l">ระดับ ${l}${NM[l] ? ' · ' + NM[l] : ''}</div><div class="v">${fmtInt(n(l))} <span class="muted" style="font-size:14px">คน</span></div>${T[l] != null ? `<div class="muted">เป้าหมาย ${T[l]} คน</div>` : ''}</div>`).join('')}<div class="kpi"><div class="l">ระดับ 3–4 รวม (เป้า ≥ 8)</div><div class="v" style="color:${hi >= 8 ? '#2E7D32' : '#C62828'}">${fmtInt(hi)}</div><div class="muted">รวมทุกระดับ ${fmtInt(pop.length - none)} คน</div></div></div>
     ${none ? `<div class="muted" style="margin-top:6px">ยังไม่มีคะแนนครบ 3 มิติ${r ? ' ในรอบ ' + r : ''}: ${fmtInt(none)} คน</div>` : ''}${warn && !r ? `<div class="banner warn" style="margin-top:6px">มี ${fmtInt(warn)} คนที่บางมิติในรอบล่าสุดต่ำกว่ารอบ 1 (แถวที่มี ⚠ ในตาราง) ตรวจกลับที่ชีต 07</div>` : ''}</div>`;
 }
