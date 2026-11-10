@@ -6,7 +6,7 @@
    ===================================================================== */
 // หมวดของแท็บ 01: [ชื่อหมวด, หัวคอลัมน์แรกของหมวด] เรียงตามชีต · หมวดสุดท้ายจบที่ HH_SEC01_END
 const HH_SEC01 = [['ข้อมูลบุคคลและที่ตั้ง', 'รหัสครัวเรือน'], ['ครัวเรือนและอาชีพ', 'สมาชิกครัวเรือน (คน)'], ['รายได้และรายจ่าย', 'รายได้รวม/เดือน (อัตโนมัติ)'], ['การผลิตและพื้นที่', 'กิจกรรมการผลิต'],
-  ['สัตว์ที่เลี้ยง', 'ไก่ไข่ (ตัว)'], ['เศษอาหารและต้นทุน', 'เศษอาหารในครัวเรือน (กก./วัน)'], ['ความพร้อมและบทบาท BSF', 'Pain Point'], ['ความยินยอม', 'ความยินยอม PDPA'], ['ค่าสถิติของชีต', 'นับสถิติครัวเรือน']];
+  ['สัตว์ที่เลี้ยง', 'ไก่ไข่ (ตัว)'], ['เศษอาหารและต้นทุน', 'เศษอาหารในครัวเรือน (กก./วัน)'], ['ความพร้อมและบทบาท BSF', 'Pain Point'], ['ความยินยอม', 'ความยินยอม PDPA'], ['ค่าสถิติ', 'นับสถิติครัวเรือน']];
 const HH_SEC01_END = 'สมาชิกสถิติ';
 const HH_RAW = /บัตร|โทร|รหัส|วันที่|เลขที่|ละติจูด|ลองจิจูด|สูตร/;
 // แบ่งคอลัมน์เป็นหมวด: แท็บ 01 ตามหมวดข้างบน · แท็บอื่นหมวดเดียว · ช่องสูตรอัตโนมัติไปหมวดท้าย
@@ -17,8 +17,8 @@ function hhSections(T) {
     cols.forEach((c, i) => { if (end >= 0 && i > end) return other.push(c); const s = starts.filter(x => x[1] <= i).pop(); if (!s) return other.push(c); let g = out.find(x => x.t === s[0]); if (!g) out.push(g = { t: s[0], cols: [] }); g.cols.push(c); });
   } else { for (const c of cols) (c.is_formula ? auto : other).push(c); if (other.length) out.push({ t: 'ข้อมูล', cols: other.splice(0) }); }
   if (other.length) out.push({ t: 'อื่น ๆ', cols: other });
-  if (auto.length) out.push({ t: 'ข้อมูลอัตโนมัติจากชีต', cols: auto, closed: true });
-  if (T.tab.tab_key === '01') { const s = out.find(x => x.t === 'ค่าสถิติของชีต'); if (s) s.closed = true; }
+  if (auto.length) out.push({ t: 'ข้อมูลคำนวณอัตโนมัติ', cols: auto, closed: true });
+  if (T.tab.tab_key === '01') { const s = out.find(x => x.t === 'ค่าสถิติ'); if (s) s.closed = true; }
   return out;
 }
 // แสดงค่า: ตัวเลขจัดรูปแบบ (ยกเว้นรหัส วันที่ พิกัด เลขที่)
@@ -46,7 +46,7 @@ async function hhDetail(view, code, tab) {
     <div class="row" style="gap:6px"><button class="small secondary" onclick="S._hhShow['${ec}']=!S._hhShow['${ec}'];render()">${S._hhShow[code] ? 'ซ่อน' : 'แสดง'}ข้อมูลส่วนบุคคล</button>${hhCanAdmin() ? `<a class="btn small" style="text-decoration:none" href="#hh/service/${encodeURIComponent(code)}">＋ รับหนอน</a>` : ''}</div></div>
     <div class="subtabs" style="margin:8px 0 0">${HH_DTABS.map(([k, l]) => `<a href="${url(k)}" class="${k === tab ? 'active' : ''}">${l}</a>`).join('')}</div></div>`;
   const emptyBtn = `<label class="lg-chip" style="cursor:pointer"><input type="checkbox" ${S._hhEmpty ? 'checked' : ''} onchange="S._hhEmpty=this.checked;render()" style="width:auto;min-height:0"> แสดงช่องว่าง</label>`;
-  const rowsOf = key => { const T = H.byKey[key]; if (!T) return '<div class="card muted">ยังไม่มีแท็บนี้ในระบบ (ซิงก์กับชีตก่อน)</div>'; const rs = T.rows.filter(r => r.hh_code === code);
+  const rowsOf = key => { const T = H.byKey[key]; if (!T) return '<div class="card muted">ยังไม่มีข้อมูลส่วนนี้</div>'; const rs = T.rows.filter(r => r.hh_code === code);
     return `<div class="card"><div class="cardhead"><h4>${esc(T.tab.label)} (${rs.length})</h4><div class="row" style="gap:6px">${emptyBtn}${key === '01' ? `<button class="small" onclick="hhEdit('01','${reg.id}')">แก้ทะเบียน</button>` : `<button class="small" onclick="hhEdit('${key}',null,{'รหัสครัวเรือน':'${ec}'})">＋ เพิ่ม</button>`}</div></div>
       ${rs.map(r => `<div class="hh-rec">${rs.length > 1 || key === '07' ? `<div class="row" style="justify-content:space-between"><b>${esc(r.row_key)}</b></div>` : ''}${hhKv(T, r, code)}${key === '01' ? '' : `<div style="margin-top:6px"><button class="small secondary" onclick="hhEdit('${key}','${r.id}')">แก้</button></div>`}</div>`).join('') || '<div class="muted">ยังไม่มีข้อมูล</div>'}</div>`; };
   let body = '';

@@ -16,6 +16,10 @@ function hhCalc(byKey) {
   const T = byKey || {}, out = { changed: 0, cells: {} };
   const colsOf = k => { const m = {}, f = {}; for (const c of ((T[k] || {}).cols || [])) { m[c.col_index] = c.header; f[c.header] = !!c.is_formula; } return { h: L => m[hhColL(L)], f }; };
   const C = {}; for (const k of ['01', '02', '03', '04', '05', '06', '07']) C[k] = colsOf(k);
+  // กันคำนวณผิดช่อง: ลำดับคอลัมน์ต้องตรงกับชีตเดิม (ตรวจหัวคอลัมน์หลัก) ถ้าไม่ตรงไม่คำนวณเลย
+  const ANCHOR = [['01', 'A', 'รหัสครัวเรือน'], ['01', 'F', 'ชื่อ-สกุล'], ['01', 'Y', 'รายได้รวม/เดือน'], ['01', 'BF', 'Baseline BSF'], ['02', 'D', 'รายได้ต่อเดือน'], ['03', 'H', 'ค่าอาหาร/เดือน'], ['04', 'J', 'ค่าปุ๋ย/ปี'], ['06', 'AA', 'จำนวนเกณฑ์ที่ผ่าน'], ['06', 'AB', 'สรุปศักยภาพนวัตกร'], ['07', 'B', 'รอบการประเมิน'], ['07', 'N', 'มิติ 1']];
+  const bad = ANCHOR.filter(([k, L, p]) => T[k] && !String(C[k].h(L) || '').startsWith(p));
+  if (!T['01'] || bad.length) { out.skipped = bad.map(([k, L]) => k + L).join(',') || 'no 01'; return out; }
   const rows = k => ((T[k] || {}).rows || []);
   const get = (k, r, L) => { const h = C[k].h(L); return h ? (r.data || {})[h] : null; };
   const set = (k, r, L, v) => {

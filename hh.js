@@ -2,11 +2,11 @@
 // เมนู "ครัวเรือน AppTech" (DEC-116 ข้อ 2B · DEC-117) — แท็บในโมดูลเดิม เห็นเฉพาะผู้มีสิทธิ์ (super/admin/ผู้บันทึกที่สังกัดโครงการของไฟล์)
 //   ข้อมูลเป็นสำเนาของ Google Sheet "ข้อมูลครัวเรือน โครงการ BSF" (hh.row เก็บทุกคอลัมน์) · ชีตเป็นหลักในช่วงเปลี่ยนผ่าน
 //   ซิงก์แบบกดปุ่ม (ระบบหลังบ้าน hh_sync): ตรวจ → อัปเดต · ไม่อัตโนมัติ
-//   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/sync · #hh/ref · #hh/cols
+//   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/ref (เลิกใช้ชีต DEC-137: #hh/sync และ #hh/import แสดงหน้าแจ้ง) · #hh/cols
 // =====================================================================
-const HH_SUB = [['overview', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'ข้อมูลอ้างอิง'], ['import', 'นำเข้ายอดรายเดือน'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต'], ['items', 'รายการรายรับรายจ่าย'], ['cols', 'ตั้งค่าคอลัมน์']];
+const HH_SUB = [['overview', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'ข้อมูลอ้างอิง'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['items', 'รายการรายรับรายจ่าย'], ['cols', 'ตั้งค่าคอลัมน์']];
 // กลุ่มเมนูตามงาน (DEC-130): บันทึกงานประจำ · รายงาน · ข้อมูลพื้นฐานจากชีต · ดูแลข้อมูลและตั้งค่า (admin)
-const HH_GROUPS = [['work', 'บันทึกงานประจำ|งานประจำ', ['service', 'ledger', 't/07']], ['report', 'รายงาน|รายงาน', ['overview', 'income', 'innov', 'map']], ['base', 'ข้อมูลพื้นฐาน|พื้นฐาน', ['t/01', 't/02', 't/03', 't/04', 't/05', 't/06', 't/09']], ['admin', 'ดูแลข้อมูลและตั้งค่า|ตั้งค่า', ['sync', 'import', 'check', 'items', 'cols', 'ref']]];
+const HH_GROUPS = [['work', 'บันทึกงานประจำ|งานประจำ', ['service', 'ledger', 't/07']], ['report', 'รายงาน|รายงาน', ['overview', 'income', 'innov', 'map']], ['base', 'ข้อมูลพื้นฐาน|พื้นฐาน', ['t/01', 't/02', 't/03', 't/04', 't/05', 't/06', 't/09']], ['admin', 'ดูแลข้อมูลและตั้งค่า|ตั้งค่า', ['check', 'items', 'cols', 'ref']]];
 const HH_ADMIN_ONLY = ['service', 'items', 'cols', 'import'];
 const HH_LONG = /หมายเหตุ|หลักฐาน|Pain|Gain|ทักษะ|คุณลักษณะ|จุดแข็ง|สิ่งที่ต้องพัฒนา|แผนพัฒนา|เรื่องที่เคยถ่ายทอด|เครือข่ายความร่วมมือ|ผลผลิตหลัก|ช่องทาง/;
 const HH_COLORS = { A: '#2E7D32', B: '#F9A825', C: '#EF6C00', '': '#455A64' };
@@ -36,6 +36,7 @@ async function hhLoad(force) {
       model.options[t.tab_key] = Object.fromEntries(cs.filter(c => Array.isArray(c.options) && c.options.length).map(c => [c.header, c.options]));
     }
   }
+  if (typeof hhCalc === 'function') hhCalc(byKey);   // DEC-137 เลิกใช้ชีต: ระบบคำนวณช่องอัตโนมัติเอง (hh-calc.js)
   const reg = byKey['01'] ? byKey['01'].rows : [];
   const role = (k, r) => { const c = (byKey[k] ? byKey[k].cols : []).find(x => x.role === r); return c ? c.header : null; };
   let routes = null, photos = null;   // DEC-126 (sql/022) · ยังไม่รัน = null
@@ -44,7 +45,6 @@ async function hhLoad(force) {
   S._hh = { link, tabs, byKey, model, logs: (logs || []).slice(0, 10), role, reg, routes, photos, roleVal: (row, k, r) => { const h = role(k, r); return h ? (row.data || {})[h] : null; } };
   S._hh.lg = typeof lgLoad === 'function' ? await lgLoad(link.project_id) : null;   // DEC-127 รายรับรายจ่าย (sql/023)
   S._hh.rp = typeof rpLoad === 'function' ? await rpLoad(link.project_id) : null;
-  try { const ps = await api.list('core.app_setting', { eq: { key: 'hh_sheet_pull_off' } }); S._hhPullOff = (ps[0] && ps[0].value) || ''; } catch (e) { S._hhPullOff = ''; }   // DEC-133   // DEC-132 ค่าตามรายงาน + ระดับรายคน (sql/025)
   return S._hh;
 }
 function hhMenu(sub) {
@@ -55,7 +55,7 @@ function hhMenu(sub) {
     <div class="subtabs">${g[2].map(k => `<a href="#hh/${k}" class="${cur === k ? 'active' : ''}">${lbl[k] || k}</a>`).join('')}</div>`;
 }
 function hhShell(sub, body) {
-  const H = S._hh; const last = H && H.link.last_sync_at ? `ซิงก์ล่าสุด ${thDate(H.link.last_sync_at)}` : 'ยังไม่เคยซิงก์กับชีต';
+  const H = S._hh; const last = 'ข้อมูลอยู่ในระบบ (เลิกใช้ Google Sheet 10 พ.ย. 2569)';
   setTimeout(() => { const a = document.querySelector('.subtabs a.active'), bar = a && a.parentElement; if (bar && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2; }, 0);   // จอแคบ: เลื่อนเมนูย่อยให้เห็นเมนูที่เลือก
   return `<div class="card"><div class="cardhead"><h4>ครัวเรือน AppTech ${helpBtn('hh')}</h4><span class="muted">${esc(H ? H.link.name : '')} · ${last}</span></div>
     ${hhMenu(sub)}</div></div>${body}`;
@@ -64,7 +64,7 @@ async function pageHH(view) {
   const parts = location.hash.replace(/^#hh\/?/, '').split('/'), sub = parts[0] || '';
   let H; try { H = await hhLoad(); } catch (e) { const f = friendlyError(e); return view.innerHTML = `<div class="card"><h3 style="margin-top:0">ครัวเรือน AppTech</h3><div class="banner warn">${esc(f.title)}</div><div class="muted" style="margin-top:6px">${esc(f.hint)} (เจ้าของโครงการต้องรัน sql/014_household.sql และเพิ่มสคีมา hh ใน Exposed schemas ก่อน)</div></div>`; }
   if (!H) return view.innerHTML = `<div class="card">บัญชีนี้ไม่มีสิทธิ์ข้อมูลครัวเรือน (เฉพาะ super admin · admin · ผู้บันทึกที่สังกัดโครงการ บพท.69_AppTech)</div>`;
-  if (!H.reg.length && !['sync', 'cols', 'ref', 'import'].includes(sub)) return view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">ยังไม่มีข้อมูลครัวเรือนในระบบ</h4><div>ขั้นแรก ดึงข้อมูลจากชีตเข้าระบบที่แท็บ <a href="#hh/sync">ซิงก์กับชีต</a> → "ตรวจกับชีต" → "อัปเดตตามนี้"${hhCanAdmin() ? '' : ' (admin เป็นผู้กดอัปเดต)'}</div></div>`);
+  if (!H.reg.length && !['sync', 'cols', 'ref', 'import'].includes(sub)) return view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">ยังไม่มีข้อมูลครัวเรือนในระบบ</h4><div>เพิ่มครัวเรือนได้ที่ ข้อมูลพื้นฐาน → <a href="#hh/t/01">ทะเบียน</a></div></div>`);
   if (!sub && hhCanAdmin() && typeof hhServicePage === 'function') return hhServicePage(view);   // DEC-130: หน้าแรกของผู้ดูแล = รับหนอน/บริการ
   if (sub === 'overview') return hhOverview(view);
   if (sub === 't') return hhTabPage(view, parts[1] || '01');
@@ -76,9 +76,8 @@ async function pageHH(view) {
   if (sub === 'service') return hhServicePage(view, parts[1], parts[2]);   // DEC-129
   if (sub === 'items') return hhItemsPage(view);
   if (sub === 'check') return hhCheckPage(view);
-  if (sub === 'sync') return hhSyncPage(view);
+  if (sub === 'sync' || sub === 'import') return hhSheetRetired(view, sub);   // DEC-137 เลิกใช้ชีต
   if (sub === 'ref') return hhRefPage(view);
-  if (sub === 'import') return hhImportPage(view);   // DEC-136
   if (sub === 'cols') return hhColsPage(view);
   return hhOverview(view);
 }
@@ -106,7 +105,7 @@ function hhOverview(view) {
   const groups = cnt(all, grp), tambons = cnt(use, r => String(rv(r, 'tambon') ?? '').trim()), status = cnt(all, st);
   view.innerHTML = hhShell('', `
     <div class="kpis"><div class="kpi hero"><div class="l">ครัวเรือนที่ลงทะเบียน</div><div class="v">${fmtInt(all.length)}</div></div><div class="kpi"><div class="l">ข้อมูลครบ (ใช้คำนวณสถิติ)</div><div class="v">${fmtInt(use.length)}</div></div><div class="kpi"><div class="l">สมาชิกรวม (คน)</div><div class="v">${fmtInt(mem.reduce((a, b) => a + b, 0))}</div></div><div class="kpi"><div class="l">รายได้มัธยฐาน (บาท/เดือน)</div><div class="v">${fmt(median(inc), 0)}</div></div><div class="kpi"><div class="l">Baseline อาหารสัตว์+ปุ๋ย (บาท/เดือน)</div><div class="v">${fmt(base, 0)}</div></div></div>
-    <div class="muted" style="margin:6px 0 10px">สถิติใช้เฉพาะครัวเรือนที่ข้อมูลครบและไม่ใช่กลุ่ม C ${qBtn('ขอบเขตของสถิติ', '<p>นับเฉพาะครัวเรือนสถานะ "ข้อมูลครบ" และไม่ใช่กลุ่ม C ตามแท็บ 90 ของชีต</p><p>รายหมวด (แหล่งรายได้ สัตว์ที่เลี้ยง พืช) นับเป็นจำนวนครัวเรือน เพราะหลายแถวกรอกหลายรายการในช่องเดียว จึงแยกยอดเงินรายหมวดไม่ได้</p><p>ค่ากลางที่แนะนำให้ใช้ในรายงานคือมัธยฐาน เพราะทนต่อค่าผิดปกติมากกว่าค่าเฉลี่ย</p>')}</div>
+    <div class="muted" style="margin:6px 0 10px">สถิติใช้เฉพาะครัวเรือนที่ข้อมูลครบและไม่ใช่กลุ่ม C ${qBtn('ขอบเขตของสถิติ', '<p>นับเฉพาะครัวเรือนสถานะ "ข้อมูลครบ" และไม่ใช่กลุ่ม C (เกณฑ์เดียวกับสรุปสถิติเดิม)</p><p>รายหมวด (แหล่งรายได้ สัตว์ที่เลี้ยง พืช) นับเป็นจำนวนครัวเรือน เพราะหลายแถวกรอกหลายรายการในช่องเดียว จึงแยกยอดเงินรายหมวดไม่ได้</p><p>ค่ากลางที่แนะนำให้ใช้ในรายงานคือมัธยฐาน เพราะทนต่อค่าผิดปกติมากกว่าค่าเฉลี่ย</p>')}</div>
     <div class="grid-dash">
       <div class="card"><div class="cardhead"><h4>กลุ่มเป้าหมาย (กลุ่มหลัก)</h4></div><div class="chartbox"><canvas id="hhG"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>ครัวเรือนตามตำบล</h4></div><div class="chartbox"><canvas id="hhT"></canvas></div></div>
@@ -130,7 +129,7 @@ function hhOverview(view) {
 // ---------------------------------------------------------------------
 function hhTabPage(view, key) {
   if (key === '09' && typeof hhDevPage === 'function') return hhDevPage(view);   // DEC-131: สรุปพัฒนาการคำนวณจาก 01/06/07 ไม่กรอกเอง
-  const H = S._hh, T = H.byKey[key]; if (!T) return view.innerHTML = hhShell('t/' + key, '<div class="card">ไม่พบแท็บนี้ (ซิงก์กับชีตก่อน)</div>');
+  const H = S._hh, T = H.byKey[key]; if (!T) return view.innerHTML = hhShell('t/' + key, '<div class="card">ไม่พบข้อมูลส่วนนี้</div>');
   const f = S._hhf = S._hhf || {}; const st = f[key] = f[key] || { q: '', group: '', tambon: '', status: '', imin: '', imax: '' };
   const cols = T.cols.filter(c => c.in_list); const listCols = cols.length ? cols : T.cols.slice(0, 6);
   const reg = Object.fromEntries(H.reg.map(r => [r.hh_code, r]));
@@ -151,7 +150,7 @@ function hhTabPage(view, key) {
   view.innerHTML = hhShell('t/' + key, `<div class="card"><div class="cardhead"><h4>${esc(T.tab.label)} (${fmtInt(rows.length)}${rows.length !== T.rows.length ? ' จาก ' + fmtInt(T.rows.length) : ''})</h4><div class="row"><button class="small secondary" onclick="hhExport('${key}')">ส่งออก CSV</button><button class="small" onclick="hhEdit('${key}')">＋ เพิ่ม${key === '01' ? 'ครัวเรือน' : 'แถว'}</button></div></div>
     <div class="row" style="margin-bottom:6px"><input aria-label="ค้นหาครัวเรือน" type="search" placeholder="ค้นหารหัส/ข้อความ…" value="${esc(st.q)}" style="flex:1;min-width:160px" onchange="S._hhf['${key}'].q=this.value;render()">${sel('group', 'ทุกกลุ่ม', uniq('group'))}${sel('tambon', 'ทุกตำบล', uniq('tambon'))}${sel('status', 'ทุกสถานะ', uniq('status'))}
       <label style="margin:0">รายได้ <input type="number" placeholder="ต่ำสุด" value="${esc(st.imin)}" style="width:110px" onchange="S._hhf['${key}'].imin=this.value;render()"> – <input type="number" placeholder="สูงสุด" value="${esc(st.imax)}" style="width:110px" onchange="S._hhf['${key}'].imax=this.value;render()"></label></div>
-    <div class="muted" style="margin-bottom:6px">ⓕ = คอลัมน์สูตรในชีต (ระบบแสดงอย่างเดียว) · ตัวกรองกลุ่ม/ตำบล/สถานะ/รายได้ ใช้ข้อมูลจากทะเบียน · ข้อมูลส่วนบุคคลแสดงแบบปิดบัง เปิดดูได้ในหน้ารายครัวเรือน · เลือกคอลัมน์ที่แสดงได้ที่ "ตั้งค่าคอลัมน์"</div>
+    <div class="muted" style="margin-bottom:6px">ⓕ = ช่องที่ระบบคำนวณอัตโนมัติ (แก้เองไม่ได้) · ตัวกรองกลุ่ม/ตำบล/สถานะ/รายได้ ใช้ข้อมูลจากทะเบียน · ข้อมูลส่วนบุคคลแสดงแบบปิดบัง เปิดดูได้ในหน้ารายครัวเรือน · เลือกคอลัมน์ที่แสดงได้ที่ "ตั้งค่าคอลัมน์"</div>
     <div class="tscroll">${tbl}</div></div>`);
 }
 function hhExport(key) {
@@ -163,7 +162,7 @@ function hhEdit(key, id, preset) {
   const keyHs = T.tab.key_headers || ['รหัสครัวเรือน'];
   const field = c => {
     const v = d[c.header], fid = 'hf_' + c.col_index, isKey = keyHs.includes(c.header);
-    if (c.is_formula) return `<div><label>${esc(c.header)} <span class="muted">(สูตรในชีต)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
+    if (c.is_formula) return `<div><label>${esc(c.header)} <span class="muted">(คำนวณอัตโนมัติ)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (isKey && c.header === 'รหัสครัวเรือน' && key !== '01') return `<div><label>${esc(c.header)} *</label><select id="${fid}" ${r ? 'disabled' : ''}>${H.reg.map(x => `<option ${x.hh_code === (r ? r.hh_code : d['รหัสครัวเรือน'] || '') ? 'selected' : ''}>${esc(x.hh_code)}</option>`).join('')}</select></div>`;
     if (isKey && r) return `<div><label>${esc(c.header)} <span class="muted">(กุญแจ แก้ไม่ได้)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (Array.isArray(c.options) && c.options.length) { const opts = c.options.map(String); const extra = !hhBlank(v) && !opts.includes(String(v)) ? [String(v)] : []; return `<div><label>${esc(c.header)}${isKey ? ' *' : ''}</label><select id="${fid}"><option value="">—</option>${opts.concat(extra).map(o => `<option ${String(v ?? '') === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`; }
@@ -173,8 +172,8 @@ function hhEdit(key, id, preset) {
     const chips = hi.multi && hi.toks.length ? `<div class="lg-chips" style="margin-top:4px">${hi.toks.map(t => `<button type="button" class="lg-chip ${cur.includes(t) ? 'on' : ''}" data-t="${esc(t)}" onclick="hhTok('${fid}','${esc(t).replace(/'/g, "\\'")}')">${esc(t)}</button>`).join('')}</div>` : '';
     return `<div${chips ? ' style="grid-column:1/-1"' : ''}><label>${esc(c.header)}${isKey ? ' *' : ''}</label><input id="${fid}" value="${esc(v ?? '')}" ${dl ? `list="dl_${fid}"` : ''} ${hi.numeric ? 'inputmode="decimal"' : ''} ${key === '01' && c.header === 'รหัสครัวเรือน' ? 'placeholder="เช่น BSF-062" autocapitalize="characters"' : ''}>${dl}${chips}</div>`;
   };
-  openModal(`<h3 style="margin-top:0">${r ? 'แก้' : 'เพิ่ม'} ${esc(T.tab.label)}${r ? ' · ' + esc(r.row_key) : ''}</h3><div class="muted" style="margin-bottom:8px">บันทึกแล้วยังไม่ลงชีตทันที · ไปที่ "ซิงก์กับชีต" เพื่อส่งค่าที่แก้ลงชีต (ชีตยังเป็นหลัก)</div>
-    <div class="fgrid" style="max-height:60vh;overflow:auto">${typeof hhSections === 'function' ? hhSections(T).map(s => `<div class="fsec">${esc(s.t)}${s.t === 'ข้อมูลอัตโนมัติจากชีต' ? ' (อ่านอย่างเดียว)' : ''}</div>${s.cols.map(field).join('')}`).join('') : T.cols.map(field).join('')}</div>
+  openModal(`<h3 style="margin-top:0">${r ? 'แก้' : 'เพิ่ม'} ${esc(T.tab.label)}${r ? ' · ' + esc(r.row_key) : ''}</h3><div class="muted" style="margin-bottom:8px">ช่องอัตโนมัติ (เช่น ชื่อ ยอดรวม จำนวนเกณฑ์ที่ผ่าน) ระบบคำนวณใหม่หลังบันทึก</div>
+    <div class="fgrid" style="max-height:60vh;overflow:auto">${typeof hhSections === 'function' ? hhSections(T).map(s => `<div class="fsec">${esc(s.t)}${s.t === 'ข้อมูลคำนวณอัตโนมัติ' ? ' (อ่านอย่างเดียว)' : ''}</div>${s.cols.map(field).join('')}`).join('') : T.cols.map(field).join('')}</div>
     <div class="row" style="margin-top:12px"><button id="hfSave">บันทึก</button><button class="secondary" onclick="closeModal()">ยกเลิก</button></div>`);
   $('#hfSave').onclick = async () => {
     const nd = { ...d };
@@ -187,7 +186,7 @@ function hhEdit(key, id, preset) {
     try {
       if (r) await api.update('hh.row', r.id, { data: nd });
       else await api.insert('hh.row', { tab_id: T.tab.id, row_key: rowKey, hh_code: code, data: nd });
-      closeModal(); toast('บันทึกแล้ว · ส่งลงชีตได้ที่ "ซิงก์กับชีต"'); await hhLoad(true); render();
+      closeModal(); toast('บันทึกแล้ว'); await hhLoad(true); render();
     } catch (e) { fail(e, 'บันทึกไม่สำเร็จ'); }
   };
 }
@@ -228,48 +227,20 @@ function hhCheckPage(view) {
   S._hhIssues = issues.map(i => ({ ระดับ: L[i.level], แท็บ: i.tab + ' ' + i.tab_label, รหัส: i.code, ช่อง: i.field, เรื่อง: HH_RULE_TITLE[i.rule] || i.rule, รายละเอียด: i.msg }));
   view.innerHTML = hhShell('check', `<div class="card"><div class="cardhead"><h4>ตรวจความสอดคล้องของข้อมูล ${helpBtn('hh-check')}</h4><button class="small secondary" onclick="exportCsv(S._hhIssues,'household_check')">ส่งออก CSV (ส่งให้ทีม)</button></div>
     <div class="kpis">${['error', 'warn', 'info'].map(l => `<div class="kpi" style="cursor:pointer;${st.level === l ? 'outline:2px solid var(--brand)' : ''}" onclick="S._hhc.level=S._hhc.level==='${l}'?'':'${l}';render()"><div class="l">${L[l]}</div><div class="v">${fmtInt(issues.filter(i => i.level === l).length)}</div></div>`).join('')}</div>
-    <div class="muted" style="margin-top:6px">ตรวจจากข้อมูลในระบบ (ซิงก์ล่าสุด) · ต้องแก้ = ผิดชัดเจน · ควรตรวจ = น่าสงสัย ให้ทีมยืนยัน · ข้อสังเกต = ไม่ผิด แต่ควรรู้ · กดการ์ดเพื่อกรอง · แก้ในชีตแล้วกดซิงก์ใหม่ ผลจะหายไป</div></div>
+    <div class="muted" style="margin-top:6px">ตรวจจากข้อมูลในระบบ · ต้องแก้ = ผิดชัดเจน · ควรตรวจ = น่าสงสัย ให้ทีมยืนยัน · ข้อสังเกต = ไม่ผิด แต่ควรรู้ · กดการ์ดเพื่อกรอง · แก้ข้อมูลในระบบแล้วผลจะหายไป</div></div>
     ${Object.values(by).sort((a, b) => order[a[0].level] - order[b[0].level] || a[0].tab.localeCompare(b[0].tab)).map(g => `<div class="card"><div class="cardhead"><h4><span class="pill" style="background:${C[g[0].level]}">${L[g[0].level]}</span> แท็บ ${esc(g[0].tab)} ${esc(g[0].tab_label)} — ${esc(HH_RULE_TITLE[g[0].rule] || g[0].rule)} (${g.length})</h4></div>
       <div class="tscroll"><table><thead><tr><th>รหัสครัวเรือน</th><th>ช่อง</th><th>รายละเอียด</th></tr></thead><tbody>${g.slice(0, 200).map(i => `<tr><td>${i.code.split(', ').map(c => /^BSF-\d+$/.test(c) ? `<a href="#hh/h/${encodeURIComponent(c)}">${esc(c)}</a>` : esc(c)).join(', ')}</td><td>${esc(i.field)}</td><td>${esc(i.msg)}</td></tr>`).join('')}</tbody></table></div></div>`).join('') || '<div class="card">ไม่พบปัญหา</div>'}`);
 }
 
 // ---------------------------------------------------------------------
-// ซิงก์กับชีต (กดปุ่ม): ตรวจ → เลือกค่าที่ขัดแย้ง → อัปเดต
-// ---------------------------------------------------------------------
-function hhSyncPage(view) {
-  const H = S._hh, P = S._hhPlan;
-  const head = `<div class="card"><div class="cardhead"><h4>ซิงก์กับ Google Sheet ${helpBtn('hh-sync')}</h4><a class="small" href="https://docs.google.com/spreadsheets/d/${esc(H.link.spreadsheet_id)}" target="_blank" rel="noopener">เปิดชีต ›</a></div>
-    <div>ชีตเป็นหลักในช่วงเปลี่ยนผ่าน · ระบบไม่ซิงก์อัตโนมัติ · กด <b>ตรวจกับชีต</b> เพื่อดูว่าฝั่งไหนเปลี่ยนอะไร แล้ว${hhCanAdmin() ? ' กด <b>อัปเดตตามนี้</b>' : ' ให้ admin กดอัปเดต'}</div>
-    <ul style="margin:6px 0 0;padding-left:20px" class="muted"><li>ช่องที่เปลี่ยนฝั่งเดียว → อัปเดตตามฝั่งที่เปลี่ยน (ชีต → ระบบ หรือ ระบบ → ชีต)</li><li>ช่องที่เปลี่ยนทั้งสองฝั่งต่างกัน = ขัดแย้ง → เลือกเองรายช่อง (ไม่เลือก = ใช้ค่าในชีต)</li><li>ช่องสูตรในชีตไม่ถูกเขียนทับ · แถวที่ลบในชีต ระบบปิดใช้งาน (ไม่ลบทิ้ง)</li></ul>
-    ${S._hhPullOff ? `<div class="banner warn" style="margin-top:8px">หยุดรับข้อมูลจากชีตตั้งแต่ ${esc(S._hhPullOff)} · ตรวจกับชีตได้ แต่กดอัปเดตไม่ได้ เพื่อไม่ให้ค่าเก่าจากชีตทับข้อมูลในระบบ</div>` : ''}
-    <div class="row" style="margin-top:10px"><button id="hhPrev">ตรวจกับชีต</button>${P && hhCanAdmin() && !S._hhPullOff ? '<button id="hhApply" class="secondary">อัปเดตตามนี้</button>' : ''}${isSuper() ? `<button class="small secondary" onclick="hhPullToggle()">${S._hhPullOff ? 'เปิดรับข้อมูลจากชีตอีกครั้ง' : 'หยุดรับข้อมูลจากชีต'}</button>` : ''}</div></div>`;
-  const planHtml = !P ? '' : `<div class="card"><div class="cardhead"><h4>ผลการ${P.mode === 'apply' ? 'อัปเดต' : 'ตรวจ'} (${thDate(P.at)})</h4></div>${P.warnings && P.warnings.length ? `<div class="banner warn">${P.warnings.map(esc).join('<br>')}</div>` : ''}
-    <div class="tscroll"><table><thead><tr><th>แท็บ</th><th class="num">แถวในชีต</th><th class="num">ใหม่จากชีต</th><th class="num">ชีต → ระบบ</th><th class="num">ระบบ → ชีต</th><th class="num">ใหม่จากระบบ</th><th class="num">หายจากชีต</th><th class="num">ขัดแย้ง</th><th class="num">ไม่เปลี่ยน</th></tr></thead><tbody>
-    ${P.tabs.map(t => t.kind === 'reference' ? `<tr><td>${esc(t.tab_key)} ${esc(t.label)}</td><td colspan="8" class="muted">ตารางเกณฑ์ ${t.reference_rows} แถว (อ่านอย่างเดียว)</td></tr>` : `<tr><td>${esc(t.tab_key)} ${esc(t.label)}${(t.duplicate_keys || []).length ? `<div class="muted">รหัสซ้ำในแท็บ: ${esc(t.duplicate_keys.join(', '))}</div>` : ''}</td><td class="num">${t.sheet_rows}</td><td class="num">${t.new_from_sheet}</td><td class="num">${t.update_from_sheet}</td><td class="num">${t.update_to_sheet}</td><td class="num">${t.new_to_sheet}</td><td class="num">${t.removed_in_sheet}</td><td class="num">${t.conflicts ? `<b style="color:var(--danger)">${t.conflicts}</b>` : 0}</td><td class="num">${t.unchanged}</td></tr>`).join('')}</tbody></table></div>
-    ${P.tabs.some(t => (t.samples || []).length) ? `<details style="margin-top:8px"><summary>ตัวอย่างแถวที่เปลี่ยน</summary>${P.tabs.filter(t => (t.samples || []).length).map(t => `<div style="margin-top:6px"><b>${esc(t.label)}</b>${t.samples.map(s => `<div class="muted">${esc(s.code)}: ${s.from_sheet.length ? 'ชีต → ระบบ: ' + esc(s.from_sheet.join(', ')) : ''}${s.to_sheet.length ? ' · ระบบ → ชีต: ' + esc(s.to_sheet.join(', ')) : ''}</div>`).join('')}</div>`).join('')}</details>` : ''}</div>
-    ${P.conflicts && P.conflicts.length ? `<div class="card"><div class="cardhead"><h4>ข้อขัดแย้ง (${P.conflicts.length}) — เลือกค่าที่ถูกต้องรายช่อง</h4></div><div class="tscroll"><table><thead><tr><th>แท็บ</th><th>แถว</th><th>ช่อง</th><th>ค่าในชีต</th><th>ค่าในระบบ</th><th>ใช้ค่า</th></tr></thead><tbody>${P.conflicts.map((c, i) => { const k = c.tab_key + '\u0002' + c.key + '\u0001' + c.header; const pick = (S._hhChoice || {})[k] || 'sheet'; return `<tr><td>${esc(c.tab_label)}</td><td>${esc(c.key)}</td><td>${esc(c.header)}</td><td>${esc(c.sheet ?? '(ว่าง)')}</td><td>${esc(c.system ?? '(ว่าง)')}</td><td class="nowrap"><label class="pick-opt" style="display:inline;padding:0"><input type="radio" name="hc${i}" ${pick === 'sheet' ? 'checked' : ''} onchange="hhPick(${i},'sheet')"> ชีต</label> <label class="pick-opt" style="display:inline;padding:0"><input type="radio" name="hc${i}" ${pick === 'system' ? 'checked' : ''} onchange="hhPick(${i},'system')"> ระบบ</label></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}`;
-  const logs = `<div class="card"><div class="cardhead"><h4>ประวัติการซิงก์</h4></div><table><thead><tr><th>เมื่อ</th><th>แบบ</th><th>โดย</th><th>สรุป</th></tr></thead><tbody>${(H.logs || []).map(l => `<tr><td class="nowrap">${thDate(l.run_at)}</td><td>${l.mode === 'apply' ? 'อัปเดต' : 'ตรวจ'}</td><td>${esc((l.summary || {}).by || '')}</td><td class="muted">${((l.summary || {}).tabs || []).filter(t => t.new_from_sheet || t.update_from_sheet || t.update_to_sheet || t.new_to_sheet || t.removed_in_sheet || t.conflicts).map(t => `${t.tab}: ${[t.new_from_sheet && 'ใหม่ ' + t.new_from_sheet, t.update_from_sheet && 'ชีต→ระบบ ' + t.update_from_sheet, t.update_to_sheet && 'ระบบ→ชีต ' + t.update_to_sheet, t.new_to_sheet && 'เพิ่มลงชีต ' + t.new_to_sheet, t.removed_in_sheet && 'หาย ' + t.removed_in_sheet, t.conflicts && 'ขัดแย้ง ' + t.conflicts].filter(Boolean).join(' · ')}`).join(' | ') || 'ไม่มีการเปลี่ยนแปลง'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มี</td></tr>'}</tbody></table></div>`;
-  view.innerHTML = hhShell('sync', head + planHtml + logs);
-  const run = async (mode, btn) => {
-    btn.disabled = true; btn.textContent = mode === 'apply' ? 'กำลังอัปเดต… (อาจใช้ 1–2 นาที)' : 'กำลังตรวจ…';
-    try {
-      const r = await api.engine('hh_sync', { link_id: H.link.id, mode, choices: S._hhChoice || {} });
-      S._hhPlan = { ...r, at: new Date().toISOString() };
-      if (mode === 'apply') { S._hhChoice = {}; toast('อัปเดตแล้ว'); await hhLoad(true); } else await hhLoad(true);
-      render();
-    } catch (e) { fail(e, mode === 'apply' ? 'อัปเดตไม่สำเร็จ' : 'ตรวจไม่สำเร็จ'); btn.disabled = false; btn.textContent = mode === 'apply' ? 'อัปเดตตามนี้' : 'ตรวจกับชีต'; }
-  };
-  $('#hhPrev').onclick = e => run('preview', e.target);
-  if ($('#hhApply')) $('#hhApply').onclick = e => { if (confirm('อัปเดตระบบและชีตตามผลตรวจล่าสุด? (ช่องที่ขัดแย้งใช้ค่าที่เลือกไว้)')) run('apply', e.target); };
+// DEC-137 เลิกใช้ Google Sheet: หน้าซิงก์และนำเข้ายอดรายเดือนถูกถอดออก · ลิงก์เดิมมาที่หน้านี้
+function hhSheetRetired(view, sub) {
+  const H = S._hh, logs = H.logs || [];
+  view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">เลิกใช้ Google Sheet แล้ว</h4>
+    <div>ตั้งแต่ 10 พ.ย. 2569 ข้อมูลครัวเรือนทุกส่วนอยู่ในระบบนี้ (ทะเบียน รายได้ อาหารสัตว์ ปุ๋ย หนี้สิน คัดกรอง ประเมินนวัตกร ยอดรายเดือน) · แก้และเพิ่มข้อมูลในระบบได้โดยตรง · ช่องอัตโนมัติระบบคำนวณเองตามสูตรเดิมของชีต</div>
+    <div class="muted" style="margin-top:6px">สำเนาแท็บเกณฑ์ ติดตามผลตอบแทน PMUA และข้อมูลจาก PMU ดูได้ที่ <a href="#hh/ref">ข้อมูลอ้างอิง</a></div></div>
+    <div class="card"><div class="cardhead"><h4>ประวัติการซิงก์ (ก่อนเลิกใช้)</h4></div><div class="tscroll"><table><thead><tr><th>เมื่อ</th><th>แบบ</th><th>โดย</th></tr></thead><tbody>${logs.map(l => `<tr><td class="nowrap">${thDate(l.run_at)}</td><td>${l.mode === 'apply' ? 'อัปเดต' : 'ตรวจ'}</td><td>${esc((l.summary || {}).by || '')}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">ไม่มี</td></tr>'}</tbody></table></div></div>`);
 }
-async function hhPullToggle() {   // DEC-133: ช่วงที่เปลี่ยนไปบันทึกในระบบอย่างเดียว
-  const v = S._hhPullOff ? '' : todayISO();
-  if (!confirm(v ? 'หยุดรับข้อมูลจากชีต? (ปุ่มอัปเดตตามนี้จะถูกซ่อน จนกว่าจะเปิดใหม่)' : 'เปิดรับข้อมูลจากชีตอีกครั้ง?')) return;
-  try { const ex = await api.list('core.app_setting', { eq: { key: 'hh_sheet_pull_off' } });
-    if (ex.length) await api.update('core.app_setting', 'hh_sheet_pull_off', { value: v }, 'key'); else await api.insert('core.app_setting', { key: 'hh_sheet_pull_off', value: v, description: 'วันที่หยุดรับข้อมูลครัวเรือนจากชีต (ว่าง = รับตามปกติ)' });
-    S._hhPullOff = v; toast(v ? 'หยุดรับข้อมูลจากชีตแล้ว' : 'เปิดรับข้อมูลจากชีตแล้ว'); render(); } catch (e) { fail(e, 'บันทึกการตั้งค่าไม่สำเร็จ'); }
-}
-function hhPick(i, v) { const c = S._hhPlan.conflicts[i]; S._hhChoice = S._hhChoice || {}; S._hhChoice[c.tab_key + '\u0002' + c.key + '\u0001' + c.header] = v; }
 
 // ---------------------------------------------------------------------
 // ตั้งค่าคอลัมน์ · หน้า "ข้อมูลอ้างอิง" (hhRefPage) ย้ายไป hh-import.js (DEC-136)
@@ -279,7 +250,7 @@ function hhColsPage(view) {
   if (!hhCanAdmin()) return view.innerHTML = hhShell('cols', '<div class="card">เฉพาะ admin</div>');
   const H = S._hh, st = S._hhcol = S._hhcol || { tab: '01' }, T = H.byKey[st.tab];
   view.innerHTML = hhShell('cols', `<div class="card"><div class="cardhead"><h4>ตั้งค่าคอลัมน์</h4><select aria-label="เลือกแท็บ" style="width:auto" onchange="S._hhcol.tab=this.value;render()">${Object.values(H.byKey).filter(t => t.tab.kind !== 'reference').map(t => `<option value="${t.tab.tab_key}" ${t.tab.tab_key === st.tab ? 'selected' : ''}>${t.tab.tab_key} ${esc(t.tab.label)}</option>`).join('')}</select></div>
-    <div class="muted">ระบบสร้างรายชื่อคอลัมน์จากหัวตารางของชีตทุกครั้งที่ซิงก์ (ทีมเพิ่ม/ย้ายคอลัมน์ในชีตได้) · "บทบาท" ใช้ในสถิติ แผนที่ และตัวกรอง — ถ้าเปลี่ยนชื่อหัวคอลัมน์ในชีต ให้ตั้งบทบาทใหม่ที่นี่ · "แสดงในตาราง" = คอลัมน์ในหน้ารายการ · "ส่วนบุคคล" = ปิดบังในตาราง</div>
-    <div class="tscroll"><table><thead><tr><th>#</th><th>หัวคอลัมน์</th><th>สูตร</th><th>บทบาท</th><th>แสดงในตาราง</th><th>ส่วนบุคคล</th></tr></thead><tbody>${(T ? T.cols : []).map(c => `<tr><td>${c.col_index}</td><td>${esc(c.header)}</td><td>${c.is_formula ? 'ⓕ' : ''}</td><td><select onchange="hhColSet('${c.id}','role',this.value||null)"><option value="">—</option>${Object.entries(HH_ROLE_LABEL).map(([k, l]) => `<option value="${k}" ${c.role === k ? 'selected' : ''}>${l}</option>`).join('')}${c.role && !HH_ROLE_LABEL[c.role] ? `<option selected>${esc(c.role)}</option>` : ''}</select></td><td><input type="checkbox" ${c.in_list ? 'checked' : ''} onchange="hhColSet('${c.id}','in_list',this.checked)"></td><td><input type="checkbox" ${c.sensitive ? 'checked' : ''} onchange="hhColSet('${c.id}','sensitive',this.checked)"></td></tr>`).join('') || '<tr><td colspan="6" class="muted">ยังไม่มี (ซิงก์กับชีตก่อน)</td></tr>'}</tbody></table></div></div>`);
+    <div class="muted">รายการช่องมาจากหัวตารางของชีตเดิม (เลิกใช้ชีตแล้ว รายการช่องคงที่) · "บทบาท" ใช้ในสถิติ แผนที่ และตัวกรอง · "แสดงในตาราง" = คอลัมน์ในหน้ารายการ · "ส่วนบุคคล" = ปิดบังในตาราง</div>
+    <div class="tscroll"><table><thead><tr><th>#</th><th>หัวคอลัมน์</th><th>สูตร</th><th>บทบาท</th><th>แสดงในตาราง</th><th>ส่วนบุคคล</th></tr></thead><tbody>${(T ? T.cols : []).map(c => `<tr><td>${c.col_index}</td><td>${esc(c.header)}</td><td>${c.is_formula ? 'ⓕ' : ''}</td><td><select onchange="hhColSet('${c.id}','role',this.value||null)"><option value="">—</option>${Object.entries(HH_ROLE_LABEL).map(([k, l]) => `<option value="${k}" ${c.role === k ? 'selected' : ''}>${l}</option>`).join('')}${c.role && !HH_ROLE_LABEL[c.role] ? `<option selected>${esc(c.role)}</option>` : ''}</select></td><td><input type="checkbox" ${c.in_list ? 'checked' : ''} onchange="hhColSet('${c.id}','in_list',this.checked)"></td><td><input type="checkbox" ${c.sensitive ? 'checked' : ''} onchange="hhColSet('${c.id}','sensitive',this.checked)"></td></tr>`).join('') || '<tr><td colspan="6" class="muted">ยังไม่มี</td></tr>'}</tbody></table></div></div>`);
 }
 async function hhColSet(id, k, v) { try { await api.update('hh.col', id, { [k]: v }); await hhLoad(true); toast('บันทึกแล้ว'); } catch (e) { fail(e); } }
