@@ -88,7 +88,7 @@ function hhInnovPage(view) {
   const all = invRows(), dn = invDimNames();
   const cnt = k => all.filter(r => r.scr === k).length, sel = all.filter(r => r.scr === 'ใช่');
   const assessed = sel.filter(r => r.dev.latest), official = sel.filter(r => r.dev.latest === 3), byRound = n => sel.filter(r => r.dev.latest === n).length;
-  const selNoAssess = sel.filter(r => !r.dev.latest), assessNoSel = all.filter(r => r.dev.latest && r.scr !== 'ใช่');
+  const curRound = Math.max(0, ...sel.map(r => r.dev.latest || 0)), selNoAssess = sel.filter(r => !r.dev.latest), assessNoSel = all.filter(r => r.dev.latest && r.dev.latest >= curRound && r.scr !== 'ใช่');   // DEC-134: ผู้ที่ออกไปแล้วและมีแค่รอบเก่า = ประวัติ ไม่เตือน
   const screened = all.filter(r => r.scr).length;
   // ตัวกรองตาราง
   const t = st.q.trim().toLowerCase();
