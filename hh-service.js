@@ -118,7 +118,7 @@ async function svLedgerSave() {
   for (const k of ks) { const it = svItem(k), o = (L.byMonth[mid] || []).find(x => x.item_id === it.id), rec = { amount: f.money[k], qty: null, price: null };
     if (o) await api.update('hh.ledger_line', o.id, rec); else await api.insert('hh.ledger_line', { month_id: mid, item_id: it.id, ...rec }); }
   H.lg = await lgLoad(H.link.project_id);
-  if (typeof lgToMonthly === 'function') await lgToMonthly([f.code]);   // DEC-138 เดือนที่รวมจากรายละเอียดแล้ว → ปรับยอดตามเงินขายหนอนที่เพิ่ม
+  if (typeof lgToMonthly === 'function') await lgToMonthly([f.code], [{ code: f.code, month: svMonth() }]);   // DEC-138 ต้นทุน/รายได้ที่กรอกในหน้ารับหนอน = รายละเอียด → รวมเป็นยอดของเดือนนั้น
 }
 async function svSave() {
   const H = S._hh, f = S._svf;

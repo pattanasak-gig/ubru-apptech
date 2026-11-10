@@ -18,9 +18,9 @@ const mfHas = x => !!x && (x.extra_income != null || x.cost_cut != null);
 const mfGrp = code => { const xs = ((S._hh.rp || {}).months || []).filter(x => x.hh_code === code && x.grp).sort((a, b) => String(b.month).localeCompare(String(a.month))); return xs.length ? xs[0].grp : null; };
 
 // รวมรายละเอียด → ยอดรายเดือน · คืนจำนวนแถวที่เปลี่ยน
-//   only = [{code, month}] → รวมเดือนนั้น (กดบันทึกในหน้า "บันทึกแยกรายการ" = กรอกรายละเอียดครบแล้ว)
-//   ไม่ระบุ only → รวมใหม่เฉพาะเดือนที่เคยรวมจากรายละเอียดแล้ว (source = 'ledger') เช่น หลังแก้ค่าฐาน หรือหน้ารับหนอนเพิ่มเงินขายหนอน
-//   เงินที่หน้ารับหนอนลงไว้เพียงบางรายการ ไม่ทำให้เดือนนั้นถูกรวมเอง (รายละเอียดยังไม่ครบ) จนกว่าจะกดบันทึกในหน้าบันทึกแยกรายการ
+//   only = [{code, month}] → รวมเดือนนั้น (กดบันทึกในหน้า "บันทึกแยกรายการ" หรือหน้า "รับหนอน/บริการ" ที่กรอกต้นทุน/รายได้)
+//   ไม่ระบุ only → รวมใหม่เฉพาะเดือนที่เคยรวมจากรายละเอียดแล้ว (source = 'ledger') เช่น หลังแก้ค่าฐาน
+//   รายละเอียดที่มีอยู่ก่อนกติกานี้ (ยังไม่เคยรวม) จะไม่ถูกรวมเองจนกว่าจะเปิดแล้วกดบันทึก
 async function lgToMonthly(codes, only) {
   const H = S._hh; if (!H || !H.rp || !H.lg) return 0;
   const pj = H.link.project_id, same = (a, b) => (a == null && b == null) || (a != null && b != null && Math.abs(+a - +b) < 0.005);
@@ -29,6 +29,7 @@ async function lgToMonthly(codes, only) {
   let n = 0;
   for (const r of led) {
     const v = mfFromLedger(r), e = mfRec(r.code, r.month);
+    if (e && e.source === 'sheet10') continue;   // ยอดตามรายงานที่ส่งแล้ว (นำเข้าจากชีต) ไม่แทนที่
     if (!isOnly(r) && !(e && e.source === 'ledger')) continue;
     if (e && e.source === 'ledger' && same(e.extra_income, v.extra_income) && same(e.cost_cut, v.cost_cut)) continue;
     const patch = { ...v, source: 'ledger', note: MF_NOTE_LEDGER };
@@ -59,14 +60,14 @@ function hhMonthlyPage(view, month) {
   const led = Object.fromEntries((H.lg ? lgRows() : []).filter(r => r.month === month).map(r => [r.code, r]));
   const prevM = lgShift(month, -1), tx = (r, role) => String(H.roleVal(r, '01', role) ?? '').trim();
   const rows = H.reg.map(r => { const code = r.hh_code, e = mfRec(code, month), p = mfRec(code, prevM), L = led[code];
-    return { r, code, name: tx(r, 'name'), tambon: tx(r, 'tambon'), moo: tx(r, 'moo'), e, p, L, lock: !!e && e.source === 'ledger', done: mfHas(e) }; });
+    return { r, code, name: tx(r, 'name'), tambon: tx(r, 'tambon'), moo: tx(r, 'moo'), e, p, L, lock: !!e && (e.source === 'ledger' || e.source === 'sheet10'), rep: !!e && e.source === 'sheet10', done: mfHas(e) }; });
   const tambons = [...new Set(rows.map(x => x.tambon).filter(Boolean))].sort(), t = st.q.trim().toLowerCase();
   const list = rows.filter(x => (!st.tambon || x.tambon === st.tambon) && (!st.todo || !x.done) && (!t || [x.code, x.name, x.tambon, 'ม.' + x.moo].some(v => String(v).toLowerCase().includes(t))));
   const nDone = rows.filter(x => x.done).length, nLed = rows.filter(x => x.lock).length, oos = mfOutOfSync();
   const months = [0, -1, -2, -3].map(k => lgShift(now, k));
   const cnt = m => H.reg.filter(r => mfHas(mfRec(r.hh_code, m))).length;
   const val = (x, k) => { const v = !x.lock && st.vals[x.code] && st.vals[x.code][k] !== undefined ? st.vals[x.code][k] : x.e ? x.e[k] : null; return v == null ? '' : v; };
-  const help = qBtn('บันทึกยอดรายเดือน', `<p>ทุกครัวเรือนต้องมียอด "รายได้เสริม" และ "ต้นทุนลด" ทุกเดือน แดชบอร์ดรายได้ใช้ยอดนี้เทียบเป้า ${lgBaht(LG_TARGET)} บาท/ครัวเรือน/เดือน</p><p><b>กรอกแบบละเอียด</b> แล้วกดบันทึกในหน้า "บันทึกแยกรายการ" → ระบบรวมเป็นยอดของเดือนนั้นให้อัตโนมัติและล็อกช่อง (แก้ที่หน้ารายละเอียด) · เงินขายหนอนที่ลงจากหน้ารับหนอนเป็นรายละเอียดบางส่วน ยังไม่ถูกรวมจนกว่าจะกดบันทึกในหน้ารายละเอียด<br>รายได้เสริม = จ. รายได้จากโครงการ + (ง. รายได้เดิมที่เกี่ยวข้อง − ฐาน ง.) · ต้นทุนลด = ฐาน ก. − ก. รายจ่ายที่โครงการลดได้</p><p><b>ไม่มีรายละเอียด</b> → กรอกยอดรวมเองในหน้านี้ (ไม่ต้องคำนวณ)</p><p>เดือนอนาคตบันทึกไม่ได้ · แถวที่เคยบันทึกแล้วแก้ได้ · ลบได้เฉพาะ super admin</p>`);
+  const help = qBtn('บันทึกยอดรายเดือน', `<p>ทุกครัวเรือนต้องมียอด "รายได้เสริม" และ "ต้นทุนลด" ทุกเดือน แดชบอร์ดรายได้ใช้ยอดนี้เทียบเป้า ${lgBaht(LG_TARGET)} บาท/ครัวเรือน/เดือน</p><p><b>กรอกแบบละเอียด</b> แล้วกดบันทึกในหน้า "บันทึกแยกรายการ" → ระบบรวมเป็นยอดของเดือนนั้นให้อัตโนมัติและล็อกช่อง (แก้ที่หน้ารายละเอียด) · ต้นทุนและรายได้ที่กรอกในหน้า "รับหนอน/บริการ" นับเป็นรายละเอียดเช่นกัน<br>รายได้เสริม = จ. รายได้จากโครงการ + (ง. รายได้เดิมที่เกี่ยวข้อง − ฐาน ง.) · ต้นทุนลด = ฐาน ก. − ก. รายจ่ายที่โครงการลดได้</p><p><b>ไม่มีรายละเอียด</b> → กรอกยอดรวมเองในหน้านี้ (ไม่ต้องคำนวณ)</p><p>ยอดตามรายงานที่นำเข้าจากชีตเดิม (เม.ย.–ต.ค. 2569) ล็อกไว้ ไม่ถูกแทนที่ทั้งจากการกรอกและจากรายละเอียด เพื่อให้ตรงกับรายงานที่ส่งแล้ว</p><p>เดือนอนาคตบันทึกไม่ได้ · แถวที่กรอกเองแก้ได้ · ลบได้เฉพาะ super admin</p>`);
   view.innerHTML = hhShell('monthly', `<div class="card"><div class="cardhead"><h4>บันทึกยอดรายเดือน ${help}</h4><a class="small" href="#hh/income" onclick="S._lgd={...(S._lgd||{}),src:'report'}">แดชบอร์ดรายได้ ›</a></div>
       <div class="lg-chips">${months.map(m => `<a class="lg-chip ${m === month ? 'on' : ''}" href="#hh/monthly/${m}">${esc(lgMonthLabel(m))} <span class="muted">${fmtInt(cnt(m))}/${fmtInt(H.reg.length)}</span></a>`).join('')}<label style="margin:0">เดือนอื่น <input type="month" max="${now}" value="${month}" style="width:auto" onchange="if(this.value)location.hash='#hh/monthly/'+this.value"></label></div>
       <div class="kpis" style="margin-top:8px"><div class="kpi hero"><div class="l">บันทึกแล้ว ${esc(lgMonthLabel(month))}</div><div class="v">${fmtInt(nDone)} / ${fmtInt(rows.length)}</div><div class="muted" style="color:#dbeafe">จากรายละเอียด ${fmtInt(nLed)} · ยอดรวม ${fmtInt(nDone - nLed)}</div></div>
@@ -82,7 +83,7 @@ function hhMonthlyPage(view, month) {
         return `<tr><td class="nowrap"><b>${esc(x.code)}</b> ${esc(x.name)}<div class="muted" style="font-size:12px">${x.moo ? 'ม.' + esc(x.moo) + ' ' : ''}ต.${esc(x.tambon)}${mfGrp(x.code) ? ' · กลุ่ม ' + esc(mfGrp(x.code)) : ''}</div></td>
           <td class="num muted" data-l="เดือนก่อน">${mfHas(x.p) ? `${lgBaht(x.p.extra_income)} / ${lgBaht(x.p.cost_cut)}` : '–'}</td><td class="num" data-l="รายได้เสริม (บาท)">${inp('extra_income', ex)}</td><td class="num" data-l="ต้นทุนลด (บาท)">${inp('cost_cut', ct)}</td>
           <td class="num nowrap" data-l="รวม">${has ? `<i class="dot" style="background:${s.c}"></i> ${lgBaht(tot)}` : '<span style="color:#C62828">ยังไม่บันทึก</span>'}</td>
-          <td class="nowrap">${x.lock ? `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}">จากรายละเอียด · แก้ ›</a>` : x.L ? `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}" title="มีเงินจากหน้ารับหนอนบางรายการ กดบันทึกในหน้ารายละเอียดเมื่อกรอกครบ">มีรายละเอียดบางส่วน · กรอกให้ครบ ›</a>` : `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}">กรอกแบบละเอียด ›</a>`}</td></tr>`; }).join('') || '<tr><td colspan="6" class="muted">ไม่มีครัวเรือนตามตัวกรอง</td></tr>'}
+          <td class="nowrap">${x.rep ? '<span class="muted" title="ยอดตามรายงานที่ส่งแล้ว นำเข้าจากชีตเดิม ระบบล็อกไว้">ตามรายงาน (ล็อก)</span>' : x.lock ? `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}">จากรายละเอียด · แก้ ›</a>` : x.L ? `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}" title="มีรายละเอียดที่ยังไม่เคยรวม เปิดแล้วกดบันทึกเพื่อรวมเป็นยอดเดือนนี้">มีรายละเอียด · กดบันทึกเพื่อรวมยอด ›</a>` : `<a class="small" href="#hh/ledger/${encodeURIComponent(x.code)}/${month}">กรอกแบบละเอียด ›</a>`}</td></tr>`; }).join('') || '<tr><td colspan="6" class="muted">ไม่มีครัวเรือนตามตัวกรอง</td></tr>'}
       </tbody></table></div>
       <div class="lg-bar"><div class="card" style="margin:8px 0 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="mfDirty" class="muted">${mfDirtyText()}</span><button onclick="mfSave()">บันทึก</button></div></div></div>`);
 }
@@ -104,7 +105,7 @@ async function mfSave() {
     let n = 0;
     for (const code of codes) {
       const v = st.vals[code], e = mfRec(code, st.month), cur = { extra_income: e ? e.extra_income : null, cost_cut: e ? e.cost_cut : null, ...v };
-      if (e) { if (e.source === 'ledger') continue; await api.update('hh.report_month', e.id, { extra_income: cur.extra_income, cost_cut: cur.cost_cut, source: 'manual' }); n++; }
+      if (e) { if (e.source === 'ledger' || e.source === 'sheet10') continue; await api.update('hh.report_month', e.id, { extra_income: cur.extra_income, cost_cut: cur.cost_cut, source: 'manual' }); n++; }
       else if (cur.extra_income != null || cur.cost_cut != null) { await api.insert('hh.report_month', { project_id: H.link.project_id, hh_code: code, month: st.month + '-01', extra_income: cur.extra_income, cost_cut: cur.cost_cut, grp: mfGrp(code), source: 'manual' }); n++; }
     }
     st.vals = {}; H.rp = await rpLoad(H.link.project_id); toast(`บันทึกยอดรายเดือนแล้ว ${n} ครัวเรือน`); render();
