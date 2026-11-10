@@ -210,7 +210,7 @@ async function lgBaseSave(code) {
 // ---------------------------------------------------------------------
 function hhIncomePage(view) {
   const H = S._hh, L = H.lg; if (!L) return view.innerHTML = hhShell('income', lgNeed());
-  const st = S._lgd = S._lgd || { level: 'all', key: '', from: lgShift(lgThisMonth(), -11), to: lgThisMonth() };
+  const st = S._lgd = S._lgd || { level: 'all', key: '', from: lgShift(lgThisMonth(), -11), to: lgThisMonth(), src: H.rp && H.rp.months.length ? 'report' : 'ledger' };   // DEC-136 เริ่มที่ยอดรายเดือนเมื่อมีข้อมูล
   const all = (st.src === 'report' && H.rp ? rpRows() : lgRows()).filter(r => r.month >= st.from && r.month <= st.to);   // DEC-132: เลือกแหล่งข้อมูล
   const inScope = r => st.level === 'all' || !st.key ? true : st.level === 'tambon' ? r.tambon === st.key : st.level === 'moo' ? lgVillage(r) === st.key : r.code === st.key;
   const rows = all.filter(inScope);
@@ -238,9 +238,9 @@ function hhIncomePage(view) {
         <select aria-label="ระดับการดู" style="width:auto" onchange="S._lgd.level=this.value;S._lgd.key='';render()">${[['all', 'ทั้งโครงการ'], ['tambon', 'ตำบล'], ['moo', 'หมู่บ้าน'], ['hh', 'ครัวเรือน']].map(([k, l]) => `<option value="${k}" ${st.level === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         ${st.level !== 'all' ? `<select aria-label="เลือก" style="width:auto;max-width:260px" onchange="S._lgd.key=this.value;render()"><option value="">ทั้งหมด</option>${opts(st.level).map(([v, l]) => `<option value="${esc(v)}" ${v === st.key ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}
         <label style="margin:0">ตั้งแต่ <input type="month" value="${st.from}" style="width:auto" onchange="S._lgd.from=this.value;render()"></label><label style="margin:0">ถึง <input type="month" value="${st.to}" style="width:auto" onchange="S._lgd.to=this.value;render()"></label>
-        <select aria-label="แหล่งข้อมูล" style="width:auto" onchange="S._lgd.src=this.value;render()"><option value="ledger">จากบันทึกรายรับรายจ่าย</option><option value="report" ${st.src === 'report' ? 'selected' : ''} ${H.rp ? '' : 'disabled'}>ตามรายงาน (ชีต 10)</option></select>
+        <select aria-label="แหล่งข้อมูล" style="width:auto" onchange="S._lgd.src=this.value;render()"><option value="report" ${st.src === 'report' ? 'selected' : ''} ${H.rp ? '' : 'disabled'}>ยอดรายเดือน (รายได้เสริม + ต้นทุนลด)</option><option value="ledger" ${st.src === 'report' ? '' : 'selected'}>บันทึกแยกรายการ</option></select>
         ${st.level !== 'all' ? '<button class="small secondary" onclick="S._lgd.level=\'all\';S._lgd.key=\'\';render()">‹ ทั้งโครงการ</button>' : ''}</div></div>
-    ${st.src === 'report' ? '<div class="banner info" style="margin:0 0 8px">ค่าตามรายงาน (ชีต 10): รายได้เสริม + ต้นทุนลด ที่ใส่ในชีตรายครัวเรือนรายเดือน ไม่ใช่ยอดจากบันทึกรายรับรายจ่าย · "จ." = รายได้เสริม</div>' : ''}
+    ${st.src === 'report' ? '<div class="banner info" style="margin:0 0 8px">ยอดรายเดือน: รายได้เสริม + ต้นทุนลด ของแต่ละครัวเรือน (ยอดรวมต่อเดือน ไม่แยกรายการ) · "จ." = รายได้เสริม</div>' : ''}
     ${!rows.length ? `<div class="card"><p class="muted" style="margin:0 0 12px">ยังไม่มีการบันทึกในช่วงที่เลือก</p><div><a class="btn" style="text-decoration:none" href="#hh/ledger">＋ บันทึกรายรับรายจ่าย</a></div></div>` : `
     <div class="kpis">
       <div class="kpi hero"><div class="l">เฉลี่ยต่อครัวเรือน เดือน ${lgMonthLabel(last)}</div><div class="v" style="color:${lgStatus(avg(lastRows.map(r => r.g.total))).c}">${lgBaht(avg(lastRows.map(r => r.g.total)))} บาท</div><div class="muted">เป้า ${lgBaht(LG_TARGET)} บาท/เดือน</div></div>

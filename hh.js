@@ -4,10 +4,10 @@
 //   ซิงก์แบบกดปุ่ม (ระบบหลังบ้าน hh_sync): ตรวจ → อัปเดต · ไม่อัตโนมัติ
 //   หน้าย่อย: #hh (ภาพรวม) · #hh/t/<แท็บ> · #hh/h/<รหัส> · #hh/map · #hh/check · #hh/sync · #hh/ref · #hh/cols
 // =====================================================================
-const HH_SUB = [['overview', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'เกณฑ์ 08'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต'], ['items', 'รายการรายรับรายจ่าย'], ['cols', 'ตั้งค่าคอลัมน์']];
+const HH_SUB = [['overview', 'ภาพรวม'], ['service', 'รับหนอน/บริการ'], ['innov', 'นวัตกรชุมชน'], ['income', 'แดชบอร์ดรายได้'], ['ledger', 'บันทึกรายรับรายจ่าย'], ['t/01', 'ทะเบียน'], ['t/02', 'รายได้'], ['t/03', 'อาหารสัตว์'], ['t/04', 'ปุ๋ย'], ['t/05', 'หนี้สิน'], ['t/06', 'คัดกรองนวัตกร'], ['t/07', 'ประเมินนวัตกร'], ['t/09', 'สรุปพัฒนาการ'], ['ref', 'ข้อมูลอ้างอิง'], ['import', 'นำเข้ายอดรายเดือน'], ['map', 'แผนที่ครัวเรือน'], ['check', 'ตรวจความสอดคล้อง'], ['sync', 'ซิงก์กับชีต'], ['items', 'รายการรายรับรายจ่าย'], ['cols', 'ตั้งค่าคอลัมน์']];
 // กลุ่มเมนูตามงาน (DEC-130): บันทึกงานประจำ · รายงาน · ข้อมูลพื้นฐานจากชีต · ดูแลข้อมูลและตั้งค่า (admin)
-const HH_GROUPS = [['work', 'บันทึกงานประจำ|งานประจำ', ['service', 'ledger', 't/07']], ['report', 'รายงาน|รายงาน', ['overview', 'income', 'innov', 'map']], ['base', 'ข้อมูลพื้นฐาน|พื้นฐาน', ['t/01', 't/02', 't/03', 't/04', 't/05', 't/06', 't/09']], ['admin', 'ดูแลข้อมูลและตั้งค่า|ตั้งค่า', ['sync', 'check', 'items', 'cols', 'ref']]];
-const HH_ADMIN_ONLY = ['service', 'items', 'cols'];
+const HH_GROUPS = [['work', 'บันทึกงานประจำ|งานประจำ', ['service', 'ledger', 't/07']], ['report', 'รายงาน|รายงาน', ['overview', 'income', 'innov', 'map']], ['base', 'ข้อมูลพื้นฐาน|พื้นฐาน', ['t/01', 't/02', 't/03', 't/04', 't/05', 't/06', 't/09']], ['admin', 'ดูแลข้อมูลและตั้งค่า|ตั้งค่า', ['sync', 'import', 'check', 'items', 'cols', 'ref']]];
+const HH_ADMIN_ONLY = ['service', 'items', 'cols', 'import'];
 const HH_LONG = /หมายเหตุ|หลักฐาน|Pain|Gain|ทักษะ|คุณลักษณะ|จุดแข็ง|สิ่งที่ต้องพัฒนา|แผนพัฒนา|เรื่องที่เคยถ่ายทอด|เครือข่ายความร่วมมือ|ผลผลิตหลัก|ช่องทาง/;
 const HH_COLORS = { A: '#2E7D32', B: '#F9A825', C: '#EF6C00', '': '#455A64' };
 const hhCanAdmin = () => isSuper() || (S.me && S.me.role === 'admin');
@@ -64,7 +64,7 @@ async function pageHH(view) {
   const parts = location.hash.replace(/^#hh\/?/, '').split('/'), sub = parts[0] || '';
   let H; try { H = await hhLoad(); } catch (e) { const f = friendlyError(e); return view.innerHTML = `<div class="card"><h3 style="margin-top:0">ครัวเรือน AppTech</h3><div class="banner warn">${esc(f.title)}</div><div class="muted" style="margin-top:6px">${esc(f.hint)} (เจ้าของโครงการต้องรัน sql/014_household.sql และเพิ่มสคีมา hh ใน Exposed schemas ก่อน)</div></div>`; }
   if (!H) return view.innerHTML = `<div class="card">บัญชีนี้ไม่มีสิทธิ์ข้อมูลครัวเรือน (เฉพาะ super admin · admin · ผู้บันทึกที่สังกัดโครงการ บพท.69_AppTech)</div>`;
-  if (!H.reg.length && !['sync', 'cols', 'ref'].includes(sub)) return view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">ยังไม่มีข้อมูลครัวเรือนในระบบ</h4><div>ขั้นแรก ดึงข้อมูลจากชีตเข้าระบบที่แท็บ <a href="#hh/sync">ซิงก์กับชีต</a> → "ตรวจกับชีต" → "อัปเดตตามนี้"${hhCanAdmin() ? '' : ' (admin เป็นผู้กดอัปเดต)'}</div></div>`);
+  if (!H.reg.length && !['sync', 'cols', 'ref', 'import'].includes(sub)) return view.innerHTML = hhShell(sub, `<div class="card"><h4 style="margin-top:0">ยังไม่มีข้อมูลครัวเรือนในระบบ</h4><div>ขั้นแรก ดึงข้อมูลจากชีตเข้าระบบที่แท็บ <a href="#hh/sync">ซิงก์กับชีต</a> → "ตรวจกับชีต" → "อัปเดตตามนี้"${hhCanAdmin() ? '' : ' (admin เป็นผู้กดอัปเดต)'}</div></div>`);
   if (!sub && hhCanAdmin() && typeof hhServicePage === 'function') return hhServicePage(view);   // DEC-130: หน้าแรกของผู้ดูแล = รับหนอน/บริการ
   if (sub === 'overview') return hhOverview(view);
   if (sub === 't') return hhTabPage(view, parts[1] || '01');
@@ -78,6 +78,7 @@ async function pageHH(view) {
   if (sub === 'check') return hhCheckPage(view);
   if (sub === 'sync') return hhSyncPage(view);
   if (sub === 'ref') return hhRefPage(view);
+  if (sub === 'import') return hhImportPage(view);   // DEC-136
   if (sub === 'cols') return hhColsPage(view);
   return hhOverview(view);
 }
@@ -271,12 +272,8 @@ async function hhPullToggle() {   // DEC-133: ช่วงที่เปลี�
 function hhPick(i, v) { const c = S._hhPlan.conflicts[i]; S._hhChoice = S._hhChoice || {}; S._hhChoice[c.tab_key + '\u0002' + c.key + '\u0001' + c.header] = v; }
 
 // ---------------------------------------------------------------------
-// เกณฑ์ 08 · ตั้งค่าคอลัมน์
+// ตั้งค่าคอลัมน์ · หน้า "ข้อมูลอ้างอิง" (hhRefPage) ย้ายไป hh-import.js (DEC-136)
 // ---------------------------------------------------------------------
-function hhRefPage(view) {
-  const T = S._hh.byKey['08'], vals = T && T.tab.meta ? T.tab.meta.values || [] : [];
-  view.innerHTML = hhShell('ref', `<div class="card"><div class="cardhead"><h4>เกณฑ์อ้างอิง (แท็บ 08)</h4>${T && T.tab.meta ? `<span class="muted">อ่านจากชีต ${thDate(T.tab.meta.read_at)}</span>` : ''}</div>${vals.length ? `<div class="tscroll"><table><tbody>${vals.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="muted">ยังไม่มี (ซิงก์กับชีตก่อน)</div>'}</div>`);
-}
 const HH_ROLE_LABEL = { code: 'รหัส', name: 'ชื่อ', status: 'สถานะ', group: 'กลุ่มหลัก', group2: 'กลุ่มรอง', tambon: 'ตำบล', lat: 'ละติจูด', lng: 'ลองจิจูด', members: 'สมาชิก', income: 'รายได้รวม', expense: 'รายจ่าย', feed_cost: 'ค่าอาหารสัตว์', fert_cost: 'ค่าปุ๋ย', baseline: 'Baseline', debt_payment: 'ผ่อนหนี้', larvae_need: 'ต้องการหนอน', manure_need: 'ต้องการมูล', income_regularity: 'ความสม่ำเสมอรายได้', income_source: 'แหล่งรายได้', animal: 'ชนิดสัตว์', crop: 'พืช', screen_result: 'สรุปคัดกรอง', round: 'รอบประเมิน', national_id: 'เลขบัตร', phone: 'โทรศัพท์' };
 function hhColsPage(view) {
   if (!hhCanAdmin()) return view.innerHTML = hhShell('cols', '<div class="card">เฉพาะ admin</div>');
