@@ -28,16 +28,17 @@ function hhCalc(byKey) {
   // ทะเบียน 01 (รหัสแรกที่พบ เหมือน MATCH)
   const reg = {}; for (const r of rows('01')) if (!(r.hh_code in reg)) reg[r.hh_code] = r;
   const look = (code, L) => { const r = reg[code]; return r ? get('01', r, L) : undefined; };   // undefined = ไม่พบรหัส
-  const lookDash = (code, L) => { const v = look(code, L); return hcBlank(v) ? '–' : v; };     // IF(lookup="","–",lookup)
+  const lookDash = (code, L) => { const v = look(code, L); return hcBlank(v) || String(v).trim() === '-' ? '–' : v; };   // IF(lookup="","–",lookup) · ทะเบียนที่พิมพ์ "-" ชีตแสดง "–" (ตรวจกับค่าจริง 10 พ.ย. 2569)
   const sumIf = (k, code, L) => rows(k).filter(r => r.hh_code === code).reduce((a, r) => a + hcN(get(k, r, L)), 0);
   const nameOr = code => { const v = look(code, 'F'); return v === undefined ? '⚠ ไม่พบรหัส' : hcText(v); };
 
   // 02–05: ชื่อจากทะเบียน
   for (const k of ['02', '03', '04', '05']) for (const r of rows(k)) set(k, r, 'B', nameOr(r.hh_code));
-  // 03: ค่าอาหาร/เดือน = ปริมาณ × ราคา (เมื่อมีทั้งคู่) · ตรวจสอบความสอดคล้อง
+  // 03: ค่าอาหาร/เดือน = ปริมาณ × ราคา เฉพาะเมื่อยังว่าง (ในชีตบางแถวพิมพ์ยอดเอง เช่น BSF-004) → ช่องนี้แก้เองได้ · ตรวจสอบความสอดคล้อง
+  const h03H = C['03'].h('H'); if (h03H) C['03'].f[h03H] = true;
   for (const r of rows('03')) {
     const F = get('03', r, 'F'), G = get('03', r, 'G');
-    if (!hcBlank(F) && !hcBlank(G)) set('03', r, 'H', hcN(F) * hcN(G));
+    if (!hcBlank(F) && !hcBlank(G) && hcBlank(get('03', r, 'H'))) set('03', r, 'H', hcN(F) * hcN(G));
     const H = get('03', r, 'H');
     set('03', r, 'I', hcBlank(F) || hcBlank(G) || hcBlank(H) ? null : Math.abs(hcN(F) * hcN(G) - hcN(H)) <= Math.max(20, hcN(H) * 0.1) ? '✓ สอดคล้อง' : '⚠ ตรวจสอบ: ปริมาณ×ราคา = ' + Math.round(hcN(F) * hcN(G)).toLocaleString('en-US'));
   }
@@ -83,5 +84,7 @@ function hhCalc(byKey) {
       set('07', r, L, isR1 || hcBlank(v) ? null : hcN(v) - base.reduce((a, x) => a + hcN(get('07', x, D)), 0));   // = SUMIFS ของชีต (ไม่มีรอบ 1 = ลบด้วย 0)
     }
   }
+  // ช่องที่ผู้ใช้กรอกเองได้ (ระบบเติมให้เมื่อว่าง) → ไม่ล็อกในฟอร์ม
+  for (const c of ((T['03'] || {}).cols || [])) if (c.header === h03H) c.is_formula = false;
   return out;
 }
