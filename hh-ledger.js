@@ -109,7 +109,8 @@ function hhLedgerPage(view, code, month) {
     <div class="card"><h4 style="margin:0 0 6px">2 · เดือนและช่องทาง</h4>
       <div class="lg-chips">${monthChips}<label class="lg-chip" style="cursor:pointer">เลือกเดือน <input type="month" value="${month}" max="${lgThisMonth()}" style="width:auto;min-height:32px;padding:2px 6px" onchange="if(this.value)go('#hh/ledger/${encodeURIComponent(code)}/'+this.value)"></label></div>
       <div class="lg-chips" style="margin-top:6px">${LG_CHANNELS.map(([k, l]) => `<button type="button" class="lg-chip ${f.channel === k ? 'on' : ''}" onclick="lgChannel('${k}',this)">${l}</button>`).join('')}</div>
-      <div class="row" style="margin-top:6px;gap:6px">${rec ? `<span class="pill">แก้ไขการบันทึกเดือน ${lgMonthLabel(month)}</span>` : `<span class="pill" style="background:#e0f2fe">บันทึกใหม่ เดือน ${lgMonthLabel(month)}</span>`}${!rec && prev ? `<button class="small secondary" onclick="lgCopyPrev('${prev.id}')">ใช้รายการเดือน ${lgMonthLabel(lgMonthKey(prev.month))}</button>` : ''}</div></div>
+      <div class="row" style="margin-top:6px;gap:6px">${rec ? `<span class="pill">แก้ไขการบันทึกเดือน ${lgMonthLabel(month)}</span>` : `<span class="pill" style="background:#e0f2fe">บันทึกใหม่ เดือน ${lgMonthLabel(month)}</span>`}${!rec && prev ? `<button class="small secondary" onclick="lgCopyPrev('${prev.id}')">ใช้รายการเดือน ${lgMonthLabel(lgMonthKey(prev.month))}</button>` : ''}</div>
+      ${(() => { const e = typeof mfRec === 'function' ? mfRec(code, month) : null; return `<div class="muted" style="margin-top:6px;font-size:13px">บันทึกแล้วระบบรวมเป็นยอดรายเดือนให้อัตโนมัติ (รายได้เสริม + ต้นทุนลด)${e && e.source !== 'ledger' && (e.extra_income != null || e.cost_cut != null) ? ` · <b>เดือนนี้มียอดรวมที่กรอกไว้ ${lgBaht((+e.extra_income || 0) + (+e.cost_cut || 0))} บาท จะถูกแทนด้วยยอดจากรายละเอียด</b>` : ''}</div>`; })()}</div>
     <div class="lg-sep">นับเข้าเป้า 5,000 บาท (ก. จ. ง.) และผลผลิตที่ใช้เอง</div>
     ${LG_GROUPS.slice(0, 4).map(grpCard).join('')}
     <div class="lg-sep">บันทึกเพื่อดูรายรับรายจ่ายทั้งหมด (ไม่นับเข้าเป้า)</div>
@@ -174,13 +175,15 @@ async function lgSave() {
       else if (has) await api.insert('hh.ledger_line', { month_id: monthId, item_id: it.id, ...rec });
       else if (o) await api.update('hh.ledger_line', o.id, { status: 'inactive' });
     }
-    toast(`บันทึก ${f.code} เดือน ${lgMonthLabel(f.month)} แล้ว`);
-    H.lg = await lgLoad(H.link.project_id); render();
+    H.lg = await lgLoad(H.link.project_id);
+    if (typeof lgToMonthly === 'function') await lgToMonthly([f.code], [{ code: f.code, month: f.month }]);   // DEC-138 รวมเป็นยอดรายเดือนอัตโนมัติ
+    toast(`บันทึก ${f.code} เดือน ${lgMonthLabel(f.month)} แล้ว · รวมเป็นยอดรายเดือนให้แล้ว`); render();
   } catch (e) { fail(e, 'บันทึกรายรับรายจ่ายไม่สำเร็จ'); }
 }
 async function lgDelete(monthId) {
-  if (!confirm('ยกเลิกการบันทึกเดือนนี้ของครัวเรือนนี้? (ตัวเลขของเดือนนี้จะไม่ถูกนับในแดชบอร์ด)')) return;
-  try { await api.update('hh.ledger_month', monthId, { status: 'inactive' }); toast('ยกเลิกแล้ว'); S._hh.lg = await lgLoad(S._hh.link.project_id); render(); } catch (e) { fail(e); }
+  if (!confirm('ยกเลิกรายละเอียดเดือนนี้ของครัวเรือนนี้?\nยอดรายเดือนที่รวมไว้จะถูกล้าง และต้องไปกรอกยอดรวมแทน')) return;
+  const code = ((S._hh.lg.months || []).find(m => m.id === monthId) || {}).hh_code;
+  try { await api.update('hh.ledger_month', monthId, { status: 'inactive' }); S._hh.lg = await lgLoad(S._hh.link.project_id); if (code && typeof lgToMonthly === 'function') await lgToMonthly([code]); toast('ยกเลิกแล้ว · เดือนนี้ต้องกรอกยอดรวมแทน'); render(); } catch (e) { fail(e); }
 }
 // ค้นหาครัวเรือน (พิมพ์บางส่วน → เลือก)
 function lgSearch(q) {
@@ -202,7 +205,7 @@ async function lgBaseSave(code) {
   if (isNaN(e) || isNaN(i)) return toastErr('ตัวเลขไม่ถูกต้อง', 'ใส่ตัวเลขที่ไม่ติดลบ หรือเว้นว่าง');
   try { const old = (H.lg.base || {})[code], rec = { e_direct: e, i_related: i, note: $('#lgBN').value.trim() || null };
     if (old) await api.update('hh.baseline', old.id, rec); else await api.insert('hh.baseline', { project_id: H.link.project_id, hh_code: code, ...rec });
-    closeModal(); toast('บันทึกค่าฐานแล้ว'); H.lg = await lgLoad(H.link.project_id); render(); } catch (e2) { fail(e2); }
+    closeModal(); H.lg = await lgLoad(H.link.project_id); if (typeof lgToMonthly === 'function') await lgToMonthly([code]); toast('บันทึกค่าฐานแล้ว · คำนวณยอดรายเดือนใหม่แล้ว'); render(); } catch (e2) { fail(e2); }
 }
 
 // ---------------------------------------------------------------------
@@ -238,10 +241,10 @@ function hhIncomePage(view) {
         <select aria-label="ระดับการดู" style="width:auto" onchange="S._lgd.level=this.value;S._lgd.key='';render()">${[['all', 'ทั้งโครงการ'], ['tambon', 'ตำบล'], ['moo', 'หมู่บ้าน'], ['hh', 'ครัวเรือน']].map(([k, l]) => `<option value="${k}" ${st.level === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         ${st.level !== 'all' ? `<select aria-label="เลือก" style="width:auto;max-width:260px" onchange="S._lgd.key=this.value;render()"><option value="">ทั้งหมด</option>${opts(st.level).map(([v, l]) => `<option value="${esc(v)}" ${v === st.key ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}
         <label style="margin:0">ตั้งแต่ <input type="month" value="${st.from}" style="width:auto" onchange="S._lgd.from=this.value;render()"></label><label style="margin:0">ถึง <input type="month" value="${st.to}" style="width:auto" onchange="S._lgd.to=this.value;render()"></label>
-        <select aria-label="แหล่งข้อมูล" style="width:auto" onchange="S._lgd.src=this.value;render()"><option value="report" ${st.src === 'report' ? 'selected' : ''} ${H.rp ? '' : 'disabled'}>ยอดรายเดือน (รายได้เสริม + ต้นทุนลด)</option><option value="ledger" ${st.src === 'report' ? '' : 'selected'}>บันทึกแยกรายการ</option></select>
+        <select aria-label="แหล่งข้อมูล" style="width:auto" onchange="S._lgd.src=this.value;render()"><option value="report" ${st.src === 'report' ? 'selected' : ''} ${H.rp ? '' : 'disabled'}>ยอดรายเดือน (รายได้เสริม + ต้นทุนลด)</option><option value="ledger" ${st.src === 'report' ? '' : 'selected'}>เฉพาะเดือนที่บันทึกแยกรายการ</option></select>
         ${st.level !== 'all' ? '<button class="small secondary" onclick="S._lgd.level=\'all\';S._lgd.key=\'\';render()">‹ ทั้งโครงการ</button>' : ''}</div></div>
     ${st.src === 'report' ? '<div class="banner info" style="margin:0 0 8px">ยอดรายเดือน: รายได้เสริม + ต้นทุนลด ของแต่ละครัวเรือน (ยอดรวมต่อเดือน ไม่แยกรายการ) · "จ." = รายได้เสริม</div>' : ''}
-    ${!rows.length ? `<div class="card"><p class="muted" style="margin:0 0 12px">ยังไม่มีการบันทึกในช่วงที่เลือก</p><div><a class="btn" style="text-decoration:none" href="#hh/ledger">＋ บันทึกรายรับรายจ่าย</a></div></div>` : `
+    ${!rows.length ? `<div class="card"><p class="muted" style="margin:0 0 12px">ยังไม่มีการบันทึกในช่วงที่เลือก</p><div><a class="btn" style="text-decoration:none" href="${st.src === 'report' ? '#hh/monthly' : '#hh/ledger'}">＋ ${st.src === 'report' ? 'บันทึกยอดรายเดือน' : 'บันทึกแยกรายการ'}</a></div></div>` : `
     <div class="kpis">
       <div class="kpi hero"><div class="l">เฉลี่ยต่อครัวเรือน เดือน ${lgMonthLabel(last)}</div><div class="v" style="color:${lgStatus(avg(lastRows.map(r => r.g.total))).c}">${lgBaht(avg(lastRows.map(r => r.g.total)))} บาท</div><div class="muted">เป้า ${lgBaht(LG_TARGET)} บาท/เดือน</div></div>
       <div class="kpi"><div class="l">ถึงเป้าในเดือน ${lgMonthLabel(last)}</div><div class="v">${fmtInt(reach)} / ${fmtInt(lastRows.length)}</div><div class="muted">ครัวเรือนที่บันทึก</div></div>
@@ -252,7 +255,7 @@ function hhIncomePage(view) {
       <div class="card"><div class="cardhead"><h4>รายได้เพิ่ม + ต้นทุนลด เฉลี่ยต่อครัวเรือน (บาท/เดือน)</h4></div><div class="chartbox"><canvas id="lgTrend"></canvas></div></div>
       <div class="card"><div class="cardhead"><h4>องค์ประกอบ (เฉลี่ยต่อครัวเรือน)</h4></div><div class="chartbox"><canvas id="lgParts"></canvas></div></div>
       ${st.src === 'report' ? '' : '<div class="card"><div class="cardhead"><h4>รายรับ–รายจ่ายรวม (บาท)</h4></div><div class="chartbox"><canvas id="lgFlow"></canvas></div></div>'}
-      <div class="card"><div class="cardhead"><h4>ยังไม่บันทึกเดือน ${lgMonthLabel(last)} (${fmtInt(missing.length)})</h4></div><div class="lg-chips" style="max-height:220px;overflow:auto">${missing.map(r => `<a class="lg-chip" href="#hh/ledger/${encodeURIComponent(r.hh_code)}/${last || lgThisMonth()}">${esc(r.hh_code)} · ${esc(H.roleVal(r, '01', 'name') || '')}</a>`).join('') || '<span class="muted">บันทึกครบแล้ว</span>'}</div></div></div>
+      <div class="card"><div class="cardhead"><h4>ยังไม่บันทึกเดือน ${lgMonthLabel(last)} (${fmtInt(missing.length)})</h4></div><div class="lg-chips" style="max-height:220px;overflow:auto">${missing.map(r => `<a class="lg-chip" href="${st.src === 'report' ? `#hh/monthly/${last || lgThisMonth()}` : `#hh/ledger/${encodeURIComponent(r.hh_code)}/${last || lgThisMonth()}`}">${esc(r.hh_code)} · ${esc(H.roleVal(r, '01', 'name') || '')}</a>`).join('') || '<span class="muted">บันทึกครบแล้ว</span>'}</div></div></div>
     <div class="card"><div class="cardhead"><h4>${next === 'tambon' ? 'รายตำบล' : next === 'moo' ? 'รายหมู่บ้าน' : next === 'hh' ? 'รายครัวเรือน' : 'รายเดือน'} ${next !== 'month' ? '<span class="muted">กดแถวเพื่อดูละเอียด</span>' : ''}</h4></div><div class="tscroll"><table><thead><tr><th>${next === 'month' ? 'เดือน' : 'ชื่อ'}</th><th class="num">ครัวเรือน</th><th class="num">เดือนที่บันทึก</th><th class="num">รายได้เพิ่ม+ต้นทุนลด/เดือน</th><th class="num">จ. จากโครงการ</th><th class="num">ต้นทุนลด</th><th class="num">รายได้เดิมเพิ่ม</th><th class="num">เดือนที่ถึงเป้า</th></tr></thead><tbody>
       ${table.map(x => { const s = lgStatus(x.t); return `<tr ${drill(x.k)}><td><i class="dot" style="background:${s.c}"></i> ${esc(lab(x.k))}</td><td class="num">${fmtInt(x.hh.size)}</td><td class="num">${fmtInt(x.rows.length)}</td><td class="num"><b>${lgBaht(x.t)}</b></td><td class="num">${lgBaht(x.p)}</td><td class="num">${lgBaht(x.c)}</td><td class="num">${lgBaht(x.e)}</td><td class="num">${fmt(x.hit * 100, 0)}%</td></tr>`; }).join('')}
       </tbody></table></div><div class="muted" style="margin-top:4px"><i class="dot" style="background:#2E7D32"></i>ถึงเป้า ≥ ${lgBaht(LG_TARGET)} · <i class="dot" style="background:#F9A825"></i>ใกล้เป้า ≥ ${lgBaht(LG_TARGET * 0.6)} · <i class="dot" style="background:#C62828"></i>ยังห่างเป้า</div></div>`}`);
