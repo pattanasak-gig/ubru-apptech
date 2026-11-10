@@ -163,7 +163,7 @@ function hhEdit(key, id, preset) {
   const keyHs = T.tab.key_headers || ['รหัสครัวเรือน'];
   const field = c => {
     const v = d[c.header], fid = 'hf_' + c.col_index, isKey = keyHs.includes(c.header);
-    if (c.is_formula) return `<div><label>${esc(c.header)} <span class="muted">(คำนวณอัตโนมัติ)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
+    if (c.is_formula) return `<div><label>${esc(c.header)}${/อัตโนมัติ/.test(c.header) ? '' : ' <span class="muted">(คำนวณอัตโนมัติ)</span>'}</label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (isKey && c.header === 'รหัสครัวเรือน' && key !== '01') return `<div><label>${esc(c.header)} *</label><select id="${fid}" ${r ? 'disabled' : ''}>${H.reg.map(x => `<option ${x.hh_code === (r ? r.hh_code : d['รหัสครัวเรือน'] || '') ? 'selected' : ''}>${esc(x.hh_code)}</option>`).join('')}</select></div>`;
     if (isKey && r) return `<div><label>${esc(c.header)} <span class="muted">(กุญแจ แก้ไม่ได้)</span></label><input value="${esc(v ?? '')}" readonly style="background:#f3f4f6"></div>`;
     if (Array.isArray(c.options) && c.options.length) { const opts = c.options.map(String); const extra = !hhBlank(v) && !opts.includes(String(v)) ? [String(v)] : []; return `<div><label>${esc(c.header)}${isKey ? ' *' : ''}</label><select id="${fid}"><option value="">—</option>${opts.concat(extra).map(o => `<option ${String(v ?? '') === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`; }

@@ -13,7 +13,8 @@ async function rpLoad(projectId) {
 // แถวรายครัวเรือนรายเดือน รูปแบบเดียวกับ lgRows (ใช้แดชบอร์ดเดิม): จ. = รายได้เสริม · ต้นทุนลด = ต้นทุนลด
 function rpRows() {
   const H = S._hh; if (!H.rp) return [];
-  return H.rp.months.filter(m => m.extra_income != null || m.cost_cut != null).map(m => {   // DEC-138 แถวที่ล้างค่าแล้ว = ยังไม่บันทึก const reg = H.reg.find(x => x.hh_code === m.hh_code), ex = +m.extra_income || 0, cut = +m.cost_cut || 0;
+  // DEC-138 แถวที่ล้างค่าแล้ว (ทั้งสองช่องว่าง) = ยังไม่บันทึก ไม่นับ
+  return H.rp.months.filter(m => m.extra_income != null || m.cost_cut != null).map(m => { const reg = H.reg.find(x => x.hh_code === m.hh_code), ex = +m.extra_income || 0, cut = +m.cost_cut || 0;
     return { m, code: m.hh_code, month: String(m.month).slice(0, 7), src: 'report', grp: m.grp,
       sums: { e_direct: 0, e_indirect: 0, e_other: 0, i_related: 0, i_project: ex, i_other: 0, self_qty: 0, income: ex, expense: 0, net: ex },
       base: { e_direct: null, i_related: null }, g: { proj: ex, cut, rel: 0, total: ex + cut, noBaseE: false, noBaseI: false },
