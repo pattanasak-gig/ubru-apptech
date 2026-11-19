@@ -322,6 +322,11 @@ const DemoBackend = () => {
         if (eggs[t]) ln('ขายไข่ไก่', { amount: eggs[t] }); ln('รายจ่ายอื่นที่ไม่เกี่ยวข้องกับโครงการ (รวม)', { amount: 6000 }); ln('รายได้อื่นที่ไม่เกี่ยวข้องกับโครงการ (รวม)', { amount: 7000 }); if (t > 1) ln('หนอน BSF ใช้เลี้ยงสัตว์เอง', { qty: 3 * t });
       }));
     [['BSF-001', 2600, 500], ['BSF-002', 1700, 300], ['BSF-003', 3000], ['BSF-004', 1200, 200]].forEach(([c, e, i]) => add('hh.baseline', { org_id: o1.id, project_id: pBsf.id, hh_code: c, e_direct: e, i_related: i ?? null, note: 'สาธิต' }));
+    // DEC-140 สาธิตการรับหนอน/อาหารหมัก (= hh.service + sql/029) · วันที่นับย้อนจากวันนี้
+    const dAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+    [['BSF-001', 75, 10, 4, false, 20, 'staff', null], ['BSF-001', 45, 8, null, false, 20, 'household', 'feed_all'], ['BSF-001', 14, 10, 4.1, true, 25, 'staff', 'feed_part'],
+     ['BSF-002', 50, 6, 2.4, false, 15, 'staff', null], ['BSF-002', 20, 6, null, false, 15, 'staff', 'keep_all'], ['BSF-003', 30, 12, 5, false, 30, 'household', null]]
+      .forEach(([c, ago, tot, lv, est, cp, by, oc]) => add('hh.service', { org_id: o1.id, project_id: pBsf.id, hh_code: c, service_date: dAgo(ago), total_kg: tot, larvae_kg: lv, larvae_est: est, compost_kg: cp, filled_by: by, money_month: null, is_backfill: false, outcome: oc, feed_kg: oc === 'feed_all' ? 3 : oc === 'feed_part' ? 2 : null, keep_kg: oc === 'feed_part' ? 2 : null, animals: oc ? [{ a: 'ไก่ไข่', n: 20, kg: 2 }] : [], frass_use: oc ? ['แปลงผัก'] : [], larva_feeds: [], loss_reasons: [], want_more: oc ? true : null, status: 'active', note: 'ข้อมูลสาธิต' }));
   }
   let me = null;
   const byId = (t, id) => D[t].find(r => r.id === id) || {};

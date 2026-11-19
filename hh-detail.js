@@ -34,12 +34,12 @@ function hhKv(T, r, code) {
       return `<div class="kv${HH_LONG.test(c.header) || String(sv).length > 60 ? ' wide' : ''}"><span class="k">${esc(c.header.replace(/\s*\(อัตโนมัติ\)$/, ''))}${c.is_formula ? ' ⓕ' : ''}</span><span class="v">${esc(sv)}</span></div>`; }).join('')}</div></details>`;
   }).join('');
 }
-const HH_DTABS = [['sum', 'สรุป'], ['01', 'ทะเบียน'], ['02', 'รายได้'], ['03', 'อาหารสัตว์'], ['04', 'ปุ๋ย'], ['05', 'หนี้สิน'], ['inv', 'นวัตกร'], ['ledger', 'รายรับรายจ่าย'], ['svc', 'รับหนอน'], ['photo', 'รูป']];
+const HH_DTABS = [['sum', 'สรุป'], ['01', 'ทะเบียน'], ['02', 'รายได้'], ['03', 'อาหารสัตว์'], ['04', 'ปุ๋ย'], ['05', 'หนี้สิน'], ['inv', 'นวัตกร'], ['ledger', 'รายรับรายจ่าย'], ['svc', 'รับหนอน/อาหารหมัก'], ['photo', 'รูป']];
 async function hhDetail(view, code, tab) {
   const H = S._hh, reg = H.reg.find(r => r.hh_code === code);
   if (!reg) return view.innerHTML = hhShell('detail', `<div class="card">ไม่พบรหัส ${esc(code)} ในทะเบียน</div>`);
   tab = HH_DTABS.some(x => x[0] === tab) ? tab : ['06', '07', '09'].includes(tab) ? 'inv' : 'sum';
-  if (tab === 'svc' && typeof svLoad === 'function') await svLoad();
+  if ((tab === 'svc' || tab === 'sum') && typeof svLoad === 'function') await svLoad();
   S._hhShow = S._hhShow || {};
   const rv = role => H.roleVal(reg, '01', role), ec = esc(code), url = t => `#hh/h/${encodeURIComponent(code)}/${t}`;
   const head = `<div class="card"><div class="cardhead"><div><h4 style="margin:0">${ec} · ${esc(rv('name') || '')}</h4><div class="muted">กลุ่ม ${esc(rv('group') || '-')} · ${rv('moo') ? 'ม.' + esc(rv('moo')) + ' ' : ''}ต.${esc(rv('tambon') || '-')} · ${esc(rv('status') || '')}</div></div>
@@ -54,14 +54,14 @@ async function hhDetail(view, code, tab) {
     const k = (l, v, u) => `<div class="kpi"><div class="l">${l}</div><div class="v" style="font-size:22px">${hhBlank(v) ? '–' : esc(hhFmtVal(v, l))}${u && !hhBlank(v) ? ` <span class="muted" style="font-size:14px">${u}</span>` : ''}</div></div>`;
     const svN = Array.isArray(S._sv) ? S._sv.filter(r => r.hh_code === code).length : null;
     const la = hhNumv(rv('lat')), lo = hhNumv(rv('lng'));
-    body = `<div class="kpis" style="margin-bottom:10px">${k('รายได้รวม/เดือน', rv('income'), 'บาท')}${k('ค่าอาหารสัตว์/เดือน', rv('feed_cost'), 'บาท')}${k('ค่าปุ๋ย/เดือน', rv('fert_cost'), 'บาท')}${k('สมาชิก', rv('members'), 'คน')}${svN != null ? k('รับหนอนแล้ว', svN, 'รอบ') : ''}</div>
+    body = `<div class="kpis" style="margin-bottom:10px">${k('รายได้รวม/เดือน', rv('income'), 'บาท')}${k('ค่าอาหารสัตว์/เดือน', rv('feed_cost'), 'บาท')}${k('ค่าปุ๋ย/เดือน', rv('fert_cost'), 'บาท')}${k('สมาชิก', rv('members'), 'คน')}${svN != null ? k('รับหนอนแล้ว', svN, 'รอบ') : ''}${svN ? k('อาหารหมักที่รับรวม', fmt(S._sv.filter(r => r.hh_code === code).reduce((a, r) => a + (+r.compost_kg || 0), 0), 1), 'กก.') : ''}</div>
       ${typeof hhInnovMini === 'function' ? hhInnovMini(code) : ''}${typeof hhLedgerMini === 'function' ? hhLedgerMini(code) : ''}
       ${!isNaN(la) && !isNaN(lo) ? `<details class="card" ontoggle="if(this.open&&!this._m){this._m=1;hhDetailMap('${ec}')}"><summary style="cursor:pointer;font-weight:600">แผนที่และเส้นทางถึงศูนย์</summary><div id="hhMini" class="hh-mini" style="margin-top:8px"></div><div class="muted" id="hhMiniNote"></div></details>` : ''}`;
   } else if (tab === 'inv') body = (typeof hhInnovMini === 'function' ? hhInnovMini(code) : '') + rowsOf('06') + rowsOf('07');
   else if (tab === 'ledger') body = typeof hhLedgerMini === 'function' ? hhLedgerMini(code) : '';
   else if (tab === 'photo') body = typeof hhPhotoSection === 'function' ? hhPhotoSection(code) : '';
-  else if (tab === 'svc') { const rs = Array.isArray(S._sv) ? S._sv.filter(r => r.hh_code === code) : [];
-    body = `<div class="card"><div class="cardhead"><h4>การรับหนอน (${rs.length} รอบ)</h4>${hhCanAdmin() ? `<a class="btn small" style="text-decoration:none" href="#hh/service/${encodeURIComponent(code)}">＋ บันทึกรอบใหม่</a>` : ''}</div>${rs.length ? `<div class="tscroll"><table><thead><tr><th>รอบ</th><th>วันที่</th><th class="num">หนอน+มูล</th><th class="num">หนอน</th><th class="num">หมัก</th><th>ใช้รอบก่อน</th></tr></thead><tbody>${rs.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#hh/service/${encodeURIComponent(code)}/${r.id}">${esc(String(r.service_date).slice(0, 10))}</a></td><td class="num">${r.total_kg ?? '–'}</td><td class="num">${r.larvae_kg ?? '–'}${r.larvae_est ? '*' : ''}</td><td class="num">${r.compost_kg ?? '–'}</td><td>${esc(((typeof SV !== 'undefined' ? SV.outcome : []).find(x => x[0] === r.outcome) || [, ''])[1])}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">ยังไม่มีการบันทึก</div>'}</div>`; }
+  else if (tab === 'svc') { const rs = Array.isArray(S._sv) ? S._sv.filter(r => r.hh_code === code) : [], A = typeof supAgg === 'function' ? supAgg(rs, '', '').tot : null, kg = (v, n) => (n ? fmt(v, 2) : '–');
+    body = `<div class="card"><div class="cardhead"><h4>การรับหนอนและอาหารหมัก (${rs.length} รอบ)</h4>${hhCanAdmin() ? `<a class="btn small" style="text-decoration:none" href="#hh/service/${encodeURIComponent(code)}">＋ บันทึกรอบใหม่</a>` : ''}</div>${rs.length ? `<div class="tscroll"><table><thead><tr><th>รอบ</th><th>วันที่รับ</th><th class="num">หนอน+มูล</th><th class="num">หนอน</th><th class="num">อาหารหมัก</th><th>หนอนรอบก่อน</th><th>ผู้กรอก</th></tr></thead><tbody>${rs.map((r, i) => `<tr><td>${i + 1}</td><td>${hhCanAdmin() ? `<a href="#hh/service/${encodeURIComponent(code)}/${r.id}">${esc(String(r.service_date).slice(0, 10))}</a>` : esc(String(r.service_date).slice(0, 10))}</td><td class="num">${r.total_kg ?? '–'}</td><td class="num">${r.larvae_kg ?? '–'}${r.larvae_est ? '*' : ''}</td><td class="num">${r.compost_kg ?? '–'}</td><td>${esc(((typeof SV !== 'undefined' ? SV.outcome : []).find(x => x[0] === r.outcome) || [, ''])[1])}</td><td>${esc((typeof SV_BY !== 'undefined' && SV_BY[r.filled_by]) || '')}</td></tr>`).join('')}${A ? `<tr style="font-weight:600"><td colspan="2">รวม</td><td class="num">${kg(A.total, A.nTotal)}</td><td class="num">${kg(A.larvae, A.nLarvae)}${A.larvaeEst ? '*' : ''}</td><td class="num">${kg(A.compost, A.nCompost)}</td><td colspan="2"></td></tr>` : ''}</tbody></table></div><div class="muted">หน่วย กก. · * ค่าประมาณจากน้ำหนักรวม</div>` : '<div class="muted">ยังไม่มีการบันทึก</div>'}</div>`; }
   else body = rowsOf(tab);
   view.innerHTML = hhShell('detail', head + body);
 }
